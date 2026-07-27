@@ -43,6 +43,7 @@ A ordem segue o risco: (1) é pré-requisito de tudo; (2) precede (3) porque mé
 accounts        id, nome, criado_em
 profiles        id (= auth.users.id), nome, email
 memberships     account_id, user_id, papel (admin|gestor|vendedor)   PK (account_id, user_id)
+invites         id, account_id, email, papel, token, expira_em, aceito_em?, criado_por
 
 pipelines       id, account_id, nome, is_default, criado_em
 stages          id, pipeline_id, nome, ordem, tipo (aberta|ganho|perdido), sla_horas?
@@ -73,6 +74,17 @@ Campos que existem agora mas só são usados em ciclos posteriores, porque custa
 
 `lead_tags.stage_id_no_momento` é o snapshot exigido pela spec de produto: sem ele, a métrica "distribuição de etiquetas por etapa" passa a mentir assim que o lead avança. `tags` é única por conta e case-insensitive, o que dá autocomplete sem transformar "Preço alto" e "preço alto" em duas etiquetas distintas. Um lead pode ter várias etiquetas.
 
+### Conta ativa e entrada de usuários
+
+`memberships` é N:N, mas neste ciclo **cada usuário pertence a exatamente uma conta**, e a aplicação resolve a conta ativa como a única membership do usuário. Seletor de conta e usuário em múltiplas contas ficam fora de escopo — o schema já suporta, a UI não.
+
+Dois caminhos de entrada:
+
+- **Signup:** cria `auth.users`, `profiles`, uma `accounts` nova, uma `memberships` com papel `admin` e o seed de §6.
+- **Convite:** o admin cria uma linha em `invites` (email + papel + token + validade) e envia o link. O convidado faz signup normal com o token, e o aceite cria a `memberships` com o papel gravado no convite, marcando `aceito_em`.
+
+O convite foi desenhado assim de propósito, em vez de usar `inviteUserByEmail` do Supabase Auth: aquela API exige `service_role`, e §5 estabelece que a chave privilegiada não existe no código da aplicação neste sub-projeto. Token em tabela mantém o convite funcionando sem abrir essa porta.
+
 ## 4. Isolamento multi-tenant (RLS)
 
 `account_id` em toda tabela de domínio, RLS habilitada em todas.
@@ -85,6 +97,7 @@ Regras:
 - Papel `vendedor`: em `leads` e nas tabelas dependentes, só enxerga registros com `responsavel_id = auth.uid()`.
 - Papéis `admin` e `gestor`: enxergam a conta inteira.
 - `lead_events` e `stage_history` são insert-only; não há policy de update ou delete.
+- `invites` só é legível e gravável por `admin` da conta. O aceite não passa por policy de leitura: é uma função `accept_invite(token)` marcada `SECURITY DEFINER`, que valida token e validade e cria a `memberships` — um usuário recém-cadastrado ainda não é membro de nada e, sem isso, não conseguiria ler o próprio convite.
 
 A restrição de visibilidade vive no banco, não no `WHERE` da aplicação.
 
@@ -129,6 +142,8 @@ move_lead_stage(p_lead_id uuid, p_stage_destino uuid, p_loss_reason_id uuid defa
 
 Numa única transação: atualiza `leads` (`stage_id`, `status`, `loss_reason_id`, `atualizado_em`), insere em `stage_history` e insere em `lead_events`. **Rejeita** destino com `tipo = 'perdido'` sem `loss_reason_id` válido da mesma conta.
 
+`leads.status` nunca é escrito pela aplicação: a função o deriva de `stages.tipo` do destino (`aberta` → `aberto`, `ganho` → `ganho`, `perdido` → `perdido`). Ter duas fontes para o mesmo fato é o caminho mais curto para um lead que aparece no Kanban em "Fechamento" e conta como perdido no relatório.
+
 O motivo de perda obrigatório é a única regra cuja violação corrompe métrica de forma silenciosa e irreversível — um lead perdido sem motivo não tem como ser corrigido depois, porque ninguém lembra. Por isso mora no banco, onde nenhum chamador consegue esquecer dela, e não numa validação de formulário.
 
 ### Drag-and-drop
@@ -145,7 +160,7 @@ Atualização otimista: o card move imediatamente e, se o RPC falhar, volta à p
 
 **Cadastro rápido** em modal, com o aviso de possível duplicata de §4.
 
-**Config.** Pipelines e etapas (com reordenação), motivos de perda, usuários e papéis.
+**Config.** Etapas do pipeline padrão (criar, renomear, reordenar, definir tipo), motivos de perda, e usuários — lista de membros com papel, mais convite por email e revogação de convite pendente. Criar pipelines adicionais fica fora deste ciclo.
 
 **Seed de conta nova.** Pipeline padrão (Novo lead → Contato feito → Qualificação → Proposta → Fechamento, mais Ganho e Perdido) e motivos de perda padrão. Conta que abre vazia exigindo configuração antes de qualquer uso é onde o early user desiste.
 
@@ -153,7 +168,7 @@ Atualização otimista: o card move imediatamente e, se o RPC falhar, volta à p
 
 ## 7. Testes
 
-**Unitários (Vitest) sobre `domain` + `InMemoryCrmStore`:** transições de etapa, normalização de telefone para E.164, normalização de email, normalização de etiqueta case-insensitive, snapshot de etapa na aplicação da tag, exigência de motivo na perda, cálculo de tempo parado na etapa.
+**Unitários (Vitest) sobre `domain` + `InMemoryCrmStore`:** transições de etapa, normalização de telefone para E.164, normalização de email, normalização de etiqueta case-insensitive, snapshot de etapa na aplicação da tag, exigência de motivo na perda, derivação de `status` a partir de `stages.tipo`, cálculo de tempo parado na etapa.
 
 **Integração contra Supabase local (`supabase start`) com as migrations aplicadas.** RLS não é testável com mock: é policy em Postgres, e só Postgres diz se funciona. Casos obrigatórios, nomeados:
 
@@ -163,7 +178,9 @@ Atualização otimista: o card move imediatamente e, se o RPC falhar, volta à p
 - `move_lead_stage` rejeita destino "perdido" sem motivo;
 - `move_lead_stage` rejeita `loss_reason_id` de outra conta;
 - uma mudança de etapa escreve `leads`, `stage_history` e `lead_events`, ou não escreve nada;
-- `lead_events` e `stage_history` não aceitam update nem delete.
+- `lead_events` e `stage_history` não aceitam update nem delete;
+- `accept_invite` rejeita token inválido, expirado ou já aceito, e cria a membership com o papel gravado no convite;
+- vendedor não consegue ler nem criar `invites`.
 
 **Smoke E2E (Playwright), um caminho só:** criar lead → arrastar pelo funil → perder com motivo → conferir a timeline.
 
@@ -175,7 +192,7 @@ Detalhe que vira bug confuso se ignorado: com RLS ativa, ler um registro sem per
 
 ## 9. Fora de escopo neste sub-projeto
 
-Webhooks Meta e Google; notificações (in-app, email, push); aba de Métricas; Scripts de Venda; Tarefas, calendário e lembretes; automações por gatilho; alertas de SLA; WhatsApp Cloud API; billing e onboarding self-service; CPL/CPA; versionamento de scripts; múltiplos pipelines na UI (o schema suporta, a UI opera um por conta).
+Webhooks Meta e Google; notificações (in-app, email, push); aba de Métricas; Scripts de Venda; Tarefas, calendário e lembretes; automações por gatilho; alertas de SLA; WhatsApp Cloud API; billing, planos e limites de uso; usuário pertencente a mais de uma conta; CPL/CPA; versionamento de scripts; múltiplos pipelines na UI (o schema suporta, a UI opera um por conta).
 
 ## 10. Pronto quando
 
