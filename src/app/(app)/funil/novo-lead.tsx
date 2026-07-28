@@ -7,6 +7,7 @@ import { criarLeadAction, verificarDuplicados, type Duplicado } from './acoes'
 const MENSAGENS: Record<string, string> = {
   nome_obrigatorio: 'Informe o nome do lead.',
   pipeline_sem_etapa_aberta: 'Configure ao menos uma etapa aberta antes de cadastrar leads.',
+  valor_invalido: 'Digite o valor em reais, ex.: 1.500,00.',
 }
 
 export function NovoLead({

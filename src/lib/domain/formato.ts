@@ -5,6 +5,22 @@ export function formatarMoeda(centavos: number | null): string {
   return MOEDA.format(centavos / 100).replace(/ /g, ' ')
 }
 
+export function parsearReaisEmCentavos(texto: string): number | null {
+  const semPrefixo = texto.trim().replace(/^R\$\s*/, '').trim()
+  if (!semPrefixo) return null
+
+  const normalizado = semPrefixo.includes(',')
+    ? semPrefixo.replace(/\./g, '').replace(',', '.')
+    : semPrefixo
+
+  if (!/^-?\d+(\.\d+)?$/.test(normalizado)) return null
+
+  const numero = Number(normalizado)
+  if (Number.isNaN(numero) || numero < 0) return null
+
+  return Math.round(numero * 100)
+}
+
 export function formatarTelefone(e164: string | null): string {
   if (!e164) return '—'
   if (!e164.startsWith('+55')) return e164

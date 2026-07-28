@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { criarStoreDoServidor } from '@/lib/data/supabase'
 import { leadSchema } from '@/lib/domain/lead'
 import { normalizarEmail, normalizarTelefone } from '@/lib/domain/normalizacao'
+import { parsearReaisEmCentavos } from '@/lib/domain/formato'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 
 export type Duplicado = { id: string; nome: string; status: string }
@@ -29,12 +30,18 @@ export async function criarLeadAction(formData: FormData): Promise<Resultado<str
   const { store, usuarioId, papel } = contexto.valor
 
   const valorTexto = String(formData.get('valor') ?? '').trim()
+  let valorCents: number | null = null
+  if (valorTexto) {
+    valorCents = parsearReaisEmCentavos(valorTexto)
+    if (valorCents === null) return falha('valor_invalido')
+  }
+
   const parsed = leadSchema.safeParse({
     nome: formData.get('nome'),
     telefone: formData.get('telefone'),
     email: formData.get('email'),
     empresa: formData.get('empresa'),
-    valorCents: valorTexto ? Math.round(Number(valorTexto.replace(',', '.')) * 100) : null,
+    valorCents,
     // Vendedor so cria lead para si; gestor e admin escolhem o responsavel.
     responsavelId:
       papel === 'vendedor' ? usuarioId : (formData.get('responsavelId') as string) || null,
