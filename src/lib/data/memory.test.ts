@@ -136,7 +136,7 @@ describe('InMemoryCrmStore', () => {
     if (!p.ok) throw new Error(p.erro)
     const etapa = p.valor.etapas[0].id
     await store.criarLead({
-      ...novoLead('Ana Silva', { responsavelId: '11111111-1111-1111-1111-111111111111' }),
+      ...novoLead('Ana Silva', { responsavelId: '11111111-1111-4111-a111-111111111111' }),
       pipelineId: p.valor.pipeline.id,
       stageId: etapa,
     })
@@ -147,7 +147,7 @@ describe('InMemoryCrmStore', () => {
     })
 
     const porResponsavel = await store.listarLeads({
-      responsavelId: '11111111-1111-1111-1111-111111111111',
+      responsavelId: '11111111-1111-4111-a111-111111111111',
     })
     if (!porResponsavel.ok) throw new Error(porResponsavel.erro)
     expect(porResponsavel.valor.map((l) => l.nome)).toEqual(['Ana Silva'])

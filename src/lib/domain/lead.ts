@@ -8,7 +8,7 @@ export const leadSchema = z
     email: z.string().trim().nullish(),
     empresa: z.string().trim().nullish(),
     valorCents: z.number().int().min(0).nullish(),
-    responsavelId: z.string().guid().nullish(),
+    responsavelId: z.uuid().nullish(),
   })
   .transform((dados) => ({
     ...dados,
