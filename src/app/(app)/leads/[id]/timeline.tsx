@@ -1,6 +1,10 @@
 import type { EventoLead } from '@/lib/domain/tipos'
 
-const FORMATO = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+const FORMATO = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+  timeZone: 'America/Sao_Paulo',
+})
 
 export function rotuloEvento(
   evento: EventoLead,
@@ -17,13 +21,13 @@ export function rotuloEvento(
       return `Etapa alterada: ${de} → ${para}`
     }
     case 'etiqueta_aplicada':
-      return `Etiqueta "${String(p.tag)}" aplicada em ${nomeEtapa.get(String(p.etapa)) ?? '?'}`
+      return `Etiqueta "${String(p.tag ?? '?')}" aplicada em ${nomeEtapa.get(String(p.etapa)) ?? '?'}`
     case 'responsavel_alterado': {
       const para = p.para ? nomePessoa.get(String(p.para)) ?? '?' : 'ninguém'
       return `Responsável alterado para ${para}`
     }
     case 'nota':
-      return String(p.texto ?? '')
+      return String(p.texto ?? '(sem texto)')
     default:
       return evento.tipo
   }

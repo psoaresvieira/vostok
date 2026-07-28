@@ -252,12 +252,13 @@ export class SupabaseCrmStore implements CrmStore {
       .eq('id', leadId)
     if (error) return falha(error.message)
 
-    await this.cliente.from('lead_events').insert({
+    const { error: erroEvento } = await this.cliente.from('lead_events').insert({
       lead_id: leadId,
       tipo: 'responsavel_alterado',
       payload: { de: atual.valor.responsavelId, para: responsavelId },
       ator_id: this.usuarioId,
     })
+    if (erroEvento) return falha(erroEvento.message)
     return ok(undefined)
   }
 

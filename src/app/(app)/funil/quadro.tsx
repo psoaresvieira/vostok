@@ -14,15 +14,7 @@ import type { Etapa, Etiqueta, Lead, Membro, MotivoPerda } from '@/lib/domain/ti
 import { Cartao } from './cartao'
 import { ModalMovimento, type PedidoMovimento } from './modal-movimento'
 import { moverEtapaAction } from './acoes'
-
-const MENSAGENS: Record<string, string> = {
-  motivo_perda_obrigatorio: 'Escolha o motivo da perda.',
-  motivo_perda_invalido: 'Esse motivo de perda não pertence à sua conta.',
-  etapa_invalida: 'Essa etapa não pertence ao seu funil.',
-  lead_nao_encontrado: 'Você não tem acesso a esse lead.',
-  movimento_falhou_etiquetas_salvas:
-    'As etiquetas foram salvas, mas o lead continua na etapa anterior. Tente mover de novo.',
-}
+import { mensagemDeErro } from './erros'
 
 // Move um unico lead: patches concorrentes se acumulam em vez de se sobrescreverem.
 type MovimentoOtimista = { leadId: string; stageId: string }
@@ -110,7 +102,7 @@ export function Quadro({
     startTransition(async () => {
       moverOtimista({ leadId: atual.leadId, stageId: atual.destino.id })
       const r = await moverEtapaAction(atual.leadId, atual.destino.id, lossReasonId, etiquetas)
-      if (!r.ok) setErro(MENSAGENS[r.erro] ?? r.erro)
+      if (!r.ok) setErro(mensagemDeErro(r.erro))
     })
   }
 

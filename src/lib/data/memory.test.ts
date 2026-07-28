@@ -176,7 +176,8 @@ describe('InMemoryCrmStore', () => {
 
     const eventos = await store.eventosDoLead(criado.valor)
     if (!eventos.ok) throw new Error(eventos.erro)
-    expect(eventos.valor.map((e) => e.tipo)).toContain('responsavel_alterado')
+    expect(eventos.valor[0].tipo).toBe('responsavel_alterado')
+    expect(eventos.valor[0].payload.para).toBe('user-2')
   })
 
   it('registra nota na timeline', async () => {
@@ -189,7 +190,8 @@ describe('InMemoryCrmStore', () => {
     })
     if (!criado.ok) throw new Error(criado.erro)
 
-    await store.registrarNota(criado.valor, 'ligou, pediu proposta')
+    const resultado = await store.registrarNota(criado.valor, 'ligou, pediu proposta')
+    expect(resultado.ok).toBe(true)
 
     const eventos = await store.eventosDoLead(criado.valor)
     if (!eventos.ok) throw new Error(eventos.erro)

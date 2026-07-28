@@ -270,8 +270,20 @@ export class InMemoryCrmStore implements CrmStore {
   async eventosDoLead(leadId: string): Promise<Resultado<EventoLead[]>> {
     return ok(
       this.eventos
-        .filter((e) => e.leadId === leadId)
-        .sort((a, b) => b.criadoEm.getTime() - a.criadoEm.getTime()),
+        // Guarda o indice de insercao antes de filtrar/ordenar: e o desempate
+        // quando dois eventos nascem no mesmo milissegundo (new Date() so tem
+        // 1ms de resolucao, entao duas mutacoes seguidas sem await no meio —
+        // comum em teste, e possivel em producao — colidem no timestamp).
+        .map((e, indice) => ({ e, indice }))
+        .filter(({ e }) => e.leadId === leadId)
+        .sort((a, b) => {
+          const porData = b.e.criadoEm.getTime() - a.e.criadoEm.getTime()
+          // Em empate, quem foi inserido depois e mais novo e vem primeiro —
+          // sort() e estavel, entao sem isso o empate cai na ordem de insercao
+          // (mais antigo primeiro), o oposto do contrato "mais recente primeiro".
+          return porData !== 0 ? porData : b.indice - a.indice
+        })
+        .map(({ e }) => e),
     )
   }
 

@@ -4,6 +4,16 @@ import { useState } from 'react'
 import type { Etiqueta } from '@/lib/domain/tipos'
 import { adicionarEtiquetas } from './acoes'
 
+// Codigos possiveis vindos de aplicarEtiquetas sao majoritariamente mensagens
+// cruas do Postgres — disjuntos do mapa de moverEtapaAction (Finding 1), entao
+// aqui basta um mapinha local seguindo a mesma convencao usada em
+// funil/novo-lead.tsx e em convite/[token]/page.tsx (MENSAGENS + `?? r.erro`).
+const MENSAGENS: Record<string, string> = {
+  lead_nao_encontrado: 'Você não tem acesso a esse lead.',
+  sem_sessao: 'Sua sessão expirou. Entre novamente.',
+  sem_conta: 'Você não tem uma conta ativa.',
+}
+
 export function EditorEtiquetas({
   leadId,
   atuais,
@@ -25,7 +35,7 @@ export function EditorEtiquetas({
     const limpo = nome.trim()
     if (!limpo) return
     const r = await adicionarEtiquetas(leadId, [limpo])
-    if (!r.ok) setErro(r.erro)
+    if (!r.ok) setErro(MENSAGENS[r.erro] ?? r.erro)
     else {
       setErro(null)
       setEntrada('')

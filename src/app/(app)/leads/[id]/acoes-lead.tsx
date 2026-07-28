@@ -5,13 +5,8 @@ import { useRouter } from 'next/navigation'
 import type { Etapa, Etiqueta, Lead, Membro, MotivoPerda } from '@/lib/domain/tipos'
 import { ModalMovimento, type PedidoMovimento } from '@/app/(app)/funil/modal-movimento'
 import { moverEtapaAction } from '@/app/(app)/funil/acoes'
+import { mensagemDeErro } from '@/app/(app)/funil/erros'
 import { trocarResponsavel } from './acoes'
-
-const MENSAGENS: Record<string, string> = {
-  motivo_perda_obrigatorio: 'Escolha o motivo da perda.',
-  motivo_perda_invalido: 'Esse motivo de perda não pertence à sua conta.',
-  sem_permissao: 'Só gestor ou admin troca o responsável.',
-}
 
 export function AcoesLead({
   lead,
@@ -36,7 +31,7 @@ export function AcoesLead({
     if (!pedido) return
     const r = await moverEtapaAction(pedido.leadId, pedido.destino.id, lossReasonId, etiquetas)
     setPedido(null)
-    if (!r.ok) setErro(MENSAGENS[r.erro] ?? r.erro)
+    if (!r.ok) setErro(mensagemDeErro(r.erro))
     else {
       setErro(null)
       router.refresh()
@@ -72,7 +67,7 @@ export function AcoesLead({
             value={lead.responsavelId ?? ''}
             onChange={async (e) => {
               const r = await trocarResponsavel(lead.id, e.target.value || null)
-              if (!r.ok) setErro(MENSAGENS[r.erro] ?? r.erro)
+              if (!r.ok) setErro(mensagemDeErro(r.erro))
               else {
                 setErro(null)
                 router.refresh()
