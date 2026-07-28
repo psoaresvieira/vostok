@@ -30,13 +30,25 @@ export default async function FunilPage({
   const membros = await store.membros()
   if (!membros.ok) throw new Error(membros.erro)
 
+  const motivos = await store.motivosPerda()
+  if (!motivos.ok) throw new Error(motivos.erro)
+
+  const etiquetas = await store.etiquetasDaConta()
+  if (!etiquetas.ok) throw new Error(etiquetas.erro)
+
   return (
     <>
       <div className="flex items-center justify-between border-b px-6 py-3">
         <Filtros membros={membros.valor} podeFiltrarPorResponsavel={papel !== 'vendedor'} />
         <NovoLead membros={membros.valor} podeEscolherResponsavel={papel !== 'vendedor'} />
       </div>
-      <Quadro etapas={pipeline.valor.etapas} leads={leads.valor} membros={membros.valor} />
+      <Quadro
+        etapas={pipeline.valor.etapas}
+        leads={leads.valor}
+        membros={membros.valor}
+        motivos={motivos.valor}
+        etiquetasConhecidas={etiquetas.valor}
+      />
     </>
   )
 }

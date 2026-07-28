@@ -63,3 +63,27 @@ export async function criarLeadAction(formData: FormData): Promise<Resultado<str
   revalidatePath('/funil')
   return ok(r.valor)
 }
+
+export async function moverEtapaAction(
+  leadId: string,
+  stageDestino: string,
+  lossReasonId: string | null,
+  etiquetas: string[],
+): Promise<Resultado<void>> {
+  const contexto = await criarStoreDoServidor()
+  if (!contexto.ok) return falha(contexto.erro)
+  const { store } = contexto.valor
+
+  // Etiquetas primeiro: o snapshot precisa gravar a etapa de ORIGEM, que e onde
+  // a qualificacao aconteceu. Depois de mover, o snapshot registraria o destino.
+  if (etiquetas.length > 0) {
+    const r = await store.aplicarEtiquetas(leadId, etiquetas)
+    if (!r.ok) return falha(r.erro)
+  }
+
+  const r = await store.moverEtapa(leadId, stageDestino, lossReasonId)
+  if (!r.ok) return falha(r.erro)
+
+  revalidatePath('/funil')
+  return ok(undefined)
+}
