@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { startTransition, useOptimistic, useState } from 'react'
 import {
   DndContext,
   PointerSensor,
@@ -20,6 +20,15 @@ const MENSAGENS: Record<string, string> = {
   motivo_perda_invalido: 'Esse motivo de perda não pertence à sua conta.',
   etapa_invalida: 'Essa etapa não pertence ao seu funil.',
   lead_nao_encontrado: 'Você não tem acesso a esse lead.',
+  movimento_falhou_etiquetas_salvas:
+    'As etiquetas foram salvas, mas o lead continua na etapa anterior. Tente mover de novo.',
+}
+
+// Move um unico lead: patches concorrentes se acumulam em vez de se sobrescreverem.
+type MovimentoOtimista = { leadId: string; stageId: string }
+
+function aplicarMovimento(atual: Lead[], patch: MovimentoOtimista): Lead[] {
+  return atual.map((l) => (l.id === patch.leadId ? { ...l, stageId: patch.stageId } : l))
 }
 
 function CartaoArrastavel({ lead, nomeResponsavel }: { lead: Lead; nomeResponsavel: string | null }) {
@@ -69,7 +78,9 @@ export function Quadro({
   motivos: MotivoPerda[]
   etiquetasConhecidas: Etiqueta[]
 }) {
-  const [posicoes, setPosicoes] = useState<Lead[]>(leads)
+  // Deriva do prop: revalidatePath e navegacao por filtro chegam sozinhos, e o
+  // patch otimista e descartado quando a transicao termina (rollback automatico).
+  const [posicoes, moverOtimista] = useOptimistic(leads, aplicarMovimento)
   const [pedido, setPedido] = useState<PedidoMovimento | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const sensores = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
@@ -88,21 +99,19 @@ export function Quadro({
     setPedido({ leadId, nomeLead: lead.nome, destino })
   }
 
-  async function confirmar(lossReasonId: string | null, etiquetas: string[]) {
+  function confirmar(lossReasonId: string | null, etiquetas: string[]) {
     if (!pedido) return
-    const anterior = posicoes
-    // Otimista: o card muda de coluna antes da resposta do servidor.
-    setPosicoes(
-      posicoes.map((l) => (l.id === pedido.leadId ? { ...l, stageId: pedido.destino.id } : l)),
-    )
+    const atual = pedido
     setPedido(null)
     setErro(null)
 
-    const r = await moverEtapaAction(pedido.leadId, pedido.destino.id, lossReasonId, etiquetas)
-    if (!r.ok) {
-      setPosicoes(anterior)
-      setErro(MENSAGENS[r.erro] ?? r.erro)
-    }
+    // O dispatch otimista e o await moram dentro da mesma transicao: o React so
+    // descarta o patch quando ela termina, entao o card nao volta antes da resposta.
+    startTransition(async () => {
+      moverOtimista({ leadId: atual.leadId, stageId: atual.destino.id })
+      const r = await moverEtapaAction(atual.leadId, atual.destino.id, lossReasonId, etiquetas)
+      if (!r.ok) setErro(MENSAGENS[r.erro] ?? r.erro)
+    })
   }
 
   return (

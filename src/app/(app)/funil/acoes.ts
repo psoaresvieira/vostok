@@ -76,13 +76,22 @@ export async function moverEtapaAction(
 
   // Etiquetas primeiro: o snapshot precisa gravar a etapa de ORIGEM, que e onde
   // a qualificacao aconteceu. Depois de mover, o snapshot registraria o destino.
+  let etiquetasSalvas = false
   if (etiquetas.length > 0) {
     const r = await store.aplicarEtiquetas(leadId, etiquetas)
     if (!r.ok) return falha(r.erro)
+    etiquetasSalvas = true
   }
 
   const r = await store.moverEtapa(leadId, stageDestino, lossReasonId)
-  if (!r.ok) return falha(r.erro)
+  if (!r.ok) {
+    // Sem transacao cobrindo as duas chamadas: as etiquetas ja estao gravadas.
+    // Devolvemos um codigo proprio para a UI contar isso em vez de dizer que
+    // nada aconteceu. Repetir e seguro: aplicarEtiquetas ignora duplicadas e
+    // rele a etapa atual antes de gravar o snapshot.
+    if (etiquetasSalvas) return falha('movimento_falhou_etiquetas_salvas')
+    return falha(r.erro)
+  }
 
   revalidatePath('/funil')
   return ok(undefined)
