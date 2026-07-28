@@ -238,6 +238,29 @@ export class SupabaseCrmStore implements CrmStore {
     return ok(undefined)
   }
 
+  async atribuirResponsavel(
+    leadId: string,
+    responsavelId: string | null,
+  ): Promise<Resultado<void>> {
+    const atual = await this.buscarLead(leadId)
+    if (!atual.ok) return falha(atual.erro)
+    if (!atual.valor) return falha('lead_nao_encontrado')
+
+    const { error } = await this.cliente
+      .from('leads')
+      .update({ responsavel_id: responsavelId, atualizado_em: new Date().toISOString() })
+      .eq('id', leadId)
+    if (error) return falha(error.message)
+
+    await this.cliente.from('lead_events').insert({
+      lead_id: leadId,
+      tipo: 'responsavel_alterado',
+      payload: { de: atual.valor.responsavelId, para: responsavelId },
+      ator_id: this.usuarioId,
+    })
+    return ok(undefined)
+  }
+
   async etiquetasDaConta(): Promise<Resultado<Etiqueta[]>> {
     const { data, error } = await this.cliente
       .from('tags')

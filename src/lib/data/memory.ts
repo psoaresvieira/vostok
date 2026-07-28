@@ -215,6 +215,26 @@ export class InMemoryCrmStore implements CrmStore {
     return ok(undefined)
   }
 
+  async atribuirResponsavel(
+    leadId: string,
+    responsavelId: string | null,
+  ): Promise<Resultado<void>> {
+    const lead = this.leads.find((l) => l.id === leadId)
+    if (!lead) return falha('lead_nao_encontrado')
+    const anterior = lead.responsavelId
+    lead.responsavelId = responsavelId
+    lead.atualizadoEm = new Date()
+    this.eventos.push({
+      id: randomUUID(),
+      leadId,
+      tipo: 'responsavel_alterado',
+      payload: { de: anterior, para: responsavelId },
+      atorId: this.usuarioAtual,
+      criadoEm: new Date(),
+    })
+    return ok(undefined)
+  }
+
   async etiquetasDaConta(): Promise<Resultado<Etiqueta[]>> {
     return ok([...this.tags])
   }

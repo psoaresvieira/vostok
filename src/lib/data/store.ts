@@ -38,6 +38,7 @@ export interface CrmStore {
     stageDestino: string,
     lossReasonId?: string | null,
   ): Promise<Resultado<void>>
+  atribuirResponsavel(leadId: string, responsavelId: string | null): Promise<Resultado<void>>
 
   etiquetasDaConta(): Promise<Resultado<Etiqueta[]>>
   aplicarEtiquetas(leadId: string, nomes: string[]): Promise<Resultado<void>>

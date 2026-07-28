@@ -156,4 +156,44 @@ describe('InMemoryCrmStore', () => {
     if (!porBusca.ok) throw new Error(porBusca.erro)
     expect(porBusca.valor.map((l) => l.nome)).toEqual(['Bruno Souza'])
   })
+
+  it('atribui responsavel e registra evento', async () => {
+    const p = await store.pipelinePadrao()
+    if (!p.ok) throw new Error(p.erro)
+    const criado = await store.criarLead({
+      ...novoLead('Ana'),
+      pipelineId: p.valor.pipeline.id,
+      stageId: p.valor.etapas[0].id,
+    })
+    if (!criado.ok) throw new Error(criado.erro)
+
+    const r = await store.atribuirResponsavel(criado.valor, 'user-2')
+    expect(r.ok).toBe(true)
+
+    const lead = await store.buscarLead(criado.valor)
+    if (!lead.ok || !lead.valor) throw new Error('lead sumiu')
+    expect(lead.valor.responsavelId).toBe('user-2')
+
+    const eventos = await store.eventosDoLead(criado.valor)
+    if (!eventos.ok) throw new Error(eventos.erro)
+    expect(eventos.valor.map((e) => e.tipo)).toContain('responsavel_alterado')
+  })
+
+  it('registra nota na timeline', async () => {
+    const p = await store.pipelinePadrao()
+    if (!p.ok) throw new Error(p.erro)
+    const criado = await store.criarLead({
+      ...novoLead('Ana'),
+      pipelineId: p.valor.pipeline.id,
+      stageId: p.valor.etapas[0].id,
+    })
+    if (!criado.ok) throw new Error(criado.erro)
+
+    await store.registrarNota(criado.valor, 'ligou, pediu proposta')
+
+    const eventos = await store.eventosDoLead(criado.valor)
+    if (!eventos.ok) throw new Error(eventos.erro)
+    const nota = eventos.valor.find((e) => e.tipo === 'nota')
+    expect(nota?.payload.texto).toBe('ligou, pediu proposta')
+  })
 })
