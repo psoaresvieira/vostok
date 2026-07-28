@@ -1,5 +1,4 @@
 import { Client } from 'pg'
-import 'dotenv/config'
 
 const CONN =
   process.env.SUPABASE_DB_URL ??
