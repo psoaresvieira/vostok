@@ -37,7 +37,7 @@ export function Filtros({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b px-6 py-3">
+    <div className="flex flex-wrap items-center gap-2">
       <input
         defaultValue={params.get('busca') ?? ''}
         placeholder="buscar por nome, telefone ou email"

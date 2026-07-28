@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { criarStoreDoServidor } from '@/lib/data/supabase'
 import type { Lead } from '@/lib/domain/tipos'
 import { Filtros } from './filtros'
+import { NovoLead } from './novo-lead'
 import { Quadro } from './quadro'
 
 export default async function FunilPage({
@@ -31,7 +32,10 @@ export default async function FunilPage({
 
   return (
     <>
-      <Filtros membros={membros.valor} podeFiltrarPorResponsavel={papel !== 'vendedor'} />
+      <div className="flex items-center justify-between border-b px-6 py-3">
+        <Filtros membros={membros.valor} podeFiltrarPorResponsavel={papel !== 'vendedor'} />
+        <NovoLead membros={membros.valor} podeEscolherResponsavel={papel !== 'vendedor'} />
+      </div>
       <Quadro etapas={pipeline.valor.etapas} leads={leads.valor} membros={membros.valor} />
     </>
   )
