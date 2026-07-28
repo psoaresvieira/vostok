@@ -60,7 +60,8 @@ export async function limparBanco(): Promise<void> {
   await comoServico(async (c) => {
     await c.query(`
       truncate table
-        public.loss_reasons, public.stages, public.pipelines,
+        public.lead_events, public.stage_history, public.lead_tags, public.tags,
+        public.leads, public.loss_reasons, public.stages, public.pipelines,
         public.invites, public.memberships, public.accounts, public.profiles
       restart identity cascade
     `)
