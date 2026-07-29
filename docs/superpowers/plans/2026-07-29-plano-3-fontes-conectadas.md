@@ -1049,6 +1049,12 @@ Cria as três tabelas do Plano 3 e as funções que as escrevem. Nenhuma tela ai
 
 Duas coisas aqui não são convenção e sim requisito: `source_credentials` e `ingestion_config` **não recebem grant nenhum**, e o índice único de `lead_sources` é global, não por conta.
 
+**Nenhuma função escreve `ingestion_config.segredo_hash`, e isso é deliberado.** A linha nasce com `segredo_hash` nulo e fica assim ao fim deste plano. O segredo de ingestão é configuração de operador — ele existe para o *servidor* provar que a chamada veio dele, antes de qualquer conta ser resolvida —, então não é dado de tenant e a aplicação não o escreve.
+
+A primeira versão deste plano tinha uma RPC `definir_segredo_ingestao(p_account_id, p_segredo)` gateada em `papel_na_conta() = 'admin'`, chamada por um painel na tela de Integrações. Era falha de isolamento entre contas: `ingestion_config` é de linha única e global, qualquer pessoa cria a própria conta por signup e nasce admin dela, logo qualquer cliente poderia sobrescrever o segredo de todos os tenants e derrubar a ingestão alheia. Removida.
+
+Quem passa a precisar do segredo é o Plano 4, que traz as rotas de webhook — e é lá que entram o `supabase/seed.sql` com um valor conhecido para desenvolvimento e a definição por SQL no painel do Supabase em produção. Aqui não, porque nada neste plano lê esse campo.
+
 **Files:**
 - Create: `supabase/migrations/0008_fontes_conectadas.sql`
 - Create: `tests/integration/0008_fontes_conectadas.test.ts`
@@ -1060,7 +1066,6 @@ Duas coisas aqui não são convenção e sim requisito: `source_credentials` e `
   - tipo `provedor_lead` (`meta` | `google`)
   - tabelas `lead_sources`, `source_credentials`, `ingestion_config`
   - `hash_segredo(p_valor text) returns text`
-  - `definir_segredo_ingestao(p_account_id uuid, p_segredo text) returns void`
   - `conectar_fonte_meta(p_account_id uuid, p_page_id text, p_nome text, p_token text, p_responsavel uuid) returns uuid`
   - `conectar_fonte_google(p_account_id uuid, p_nome text, p_url_token text, p_google_key text, p_responsavel uuid) returns uuid`
   - `desconectar_fonte(p_source_id uuid) returns void`
@@ -1382,29 +1387,6 @@ describe('0008 — fontes conectadas', () => {
     })
     expect(dono).toBe(c.vendedorBId)
   })
-
-  it('define o segredo de ingestao como hash e recusa vazio', async () => {
-    await comoUsuario(c.adminId, (cli) =>
-      cli.query('select public.definir_segredo_ingestao($1, $2)', [
-        c.accountId,
-        'segredo-forte',
-      ]),
-    )
-    const hash = await comoServico(async (cli) => {
-      const r = await cli.query<{ segredo_hash: string }>(
-        'select segredo_hash from public.ingestion_config',
-      )
-      return r.rows[0].segredo_hash
-    })
-    expect(hash).toMatch(/^[0-9a-f]{64}$/)
-    expect(hash).not.toContain('segredo-forte')
-
-    await expect(
-      comoUsuario(c.adminId, (cli) =>
-        cli.query('select public.definir_segredo_ingestao($1, $2)', [c.accountId, '   ']),
-      ),
-    ).rejects.toThrow(/segredo_vazio/)
-  })
 })
 ```
 
@@ -1517,30 +1499,6 @@ language sql
 immutable
 as $$
   select encode(sha256(p_valor::bytea), 'hex');
-$$;
-
-create or replace function public.definir_segredo_ingestao(p_account_id uuid, p_segredo text)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if auth.uid() is null then
-    raise exception 'sem_sessao';
-  end if;
-  if public.papel_na_conta(p_account_id) is distinct from 'admin' then
-    raise exception 'sem_permissao';
-  end if;
-  if p_segredo is null or btrim(p_segredo) = '' then
-    raise exception 'segredo_vazio';
-  end if;
-
-  update public.ingestion_config
-     set segredo_hash = public.hash_segredo(p_segredo),
-         atualizado_em = now()
-   where id;
-end;
 $$;
 
 create or replace function public.conectar_fonte_meta(
@@ -1658,14 +1616,14 @@ $$;
 - [ ] **Step 5: Aplicar e rodar**
 
 Run: `npm run db:reset && npx vitest run --config vitest.integration.config.ts tests/integration/0008_fontes_conectadas.test.ts`
-Expected: PASS, 14 testes.
+Expected: PASS, 13 testes.
 
 Se `authenticated nao le source_credentials` falhar dizendo que a consulta devolveu zero linhas em vez de estourar, a tabela ganhou grant em algum lugar. Ache o grant e remova. **Não** troque a asserção por "devolve vazio": zero linhas por RLS e ausência de privilégio são coisas diferentes, e só a segunda sobrevive a uma policy mal escrita no futuro.
 
 - [ ] **Step 6: Rodar a suíte inteira**
 
 Run: `npm test && npm run test:integration && npm run typecheck`
-Expected: 80 unitários PASS, 70 de integração PASS (56 + 14), typecheck limpo.
+Expected: 80 unitários PASS, 69 de integração PASS (56 + 13), typecheck limpo.
 
 - [ ] **Step 7: Commit**
 
@@ -2227,7 +2185,7 @@ O segredo do Google aparece **uma vez**, no retorno da ação que o cria. Se o a
 - Produces:
   - `fonte.ts`: `type Provedor = 'meta' | 'google'`, `type Fonte = { id, provedor, externalId, nome, responsavelPadraoId, ativo, criadoEm }`.
   - `fontes.ts`: `interface FonteStore` e `criarFonteStoreDoServidor(): Promise<Resultado<{ fontes: FonteStore; conta: Conta }>>`.
-  - `acoes-fontes.ts`: `listarPaginasDoMetaAction`, `conectarPaginaAction`, `conectarGoogleAction`, `definirResponsavelAction`, `desconectarFonteAction`, `definirSegredoAction`.
+  - `acoes-fontes.ts`: `listarPaginasDoMetaAction`, `conectarPaginaAction`, `conectarGoogleAction`, `definirResponsavelAction`, `desconectarFonteAction`.
   - `<Integracoes fontes={} membros={} origem={} etapa={} />`.
 
 - [ ] **Step 1: Escrever os tipos de domínio**
@@ -2278,7 +2236,6 @@ export interface FonteStore {
   ): Promise<Resultado<{ id: string; urlToken: string; googleKey: string }>>
   definirResponsavel(sourceId: string, responsavelId: string | null): Promise<Resultado<void>>
   desconectar(sourceId: string): Promise<Resultado<void>>
-  definirSegredoIngestao(segredo: string): Promise<Resultado<void>>
 }
 
 type LinhaFonte = {
@@ -2395,14 +2352,6 @@ export class SupabaseFonteStore implements FonteStore {
     return ok(undefined)
   }
 
-  async definirSegredoIngestao(segredo: string): Promise<Resultado<void>> {
-    const { error } = await this.cliente.rpc('definir_segredo_ingestao', {
-      p_account_id: this.accountId,
-      p_segredo: segredo,
-    })
-    if (error) return falha(codigo(error.message))
-    return ok(undefined)
-  }
 }
 
 export async function criarFonteStoreDoServidor(): Promise<
@@ -2527,16 +2476,6 @@ export async function desconectarFonteAction(sourceId: string): Promise<Resultad
   revalidatePath('/config')
   return ok(undefined)
 }
-
-export async function definirSegredoAction(segredo: string): Promise<Resultado<void>> {
-  const contexto = await criarFonteStoreDoServidor()
-  if (!contexto.ok) return falha(contexto.erro)
-
-  const r = await contexto.valor.fontes.definirSegredoIngestao(segredo)
-  if (!r.ok) return falha(r.erro)
-  revalidatePath('/config')
-  return ok(undefined)
-}
 ```
 
 Nota sobre `desconectarFonteAction`: ela **não** chama `desassinarLeadgen`. Desassinar exige o token da Page, que só existe em `source_credentials`, e ler credencial fora do banco é justamente o que este plano proibiu. O Plano 4, que já vai precisar ler o token para a ingestão, é onde a desinscrição no Meta entra. Até lá, desconectar remove a fonte do CRM e o webhook que chegar cai como Page desconhecida — comportamento correto, e o Plano 4 o registra em `integration_log`.
@@ -2574,7 +2513,6 @@ import {
   conectarGoogleAction,
   definirResponsavelAction,
   desconectarFonteAction,
-  definirSegredoAction,
   type PaginaOferecida,
   type SegredoDoGoogle,
 } from './acoes-fontes'
@@ -2602,7 +2540,6 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
   const [paginas, setPaginas] = useState<PaginaOferecida[] | null>(null)
   const [nomeGoogle, setNomeGoogle] = useState('')
   const [segredoGoogle, setSegredoGoogle] = useState<SegredoDoGoogle | null>(null)
-  const campoSegredo = useRef<HTMLInputElement>(null)
 
   function rodar(promessa: Promise<Resultado<void>>, aoDarCerto?: () => void) {
     iniciar(async () => {
@@ -2766,35 +2703,6 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
         </div>
       )}
 
-      <details className="text-sm">
-        <summary className="cursor-pointer">Segredo de ingestão</summary>
-        <p className="mt-2 text-xs text-gray-700">
-          Precisa ser igual ao <code>INGESTAO_SEGREDO</code> do servidor. Sem ele nenhum
-          webhook é aceito.
-        </p>
-        <div className="mt-2 flex gap-2">
-          <input
-            ref={campoSegredo}
-            className="rounded border px-2 py-1"
-            placeholder="segredo de ingestão"
-            type="password"
-          />
-          <button
-            type="button"
-            disabled={pendente}
-            className="rounded border px-3 py-2 disabled:opacity-50"
-            onClick={() => {
-              const campo = campoSegredo.current
-              if (!campo) return
-              rodar(definirSegredoAction(campo.value), () => {
-                campo.value = ''
-              })
-            }}
-          >
-            Salvar segredo
-          </button>
-        </div>
-      </details>
     </section>
   )
 }
@@ -2871,7 +2779,7 @@ Run: `npm run dev`
 - [ ] **Step 8: Rodar a suíte inteira**
 
 Run: `npm test && npm run test:integration && npm run typecheck && npm run build`
-Expected: 94 unitários PASS (80 + 14 da Task 6), 70 de integração PASS, typecheck e build limpos.
+Expected: 94 unitários PASS (80 + 14 da Task 6), 69 de integração PASS, typecheck e build limpos.
 
 - [ ] **Step 9: Commit**
 
@@ -2987,7 +2895,7 @@ Se `admin conecta uma Page do Meta` falhar em `/config?meta=escolher` com a list
 - [ ] **Step 4: Rodar tudo**
 
 Run: `npm test && npm run test:integration && npm run test:e2e && npm run typecheck && npm run build`
-Expected: 94 unitários, 70 de integração, 6 E2E, typecheck e build limpos.
+Expected: 94 unitários, 69 de integração, 6 E2E, typecheck e build limpos.
 
 - [ ] **Step 5: Commit**
 
@@ -3029,7 +2937,7 @@ Nota: `.superpowers/sdd/progress.md` é gitignored no repo. Se o `git add` recus
 
 ## Pronto quando
 
-- `npm test` (94), `npm run test:integration` (70), `npm run test:e2e` (6), `npm run typecheck` e `npm run build` todos limpos, rodados no resultado do merge e não só antes dele.
+- `npm test` (94), `npm run test:integration` (69), `npm run test:e2e` (6), `npm run typecheck` e `npm run build` todos limpos, rodados no resultado do merge e não só antes dele.
 - Um admin abre `/config`, clica em **Conectar Facebook**, escolhe a Page, define o responsável padrão e vê a fonte listada.
 - O mesmo admin gera a URL secreta do Google, ela aparece uma vez e não volta no recarregamento.
 - `select * from public.source_credentials` como `authenticated` responde `permission denied`.

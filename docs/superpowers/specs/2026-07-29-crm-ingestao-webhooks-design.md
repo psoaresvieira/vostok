@@ -95,7 +95,11 @@ A divergência é de um lado só. O `InMemoryCrmStore` **já** desempata pelo í
 
 Hoje o projeto tem **zero uso de chave privilegiada** — até a tela de admin usa o cliente da sessão do usuário (`admin.ts`). O webhook é o primeiro caminho de escrita sem `auth.uid()` na história do projeto.
 
-A escrita acontece por funções `security definer` chamadas com o cliente anônimo, autorizadas por um **segredo de ingestão**: `INGESTAO_SEGREDO`, variável de ambiente do servidor, cujo hash vive na linha única de `ingestion_config`. Em desenvolvimento o `seed.sql` grava um valor conhecido, para que `supabase db reset` deixe o ambiente pronto; em produção um admin o define uma vez pela tela de Integrações, por RPC gateada em sessão. Enquanto `segredo_hash` for nulo, toda função de ingestão recusa — o estado "servidor não registrado" é explícito, não um buraco aberto.
+A escrita acontece por funções `security definer` chamadas com o cliente anônimo, autorizadas por um **segredo de ingestão**: `INGESTAO_SEGREDO`, variável de ambiente do servidor, cujo hash vive na linha única de `ingestion_config`. Enquanto `segredo_hash` for nulo, toda função de ingestão recusa — o estado "servidor não registrado" é explícito, não um buraco aberto.
+
+**Esse segredo é configuração de operador, não dado de tenant, e a aplicação não o escreve.** Em desenvolvimento o `seed.sql` grava um valor conhecido, para que `supabase db reset` deixe o ambiente pronto; em produção quem opera o deploy o define por SQL no painel do Supabase.
+
+A primeira versão desta spec previa uma RPC `definir_segredo_ingestao` gateada em `papel_na_conta() = 'admin'`, chamada pela tela de Integrações. **Isso era falha de isolamento entre contas** e foi removido: `ingestion_config` é de linha única e global, qualquer pessoa cria a própria conta por signup e nasce admin dela, então qualquer cliente poderia sobrescrever o segredo de todos os tenants e derrubar a ingestão alheia. O parâmetro `p_account_id` dava aparência de escopo a uma operação sem escopo nenhum. O erro de raciocínio foi tratar como dado de conta algo que existe para o **servidor** se identificar, antes de qualquer conta ser resolvida.
 
 O ganho sobre usar `service_role` é concreto e vale a ceremônia: vazamento do segredo de ingestão permite injetar leads e ler tokens de página; vazamento da `service_role` permite ler e escrever **todas as tabelas de todas as contas**, inclusive `auth`. A superfície da RPC é pequena e auditável.
 
@@ -108,7 +112,8 @@ Superfície completa das funções novas:
 | `entregas_pendentes(segredo, limite)` | cron (anon) | segredo de ingestão |
 | `conectar_fonte_meta(...)` / `conectar_fonte_google(...)` | tela de Integrações | sessão + `papel_na_conta() = 'admin'` |
 | `desconectar_fonte(source_id)` | tela de Integrações | sessão + `papel_na_conta() = 'admin'` |
-| `definir_segredo_ingestao(hash)` | tela de Integrações | sessão + `papel_na_conta() = 'admin'` |
+
+`ingestion_config.segredo_hash` não aparece nesta tabela de propósito: nenhuma função exposta à aplicação o escreve. Ver a nota acima.
 
 `registrar_entrega` devolve o token da Page junto do `log_id` quando o provedor é `meta` — não é oráculo de token, porque quem tem o segredo já tem poder de ingestão total.
 
