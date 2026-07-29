@@ -52,7 +52,14 @@ export async function aceitarConvite(token: string): Promise<Resultado<void>> {
   const cliente = await criarClienteServidor()
   const { error } = await cliente.rpc('accept_invite', { p_token: token })
   if (error) {
-    for (const codigo of ['convite_invalido', 'convite_expirado', 'convite_ja_aceito', 'sem_sessao']) {
+    for (const codigo of [
+      'convite_invalido',
+      'convite_expirado',
+      'convite_ja_aceito',
+      'convite_de_outro_email',
+      'sem_email',
+      'sem_sessao',
+    ]) {
       if (error.message.includes(codigo)) return falha(codigo)
     }
     return falha(error.message)

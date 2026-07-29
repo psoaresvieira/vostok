@@ -7,6 +7,9 @@ const MENSAGENS: Record<string, string> = {
   convite_invalido: 'Convite não encontrado.',
   convite_expirado: 'Este convite expirou. Peça um novo ao administrador.',
   convite_ja_aceito: 'Este convite já foi usado.',
+  convite_de_outro_email:
+    'Este convite foi enviado para outro email. Entre com o email convidado para aceitá-lo.',
+  sem_email: 'Sua conta não tem email. Entre novamente para aceitar o convite.',
   sem_sessao: 'Crie sua conta ou entre para aceitar o convite.',
 }
 

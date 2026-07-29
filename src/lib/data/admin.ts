@@ -4,11 +4,15 @@ import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import type { Conta, MotivoPerda, Papel, StageTipo } from '@/lib/domain/tipos'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 
+/**
+ * Sem `token` de proposito: a listagem de pendentes vai inteira para um
+ * componente client, entao qualquer campo aqui acaba no payload RSC e no HTML.
+ * O token so e devolvido por `convidar`, no momento em que o link e gerado.
+ */
 export type Convite = {
   id: string
   email: string
   papel: Papel
-  token: string
   expiraEm: Date
 }
 
@@ -60,12 +64,40 @@ export class SupabaseAdminStore implements AdminStore {
   }
 
   async renomearEtapa(etapaId: string, nome: string): Promise<Resultado<void>> {
-    const { error } = await this.cliente.from('stages').update({ nome }).eq('id', etapaId)
+    // Zero linhas depois da RLS significa "nao encontrado", nunca erro de
+    // permissao: um id de outra conta simplesmente nao casa e o update volta
+    // vazio sem error. Sem o select abaixo a tela mostraria sucesso num no-op.
+    const { data, error } = await this.cliente
+      .from('stages')
+      .update({ nome })
+      .eq('id', etapaId)
+      .select('id')
     if (error) return falha(error.message)
+    if (!data || data.length === 0) return falha('nao_encontrado')
     return ok(undefined)
   }
 
   async reordenarEtapas(idsNaOrdem: string[]): Promise<Resultado<void>> {
+    // A troca em duas fases abaixo so e livre de colisao se idsNaOrdem for uma
+    // permutacao exata das etapas deste pipeline. Lista parcial, id repetido ou
+    // id de outro pipeline fazem o loop quebrar no meio e deixam linhas paradas
+    // na faixa 1000+ — sem transacao nao ha rollback, e a fase 1 da proxima
+    // reordenacao volta a colidir, travando a ordenacao de vez. Por isso a
+    // validacao vem antes de qualquer escrita.
+    const { data: existentes, error: erroExistentes } = await this.cliente
+      .from('stages')
+      .select('id')
+      .eq('pipeline_id', this.pipelineId)
+    if (erroExistentes) return falha(erroExistentes.message)
+
+    const doPipeline = new Set((existentes ?? []).map((e) => e.id as string))
+    const recebidos = new Set(idsNaOrdem)
+    const permutacaoExata =
+      idsNaOrdem.length === doPipeline.size &&
+      recebidos.size === idsNaOrdem.length &&
+      idsNaOrdem.every((id) => doPipeline.has(id))
+    if (!permutacaoExata) return falha('ordem_invalida')
+
     // stages_ordem_por_pipeline e um indice unico em (pipeline_id, ordem):
     // escrever as posicoes finais diretamente pode colidir com uma linha que
     // ainda guarda a posicao de destino (ex.: inverter [1..7] tentaria gravar
@@ -74,11 +106,15 @@ export class SupabaseAdminStore implements AdminStore {
     // colisao porque os valores 1000+i sao distintos entre si e maiores que
     // qualquer ordem existente — e só então gravamos as posicoes finais,
     // tambem distintas entre si.
+    // O filtro por pipeline_id repete o que a validacao acima ja garante: e
+    // defesa em profundidade, porque a policy sozinha deixaria escrever em
+    // qualquer etapa da conta, inclusive de outro pipeline.
     for (let i = 0; i < idsNaOrdem.length; i++) {
       const { error } = await this.cliente
         .from('stages')
         .update({ ordem: 1000 + i })
         .eq('id', idsNaOrdem[i])
+        .eq('pipeline_id', this.pipelineId)
       if (error) return falha(error.message)
     }
     for (let i = 0; i < idsNaOrdem.length; i++) {
@@ -86,6 +122,7 @@ export class SupabaseAdminStore implements AdminStore {
         .from('stages')
         .update({ ordem: i + 1 })
         .eq('id', idsNaOrdem[i])
+        .eq('pipeline_id', this.pipelineId)
       if (error) return falha(error.message)
     }
     return ok(undefined)
@@ -102,11 +139,13 @@ export class SupabaseAdminStore implements AdminStore {
   }
 
   async alternarMotivo(motivoId: string, ativo: boolean): Promise<Resultado<void>> {
-    const { error } = await this.cliente
+    const { data, error } = await this.cliente
       .from('loss_reasons')
       .update({ ativo })
       .eq('id', motivoId)
+      .select('id')
     if (error) return falha(error.message)
+    if (!data || data.length === 0) return falha('nao_encontrado')
     return ok(undefined)
   }
 
@@ -143,7 +182,7 @@ export class SupabaseAdminStore implements AdminStore {
   async convitesPendentes(): Promise<Resultado<Convite[]>> {
     const { data, error } = await this.cliente
       .from('invites')
-      .select('id, email, papel, token, expira_em')
+      .select('id, email, papel, expira_em')
       .eq('account_id', this.accountId)
       .is('aceito_em', null)
       .order('criado_em', { ascending: false })
@@ -153,15 +192,19 @@ export class SupabaseAdminStore implements AdminStore {
         id: i.id,
         email: i.email,
         papel: i.papel as Papel,
-        token: i.token,
         expiraEm: new Date(i.expira_em),
       })),
     )
   }
 
   async revogarConvite(conviteId: string): Promise<Resultado<void>> {
-    const { error } = await this.cliente.from('invites').delete().eq('id', conviteId)
+    const { data, error } = await this.cliente
+      .from('invites')
+      .delete()
+      .eq('id', conviteId)
+      .select('id')
     if (error) return falha(error.message)
+    if (!data || data.length === 0) return falha('nao_encontrado')
     return ok(undefined)
   }
 }

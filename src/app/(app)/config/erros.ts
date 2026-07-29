@@ -4,6 +4,8 @@
 const MENSAGENS_ERRO: Record<string, string> = {
   nome_obrigatorio: 'Dê um nome antes de salvar.',
   email_invalido: 'Email inválido.',
+  ordem_invalida: 'A nova ordem não corresponde às etapas deste funil. Recarregue a página e tente de novo.',
+  nao_encontrado: 'Esse item não existe mais. Recarregue a página.',
   sem_permissao: 'Só administradores acessam a configuração.',
   sem_sessao: 'Sua sessão expirou. Entre novamente.',
   sem_conta: 'Você ainda não está em nenhuma conta.',

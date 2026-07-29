@@ -18,6 +18,8 @@ export async function comoServico<T>(fn: (c: Client) => Promise<T>): Promise<T> 
 /**
  * Executa com RLS ativa na pele de um usuario autenticado.
  * auth.uid() le request.jwt.claims->>'sub', entao setamos esse claim.
+ * O claim `email` vai junto porque o GoTrue sempre o emite e accept_invite
+ * passou a compara-lo com o email do convite (0005_convite_por_email.sql).
  */
 export async function comoUsuario<T>(
   userId: string,
@@ -26,11 +28,21 @@ export async function comoUsuario<T>(
   const client = new Client({ connectionString: CONN })
   await client.connect()
   try {
+    const dono = await client.query<{ email: string | null }>(
+      'select email from auth.users where id = $1',
+      [userId],
+    )
     await client.query('begin')
     await client.query('set local role authenticated')
     await client.query(
       `select set_config('request.jwt.claims', $1, true)`,
-      [JSON.stringify({ sub: userId, role: 'authenticated' })],
+      [
+        JSON.stringify({
+          sub: userId,
+          role: 'authenticated',
+          email: dono.rows[0]?.email ?? undefined,
+        }),
+      ],
     )
     const r = await fn(client)
     await client.query('commit')
