@@ -16,6 +16,7 @@ import type {
 import type { CrmStore, FiltroLeads } from './store'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 import { resolverContaAtiva } from './conta'
+import { valorPostgrest, padraoIlike } from './filtro'
 
 type LinhaLead = {
   id: string
@@ -155,7 +156,10 @@ export class SupabaseCrmStore implements CrmStore {
     if (filtro.origem) q = q.eq('origem', filtro.origem)
     if (filtro.desde) q = q.gte('criado_em', filtro.desde.toISOString())
     if (filtro.busca) {
-      const alvo = `%${filtro.busca}%`
+      // padraoIlike, e nao `%${busca}%`: o texto do usuario ia cru para o
+      // PostgREST, entao a virgula abria condicao OR extra e % e _ viravam
+      // curinga (buscar "100%" casava com "1000 leads").
+      const alvo = padraoIlike(filtro.busca)
       q = q.or(`nome.ilike.${alvo},telefone_e164.ilike.${alvo},email_norm.ilike.${alvo}`)
     }
 
@@ -213,8 +217,10 @@ export class SupabaseCrmStore implements CrmStore {
   ): Promise<Resultado<Lead[]>> {
     if (!telefoneE164 && !emailNorm) return ok([])
     const condicoes: string[] = []
-    if (telefoneE164) condicoes.push(`telefone_e164.eq.${telefoneE164}`)
-    if (emailNorm) condicoes.push(`email_norm.eq.${emailNorm}`)
+    // Comparacao exata, entao aqui basta neutralizar a pontuacao da sintaxe:
+    // um email como "a,b@x.com" abria uma condicao OR a mais.
+    if (telefoneE164) condicoes.push(`telefone_e164.eq.${valorPostgrest(telefoneE164)}`)
+    if (emailNorm) condicoes.push(`email_norm.eq.${valorPostgrest(emailNorm)}`)
 
     const { data, error } = await this.cliente
       .from('leads')
