@@ -71,11 +71,14 @@ export async function limparBanco(): Promise<void> {
   await comoServico(async (c) => {
     await c.query(`
       truncate table
+        public.source_credentials, public.lead_sources,
         public.lead_events, public.stage_history, public.lead_tags, public.tags,
         public.leads, public.loss_reasons, public.stages, public.pipelines,
         public.invites, public.memberships, public.accounts, public.profiles
       restart identity cascade
     `)
+    // ingestion_config tem linha unica e fixa: zerar o segredo, nao apagar a linha.
+    await c.query('update public.ingestion_config set segredo_hash = null')
     await c.query('delete from auth.users')
   })
 }
