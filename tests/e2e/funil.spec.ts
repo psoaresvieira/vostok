@@ -1,9 +1,40 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 
-// Email unico por execucao: o banco local nao e limpo entre rodadas de E2E.
-const carimbo = Date.now()
-const EMAIL = `e2e-${carimbo}@se7e.com`
 const SENHA = 'segredo123'
+
+// Email unico por conta: o banco local nao e limpo entre rodadas de E2E, e este
+// arquivo cria uma conta por teste. O contador tambem sobrevive a --repeat-each,
+// que reusaria o mesmo Date.now() dentro da mesma execucao.
+let contas = 0
+function carimbo(): string {
+  contas += 1
+  return `${Date.now()}-${contas}`
+}
+
+async function criarConta(page: Page): Promise<void> {
+  const id = carimbo()
+  await page.goto('/signup')
+  await page.getByPlaceholder('seu nome', { exact: true }).fill('Pedro E2E')
+  await page.getByPlaceholder('nome da empresa', { exact: true }).fill(`SE7E ${id}`)
+  await page.getByPlaceholder('email', { exact: true }).fill(`e2e-${id}@se7e.com`)
+  await page.getByPlaceholder('senha (min. 8 caracteres)', { exact: true }).fill(SENHA)
+  await page.getByRole('button', { name: 'Criar conta' }).click()
+
+  await expect(page).toHaveURL(/\/funil/)
+  await expect(page.getByRole('heading', { name: 'Novo lead', exact: true, level: 2 })).toBeVisible()
+}
+
+async function criarLead(page: Page, nome: string): Promise<void> {
+  await page.getByRole('button', { name: 'Novo lead' }).click()
+  // exact: true e obrigatorio — o filtro do quadro tem placeholder
+  // "buscar por nome, telefone ou email", que casa por substring com os tres.
+  await page.getByPlaceholder('nome', { exact: true }).fill(nome)
+  await page.getByPlaceholder('telefone', { exact: true }).fill('(83) 99999-1234')
+  await page.getByPlaceholder('valor em reais', { exact: true }).fill('1.500,00')
+  await page.getByRole('button', { name: 'Salvar' }).click()
+
+  await expect(coluna(page, 'Novo lead').getByRole('link', { name: nome })).toBeVisible()
+}
 
 // O PointerSensor do dnd-kit so ativa depois que o ponteiro anda mais de 5px, e
 // o destino so e calculado nos movimentos POSTERIORES a ativacao. Um unico pulo
@@ -24,21 +55,35 @@ async function arrastar(page: Page, cartao: Locator, coluna: Locator) {
   await page.mouse.move(xDestino, yDestino, { steps: 20 })
   await page.mouse.move(xDestino, yDestino)
   await page.mouse.up()
-  // Ao soltar, o dnd-kit deixa por 50ms um listener de `click` em capture no
-  // document que chama stopPropagation — o React 19 do App Router escuta no
-  // proprio document, entao o primeiro clique nesse intervalo nunca chega ao
-  // handler. Sem esta espera o clique em "Confirmar" simplesmente some.
-  await page.waitForTimeout(150)
+}
+
+// Ao soltar, o dnd-kit deixa por 50ms um listener de `click` em capture no
+// document que chama stopPropagation — o React 19 do App Router escuta no
+// proprio document, entao o primeiro clique nesse intervalo nunca chega ao
+// handler e o clique em "Confirmar" simplesmente some. Em vez de cronometrar
+// esse intervalo com um sleep, clicamos ate o modal fechar: o clique engolido
+// nao muda estado nenhum, e assim que ele passa o modal desmonta (setPedido(null)
+// roda antes da transicao), entao repetir e seguro e nao dispara dois movimentos.
+async function clicarConfirmar(page: Page) {
+  const confirmar = page.getByRole('button', { name: 'Confirmar' })
+  await expect(async () => {
+    await confirmar.click()
+    await expect(confirmar).toBeHidden({ timeout: 1_000 })
+  }).toPass({ timeout: 15_000 })
+}
+
+// A Server Action e despachada como POST na propria rota, do jeito que o Next faz.
+function respostaDoMovimento(page: Page) {
+  return page.waitForResponse(
+    (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/funil',
+  )
 }
 
 // O cartao chega no destino pelo useOptimistic ANTES de o servidor ter gravado.
-// Esperar a resposta da Server Action (POST na propria rota, do jeito que o
-// Next despacha) evita seguir para a ficha com o movimento ainda em voo.
+// Esperar a resposta evita seguir para a ficha com o movimento ainda em voo.
 async function confirmarMovimento(page: Page) {
-  const resposta = page.waitForResponse(
-    (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/funil',
-  )
-  await page.getByRole('button', { name: 'Confirmar' }).click()
+  const resposta = respostaDoMovimento(page)
+  await clicarConfirmar(page)
   await resposta
 }
 
@@ -49,32 +94,18 @@ function coluna(page: Page, nome: string): Locator {
 }
 
 test('do signup ate a perda com motivo, com a timeline contando a historia', async ({ page }) => {
-  await page.goto('/signup')
-  await page.getByPlaceholder('seu nome', { exact: true }).fill('Pedro E2E')
-  await page.getByPlaceholder('nome da empresa', { exact: true }).fill(`SE7E ${carimbo}`)
-  await page.getByPlaceholder('email', { exact: true }).fill(EMAIL)
-  await page.getByPlaceholder('senha (min. 8 caracteres)', { exact: true }).fill(SENHA)
-  await page.getByRole('button', { name: 'Criar conta' }).click()
-
-  await expect(page).toHaveURL(/\/funil/)
-  await expect(page.getByRole('heading', { name: 'Novo lead', exact: true, level: 2 })).toBeVisible()
-
-  await page.getByRole('button', { name: 'Novo lead' }).click()
-  // exact: true e obrigatorio — o filtro do quadro tem placeholder
-  // "buscar por nome, telefone ou email", que casa por substring com os tres.
-  await page.getByPlaceholder('nome', { exact: true }).fill('Cliente Teste')
-  await page.getByPlaceholder('telefone', { exact: true }).fill('(83) 99999-1234')
-  await page.getByPlaceholder('valor em reais', { exact: true }).fill('1.500,00')
-  await page.getByRole('button', { name: 'Salvar' }).click()
+  await criarConta(page)
+  await criarLead(page, 'Cliente Teste')
 
   const cartao = page.getByRole('link', { name: 'Cliente Teste' })
   await expect(cartao).toBeVisible()
-  await expect(coluna(page, 'Novo lead').getByRole('link', { name: 'Cliente Teste' })).toBeVisible()
 
   // Arrastar de "Novo lead" para "Qualificação", etiquetando na passagem.
   await arrastar(page, cartao, coluna(page, 'Qualificação'))
 
-  await expect(page.getByRole('heading', { name: 'Cliente Teste → Qualificação' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Cliente Teste → Qualificação', exact: true }),
+  ).toBeVisible()
   const entradaEtiqueta = page.getByPlaceholder('digite e pressione Enter')
   await entradaEtiqueta.fill('Preço alto')
   await entradaEtiqueta.press('Enter')
@@ -91,7 +122,9 @@ test('do signup ate a perda com motivo, com a timeline contando a historia', asy
   // Arrastar para "Perdido": o Confirmar so libera depois de escolher o motivo.
   await arrastar(page, page.getByRole('link', { name: 'Cliente Teste' }), coluna(page, 'Perdido'))
 
-  await expect(page.getByRole('heading', { name: 'Cliente Teste → Perdido' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Cliente Teste → Perdido', exact: true }),
+  ).toBeVisible()
   const confirmar = page.getByRole('button', { name: 'Confirmar' })
   await expect(confirmar).toBeDisabled()
   // getByRole('combobox').first() pegaria o filtro de responsavel do quadro, que
@@ -103,14 +136,82 @@ test('do signup ate a perda com motivo, com a timeline contando a historia', asy
   await expect(coluna(page, 'Perdido').getByRole('link', { name: 'Cliente Teste' })).toBeVisible()
 
   await page.getByRole('link', { name: 'Cliente Teste' }).click()
-  await expect(page.getByRole('heading', { name: 'Cliente Teste', level: 1 })).toBeVisible()
-  await expect(page.getByText('Etapa alterada: Qualificação → Perdido')).toBeVisible()
-  await expect(page.getByText('Etapa alterada: Novo lead → Qualificação')).toBeVisible()
-  await expect(page.getByText('Etiqueta "Preço alto" aplicada em Novo lead')).toBeVisible()
-  await expect(page.getByText('Lead criado (origem: manual)')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Cliente Teste', exact: true, level: 1 })).toBeVisible()
+
+  // A timeline e um <ol> com um <li> por evento e o rotulo no primeiro <p>. Ler a
+  // lista inteira e a unica forma de assegurar ORDEM: getByText casa em qualquer
+  // lugar da pagina, entao passaria igual se a timeline viesse invertida — e o
+  // mais recente primeiro e um entregavel, ja quebrado uma vez neste plano.
+  const linhaDoTempo = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: 'Linha do tempo', exact: true, level: 2 }) })
+  const rotulos = linhaDoTempo.locator('ol > li > p:first-child')
+  await expect(rotulos.first()).toBeVisible()
+
+  const esperados = [
+    'Etapa alterada: Qualificação → Perdido',
+    'Etapa alterada: Novo lead → Qualificação',
+    'Etiqueta "Preço alto" aplicada em Novo lead',
+    'Lead criado (origem: manual)',
+  ]
+  const lidos = (await rotulos.allTextContents()).map((t) => t.trim())
+  // Compara so as linhas que interessam, na ordem em que a pagina as lista: outros
+  // eventos podem se intercalar, mas estes quatro tem que vir nesta sequencia.
+  expect(lidos.filter((t) => esperados.includes(t))).toEqual(esperados)
 
   // A perda gravou o motivo e o valor sobreviveu ao caminho inteiro.
   // Scoped em <dd>: "Perdido" tambem e uma <option> do seletor "Mover para".
   await expect(page.getByRole('definition').filter({ hasText: /^Perdido$/ })).toBeVisible()
-  await expect(page.getByText('R$ 1.500,00')).toBeVisible()
+  await expect(page.getByText('R$ 1.500,00')).toBeVisible()
+})
+
+test('movimento recusado pelo servidor: o quadro pinta, volta atras e avisa', async ({ page }) => {
+  await criarConta(page)
+  await criarLead(page, 'Cliente Rollback')
+
+  // Provocar a falha SEM tocar em codigo de aplicacao: interceptamos o POST da
+  // Server Action e trocamos os UUIDs do corpo (o primeiro argumento de
+  // moverEtapaAction e o id do lead) por um id que nao existe. O servidor recusa
+  // de verdade, pelo caminho de erro do proprio produto — move_lead_stage levanta
+  // `lead_nao_encontrado`. O atraso mantem a transicao aberta o suficiente para a
+  // pintura otimista ser observavel antes de a resposta chegar.
+  const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+  const INEXISTENTE = '00000000-0000-4000-8000-000000000000'
+  const rotaDoFunil = (url: URL) => url.pathname === '/funil'
+  await page.route(rotaDoFunil, async (rota) => {
+    if (rota.request().method() !== 'POST') return rota.continue()
+    const corpo = rota.request().postData() ?? ''
+    await new Promise((resolve) => setTimeout(resolve, 2_500))
+    await rota.continue({ postData: corpo.replace(UUID, INEXISTENTE) })
+  })
+
+  const naQualificacao = coluna(page, 'Qualificação').getByRole('link', { name: 'Cliente Rollback' })
+  const noNovoLead = coluna(page, 'Novo lead').getByRole('link', { name: 'Cliente Rollback' })
+
+  await arrastar(page, page.getByRole('link', { name: 'Cliente Rollback' }), coluna(page, 'Qualificação'))
+  await expect(
+    page.getByRole('heading', { name: 'Cliente Rollback → Qualificação', exact: true }),
+  ).toBeVisible()
+
+  const resposta = respostaDoMovimento(page)
+  await clicarConfirmar(page)
+
+  // Otimista: o cartao chega no destino com o movimento ainda em voo.
+  await expect(naQualificacao).toBeVisible()
+  await resposta
+
+  // Rollback: nao ha reversao explicita: o patch do useOptimistic e simplesmente
+  // descartado quando a transicao termina, e o quadro volta a refletir o servidor.
+  // O Next injeta um role="alert" vazio (#__next-route-announcer__) no fim do body,
+  // entao filtrar pelo texto e o que isola o banner do quadro. A regex ancorada
+  // mantem a assercao presa a copia real de erros.ts, e nao a um pedaco dela.
+  await expect(
+    page.getByRole('alert').filter({ hasText: /^Você não tem acesso a esse lead\.$/ }),
+  ).toBeVisible()
+  await expect(noNovoLead).toBeVisible()
+  await expect(naQualificacao).toHaveCount(0)
+
+  // A interceptacao morre com a page fixture, mas soltar a rota deixa explicito
+  // que ela nao vale para mais nada depois daqui.
+  await page.unroute(rotaDoFunil)
 })
