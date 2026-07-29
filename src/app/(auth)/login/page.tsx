@@ -4,8 +4,9 @@ import { FormularioLogin } from './formulario'
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ convite?: string }>
+  searchParams: Promise<{ convite?: string | string[] }>
 }) {
   const { convite } = await searchParams
-  return <FormularioLogin convite={convite?.trim() || null} />
+  const token = Array.isArray(convite) ? convite[0] : convite
+  return <FormularioLogin convite={token?.trim() || null} />
 }

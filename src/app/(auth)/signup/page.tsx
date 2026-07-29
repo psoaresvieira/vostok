@@ -6,8 +6,9 @@ import { FormularioCadastro } from './formulario'
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ convite?: string }>
+  searchParams: Promise<{ convite?: string | string[] }>
 }) {
   const { convite } = await searchParams
-  return <FormularioCadastro convite={convite?.trim() || null} />
+  const token = Array.isArray(convite) ? convite[0] : convite
+  return <FormularioCadastro convite={token?.trim() || null} />
 }

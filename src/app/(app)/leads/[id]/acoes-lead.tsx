@@ -69,7 +69,7 @@ export function AcoesLead({
           <select
             value={lead.responsavelId ?? ''}
             onChange={async (e) => {
-              const r = await trocarResponsavel(lead.id, e.target.value || null)
+              const r = await chamarAcao(trocarResponsavel(lead.id, e.target.value || null))
               if (!r.ok) setErro(mensagemDeErro(r.erro))
               else {
                 setErro(null)
