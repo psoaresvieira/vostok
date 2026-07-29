@@ -2561,7 +2561,7 @@ Crie `src/app/(app)/config/integracoes.tsx`:
 ```tsx
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { chamarAcao } from '@/lib/ui/acao'
 import type { Resultado } from '@/lib/domain/resultado'
@@ -2602,6 +2602,7 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
   const [paginas, setPaginas] = useState<PaginaOferecida[] | null>(null)
   const [nomeGoogle, setNomeGoogle] = useState('')
   const [segredoGoogle, setSegredoGoogle] = useState<SegredoDoGoogle | null>(null)
+  const campoSegredo = useRef<HTMLInputElement>(null)
 
   function rodar(promessa: Promise<Resultado<void>>, aoDarCerto?: () => void) {
     iniciar(async () => {
@@ -2626,11 +2627,21 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
     setPaginas(r.valor)
   }
 
-  // etapa === 'escolher' e a unica coisa que dispara isto, e so uma vez:
-  // carregarPaginas troca o estado e o botao some.
-  if (etapa === 'escolher' && paginas === null && !pendente) {
+  // useEffect, e nao chamada solta no corpo do componente: disparar uma Server
+  // Action durante o render e efeito colateral em render, e o React 19 renderiza
+  // duas vezes em desenvolvimento — a acao sairia duplicada.
+  //
+  // A guarda `carregou` e do mesmo naipe: em Strict Mode o efeito tambem roda
+  // duas vezes, e sem ela a segunda execucao repetiria a chamada ao Graph API.
+  const carregou = useRef(false)
+  useEffect(() => {
+    if (etapa !== 'escolher' || carregou.current) return
+    carregou.current = true
     void carregarPaginas()
-  }
+    // carregarPaginas so le setters de estado, que sao estaveis; depender de
+    // `etapa` e o suficiente.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etapa])
 
   return (
     <section className="flex flex-col gap-4">
@@ -2763,7 +2774,7 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
         </p>
         <div className="mt-2 flex gap-2">
           <input
-            id="segredo-ingestao"
+            ref={campoSegredo}
             className="rounded border px-2 py-1"
             placeholder="segredo de ingestão"
             type="password"
@@ -2773,7 +2784,8 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
             disabled={pendente}
             className="rounded border px-3 py-2 disabled:opacity-50"
             onClick={() => {
-              const campo = document.getElementById('segredo-ingestao') as HTMLInputElement
+              const campo = campoSegredo.current
+              if (!campo) return
               rodar(definirSegredoAction(campo.value), () => {
                 campo.value = ''
               })
@@ -2970,7 +2982,7 @@ Expected: PASS, 6 testes (4 que já existiam + 2 novos).
 
 Se `admin conecta uma Page do Meta` falhar em `/config?meta=escolher` com a lista vazia, o cookie do token não sobreviveu ao redirect — confira `sameSite: 'lax'` e `path: '/'` no `retorno/route.ts`. Não troque o teste por um que aceite lista vazia.
 
-**Atenção à segunda Page:** o terceiro teste conecta "SE7E Imóveis" e não "SE7E Marketing" de propósito. O índice de `lead_sources` é **global**, e o banco local não é limpo entre rodadas de E2E — dois testes conectando a mesma Page fariam o segundo estourar `page_ja_conectada`. Se você acrescentar mais um teste que conecta Page, ele precisa de uma terceira Page em `PAGINAS_PADRAO`.
+**Atenção à segunda Page:** o segundo teste conecta "SE7E Imóveis" e não "SE7E Marketing" de propósito. O índice de `lead_sources` é **global**, e o banco local não é limpo entre rodadas de E2E — dois testes conectando a mesma Page fariam o segundo estourar `page_ja_conectada`. Se você acrescentar mais um teste que conecta Page, ele precisa de uma terceira Page em `PAGINAS_PADRAO`.
 
 - [ ] **Step 4: Rodar tudo**
 
