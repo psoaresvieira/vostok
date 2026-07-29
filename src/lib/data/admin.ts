@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import type { Conta, MotivoPerda, Papel, StageTipo } from '@/lib/domain/tipos'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
+import { resolverContaAtiva } from './conta'
 
 /**
  * Sem `token` de proposito: a listagem de pendentes vai inteira para um
@@ -216,33 +217,29 @@ export async function criarAdminStoreDoServidor(): Promise<
   const { data: sessao } = await cliente.auth.getUser()
   if (!sessao.user) return falha('sem_sessao')
 
-  // Mesmo motivo de criarStoreDoServidor: memberships_select mostra as linhas de
-  // todos os membros da conta, entao sem .eq('user_id') o papel lido podia ser o
-  // de outra pessoa — e a checagem `papel !== 'admin'` logo abaixo passaria para
-  // um vendedor.
-  const { data, error } = await cliente
-    .from('memberships')
-    .select('papel, accounts(id, nome)')
-    .eq('user_id', sessao.user.id)
-    .limit(1)
-    .maybeSingle()
-  if (error) return falha(error.message)
-  if (!data) return falha('sem_conta')
-
-  const linha = data as unknown as { papel: Papel; accounts: { id: string; nome: string } }
-  if (linha.papel !== 'admin') return falha('sem_permissao')
+  // Mesmo resolvedor de criarStoreDoServidor, de proposito: config/page.tsx
+  // chama os dois na mesma renderizacao, e duas resolucoes independentes
+  // podiam cair em contas diferentes para quem tem duas memberships.
+  const ativa = await resolverContaAtiva(cliente, sessao.user.id)
+  if (!ativa.ok) return falha(ativa.erro)
+  if (ativa.valor.papel !== 'admin') return falha('sem_permissao')
 
   const { data: pipeline, error: erroPipeline } = await cliente
     .from('pipelines')
     .select('id')
-    .eq('account_id', linha.accounts.id)
+    .eq('account_id', ativa.valor.conta.id)
     .eq('is_default', true)
     .maybeSingle()
   if (erroPipeline) return falha(erroPipeline.message)
   if (!pipeline) return falha('pipeline_nao_encontrado')
 
   return ok({
-    admin: new SupabaseAdminStore(cliente, linha.accounts.id, sessao.user.id, pipeline.id),
-    conta: { id: linha.accounts.id, nome: linha.accounts.nome },
+    admin: new SupabaseAdminStore(
+      cliente,
+      ativa.valor.conta.id,
+      sessao.user.id,
+      pipeline.id,
+    ),
+    conta: ativa.valor.conta,
   })
 }

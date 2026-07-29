@@ -15,6 +15,7 @@ import type {
 } from '@/lib/domain/tipos'
 import type { CrmStore, FiltroLeads } from './store'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
+import { resolverContaAtiva } from './conta'
 
 type LinhaLead = {
   id: string
@@ -393,29 +394,13 @@ export async function criarStoreDoServidor(): Promise<
   const usuario = sessao.user
   if (!usuario) return falha('sem_sessao')
 
-  // O .eq('user_id') nao e redundante com a RLS: memberships_select libera
-  // TODAS as linhas da conta para qualquer membro (e o que faz a tela de
-  // usuarios funcionar). Sem o filtro, limit(1) devolvia a membership de outra
-  // pessoa e o papel lido era o dela — um vendedor recem-convidado era
-  // resolvido como admin (a linha do admin e a primeira da conta) e ganhava o
-  // link de Configuracao. As escritas continuavam barradas pelas policies, que
-  // olham auth.uid() no banco, mas a UI e o papel usado por criarLeadAction
-  // vinham errados.
-  const { data, error } = await cliente
-    .from('memberships')
-    .select('papel, accounts(id, nome)')
-    .eq('user_id', usuario.id)
-    .limit(1)
-    .maybeSingle()
-  if (error) return falha(error.message)
-  if (!data) return falha('sem_conta')
+  const ativa = await resolverContaAtiva(cliente, usuario.id)
+  if (!ativa.ok) return falha(ativa.erro)
 
-  const linha = data as unknown as { papel: Papel; accounts: { id: string; nome: string } }
-  const conta: Conta = { id: linha.accounts.id, nome: linha.accounts.nome }
   return ok({
-    store: new SupabaseCrmStore(cliente, conta.id, usuario.id),
-    conta,
+    store: new SupabaseCrmStore(cliente, ativa.valor.conta.id, usuario.id),
+    conta: ativa.valor.conta,
     usuarioId: usuario.id,
-    papel: linha.papel,
+    papel: ativa.valor.papel,
   })
 }
