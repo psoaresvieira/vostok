@@ -49,6 +49,21 @@ create unique index source_credentials_url_token_idx
   where url_token_hash is not null;
 
 -- Linha unica: o check garante que so existe a linha `true`.
+--
+-- NENHUMA funcao exposta a aplicacao escreve segredo_hash, e isso e deliberado.
+-- A linha nasce nula e fica nula ao fim do Plano 3. O segredo de ingestao e
+-- configuracao de OPERADOR, nao dado de tenant: ele existe para o servidor
+-- provar que a chamada veio dele, antes de qualquer conta ser resolvida. Quem le
+-- esse campo e o Plano 4 (rotas de webhook), e e la que entram a semeadura em
+-- desenvolvimento e a definicao por SQL no painel em producao.
+--
+-- A primeira versao desta migration tinha uma RPC
+-- `definir_segredo_ingestao(p_account_id, p_segredo)` gateada em
+-- `papel_na_conta(p_account_id) = 'admin'`. Era falha de isolamento entre
+-- contas: esta tabela e global, e no produto qualquer pessoa cria a propria
+-- conta por signup e nasce admin dela — logo qualquer cliente podia sobrescrever
+-- o segredo de todos os tenants e derrubar a ingestao alheia. O p_account_id
+-- dava aparencia de escopo a uma operacao sem escopo. Nao reintroduza.
 create table public.ingestion_config (
   id boolean primary key default true check (id),
   segredo_hash text,
@@ -97,30 +112,6 @@ language sql
 immutable
 as $$
   select encode(sha256(p_valor::bytea), 'hex');
-$$;
-
-create or replace function public.definir_segredo_ingestao(p_account_id uuid, p_segredo text)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if auth.uid() is null then
-    raise exception 'sem_sessao';
-  end if;
-  if public.papel_na_conta(p_account_id) is distinct from 'admin' then
-    raise exception 'sem_permissao';
-  end if;
-  if p_segredo is null or btrim(p_segredo) = '' then
-    raise exception 'segredo_vazio';
-  end if;
-
-  update public.ingestion_config
-     set segredo_hash = public.hash_segredo(p_segredo),
-         atualizado_em = now()
-   where id;
-end;
 $$;
 
 create or replace function public.conectar_fonte_meta(

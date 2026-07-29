@@ -288,26 +288,4 @@ describe('0008 — fontes conectadas', () => {
     expect(dono).toBe(c.vendedorBId)
   })
 
-  it('define o segredo de ingestao como hash e recusa vazio', async () => {
-    await comoUsuario(c.adminId, (cli) =>
-      cli.query('select public.definir_segredo_ingestao($1, $2)', [
-        c.accountId,
-        'segredo-forte',
-      ]),
-    )
-    const hash = await comoServico(async (cli) => {
-      const r = await cli.query<{ segredo_hash: string }>(
-        'select segredo_hash from public.ingestion_config',
-      )
-      return r.rows[0].segredo_hash
-    })
-    expect(hash).toMatch(/^[0-9a-f]{64}$/)
-    expect(hash).not.toContain('segredo-forte')
-
-    await expect(
-      comoUsuario(c.adminId, (cli) =>
-        cli.query('select public.definir_segredo_ingestao($1, $2)', [c.accountId, '   ']),
-      ),
-    ).rejects.toThrow(/segredo_vazio/)
-  })
 })
