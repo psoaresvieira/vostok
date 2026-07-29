@@ -3,12 +3,14 @@
 import { startTransition, useOptimistic, useState } from 'react'
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   useDraggable,
   useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core'
 import type { Etapa, Etiqueta, Lead, Membro, MotivoPerda } from '@/lib/domain/tipos'
 import { chamarAcao } from '@/lib/ui/acao'
@@ -24,6 +26,16 @@ function aplicarMovimento(atual: Lead[], patch: MovimentoOtimista): Lead[] {
   return atual.map((l) => (l.id === patch.leadId ? { ...l, stageId: patch.stageId } : l))
 }
 
+// O cartao de origem fica onde esta, esmaecido, marcando de onde o lead saiu.
+// Quem segue o ponteiro e a copia no DragOverlay (ver Quadro).
+//
+// Deliberadamente NAO aplicamos `transform` neste elemento. Alem de o cartao
+// sair recortado pelo `overflow-x` do quadro, mover o proprio no faz o mousedown
+// e o mouseup cairem no mesmo <a> do cartao — o browser dispara um `click` de
+// verdade e navega para a ficha do lead em vez de abrir o modal de movimento. O
+// dnd-kit so chama stopPropagation nesse click (nunca preventDefault), entao a
+// navegacao acontece de qualquer jeito. Com o overlay, mousedown e mouseup caem
+// em elementos diferentes e nao ha click nenhum.
 function CartaoArrastavel({ lead, nomeResponsavel }: { lead: Lead; nomeResponsavel: string | null }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id })
   return (
@@ -76,11 +88,21 @@ export function Quadro({
   const [posicoes, moverOtimista] = useOptimistic(leads, aplicarMovimento)
   const [pedido, setPedido] = useState<PedidoMovimento | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  // Qual lead esta em voo: e o que o DragOverlay desenha sob o ponteiro.
+  const [arrastandoId, setArrastandoId] = useState<string | null>(null)
   const sensores = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const nomePorId = new Map(membros.map((m) => [m.id, m.nome]))
+  const nomeDoResponsavel = (lead: Lead) =>
+    lead.responsavelId ? nomePorId.get(lead.responsavelId) ?? null : null
+  const arrastando = arrastandoId ? posicoes.find((l) => l.id === arrastandoId) ?? null : null
+
+  function aoPegar(evento: DragStartEvent) {
+    setArrastandoId(String(evento.active.id))
+  }
 
   function aoSoltar(evento: DragEndEvent) {
+    setArrastandoId(null)
     const leadId = String(evento.active.id)
     const destinoId = evento.over ? String(evento.over.id) : null
     if (!destinoId) return
@@ -121,7 +143,12 @@ export function Quadro({
           {erro}
         </p>
       )}
-      <DndContext sensors={sensores} onDragEnd={aoSoltar}>
+      <DndContext
+        sensors={sensores}
+        onDragStart={aoPegar}
+        onDragEnd={aoSoltar}
+        onDragCancel={() => setArrastandoId(null)}
+      >
         <div className="flex gap-4 overflow-x-auto p-6">
           {etapas.map((etapa) => {
             const daEtapa = posicoes.filter((l) => l.stageId === etapa.id)
@@ -131,15 +158,32 @@ export function Quadro({
                   <CartaoArrastavel
                     key={lead.id}
                     lead={lead}
-                    nomeResponsavel={
-                      lead.responsavelId ? nomePorId.get(lead.responsavelId) ?? null : null
-                    }
+                    nomeResponsavel={nomeDoResponsavel(lead)}
                   />
                 ))}
               </Coluna>
             )
           })}
         </div>
+        {/* A copia que acompanha o ponteiro. O dnd-kit core nao move nada
+            sozinho: sem isto (ou sem aplicar `transform` no cartao de origem) o
+            cartao ficava parado e a unica pista do arrasto era a coluna de
+            destino mudando de cor — invisivel num monitor onde as 7 colunas nao
+            cabem na tela e a coluna comeca a auto-rolar. O overlay e renderizado
+            em position: fixed, entao tambem nao e recortado pelo overflow-x do
+            quadro. */}
+        {/* dropAnimation={null}: com a animacao padrao o dnd-kit mantem a copia
+            montada por mais uns 250ms depois do drop, e nesse intervalo o mesmo
+            lead existe duas vezes no DOM (dois links com o mesmo nome). Aqui a
+            animacao nem faria sentido — ela devolveria o cartao a posicao antiga
+            enquanto o modal de movimento ja esta abrindo. */}
+        <DragOverlay dropAnimation={null}>
+          {arrastando && (
+            <div className="cursor-grabbing shadow-lg">
+              <Cartao lead={arrastando} nomeResponsavel={nomeDoResponsavel(arrastando)} />
+            </div>
+          )}
+        </DragOverlay>
       </DndContext>
       {pedido && (
         <ModalMovimento
