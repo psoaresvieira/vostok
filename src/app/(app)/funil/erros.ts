@@ -14,6 +14,7 @@ const MENSAGENS_ERRO: Record<string, string> = {
   etapa_invalida: 'Essa etapa não pertence ao seu funil.',
   lead_nao_encontrado: 'Você não tem acesso a esse lead.',
   sem_permissao: 'Só gestor ou admin troca o responsável.',
+  responsavel_invalido: 'Esse responsável não faz parte da sua conta. Recarregue a página e escolha de novo.',
   [FALHA_DE_CONEXAO]: MENSAGEM_FALHA_DE_CONEXAO,
 }
 

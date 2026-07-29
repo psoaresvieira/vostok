@@ -200,7 +200,7 @@ export class SupabaseCrmStore implements CrmStore {
       })
       .select('id')
       .single()
-    if (error) return falha(error.message)
+    if (error) return falha(codigoDoErroPostgres(error.message))
 
     await this.cliente.from('lead_events').insert({
       lead_id: data.id,
@@ -257,7 +257,7 @@ export class SupabaseCrmStore implements CrmStore {
       .from('leads')
       .update({ responsavel_id: responsavelId, atualizado_em: new Date().toISOString() })
       .eq('id', leadId)
-    if (error) return falha(error.message)
+    if (error) return falha(codigoDoErroPostgres(error.message))
 
     const { error: erroEvento } = await this.cliente.from('lead_events').insert({
       lead_id: leadId,
@@ -388,7 +388,16 @@ function codigoDoErroPostgres(mensagem: string): string {
     'sem_sessao',
   ]
   const achado = conhecidos.find((c) => mensagem.includes(c))
-  return achado ?? mensagem
+  if (achado) return achado
+
+  // A policy nao levanta excecao com nome: ela apenas nega, e o PostgREST
+  // devolve o texto padrao. Em leads, a unica regra do with check que a UI
+  // consegue violar por DADO (e nao por permissao) e a do responsavel — quem
+  // nao e membro da conta nem chega a essa policy.
+  if (/row-level security policy/i.test(mensagem) && /"leads"/.test(mensagem)) {
+    return 'responsavel_invalido'
+  }
+  return mensagem
 }
 
 /** Resolve a conta ativa do usuario logado e devolve o store pronto. */

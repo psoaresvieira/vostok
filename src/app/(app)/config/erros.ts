@@ -13,6 +13,7 @@ const MENSAGENS_ERRO: Record<string, string> = {
   sem_sessao: 'Sua sessão expirou. Entre novamente.',
   sem_conta: 'Você ainda não está em nenhuma conta.',
   pipeline_nao_encontrado: 'Não encontramos o funil da sua conta.',
+  responsavel_invalido: 'Esse responsável não faz parte da sua conta. Recarregue a página e escolha de novo.',
 }
 
 export function mensagemDeErro(codigo: string): string {
