@@ -117,6 +117,51 @@ describe('InMemoryCrmStore', () => {
     expect(etiquetas.valor).toHaveLength(1)
   })
 
+  // Contrato de casamento de etiqueta: igualdade exata sem caixa, NUNCA padrao.
+  // O SupabaseCrmStore casava com .ilike('nome', nome), mandando o texto do
+  // usuario como PADRAO: '10%' casava com '100 leads' e o lead terminava com uma
+  // etiqueta que ninguem escreveu — inclusive no snapshot de stage_id_no_momento,
+  // que e a metrica que a ordem "etiqueta antes de mover" existe para proteger.
+  // Este teste e o par em memoria do teste de integracao contra o Postgres.
+  it('trata % e _ como texto, nao como curinga', async () => {
+    const p = await store.pipelinePadrao()
+    if (!p.ok) throw new Error(p.erro)
+    const criar = async (nome: string) => {
+      const r = await store.criarLead({
+        ...novoLead(nome),
+        pipelineId: p.valor.pipeline.id,
+        stageId: p.valor.etapas[0].id,
+      })
+      if (!r.ok) throw new Error(r.erro)
+      return r.valor
+    }
+    const a = await criar('Ana')
+    const b = await criar('Bruno')
+    const c = await criar('Carla')
+
+    await store.aplicarEtiquetas(a, ['100 leads'])
+    await store.aplicarEtiquetas(b, ['10%'])
+    await store.aplicarEtiquetas(c, ['10%'])
+
+    const etiquetas = await store.etiquetasDaConta()
+    if (!etiquetas.ok) throw new Error(etiquetas.erro)
+    expect(etiquetas.valor.map((e) => e.nome).sort()).toEqual(['10%', '100 leads'])
+
+    const idDe = (nome: string) => etiquetas.valor.find((e) => e.nome === nome)!.id
+    const lead = async (id: string) => {
+      const r = await store.buscarLead(id)
+      if (!r.ok || !r.valor) throw new Error('lead sumiu')
+      return r.valor
+    }
+
+    // '10%' nao pegou o id de '100 leads'...
+    expect((await lead(b)).etiquetas.map((e) => e.id)).toEqual([idDe('10%')])
+    // ...e '100 leads' nao pegou o id de '10%'.
+    expect((await lead(a)).etiquetas.map((e) => e.id)).toEqual([idDe('100 leads')])
+    // Reaplicar '10%' com duas etiquetas comecando em '10' reusa a certa.
+    expect((await lead(c)).etiquetas.map((e) => e.id)).toEqual([idDe('10%')])
+  })
+
   it('encontra possiveis duplicados por telefone', async () => {
     const p = await store.pipelinePadrao()
     if (!p.ok) throw new Error(p.erro)

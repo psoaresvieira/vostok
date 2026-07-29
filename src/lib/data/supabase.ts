@@ -277,19 +277,25 @@ export class SupabaseCrmStore implements CrmStore {
     if (!lead.ok) return falha(lead.erro)
     if (!lead.valor) return falha('lead_nao_encontrado')
 
+    // Uma leitura so das etiquetas da conta, e o casamento acontece aqui em JS
+    // por igualdade sem caixa — a mesma regra do InMemoryCrmStore.
+    //
+    // Antes era .ilike('nome', nome) por etiqueta, o que mandava o texto do
+    // usuario como PADRAO: '10%' casava com '100 leads' (uma linha: id errado
+    // reusado em silencio, inclusive no snapshot de stage_id_no_momento) e
+    // 'lead_frio' casava com 'leadXfrio' (duas ou mais linhas: PGRST116 e a
+    // mensagem crua do PostgREST na tela). Escapar %, _ e \ resolveria o
+    // casamento, mas continuaria custando uma ida ao banco por etiqueta.
+    const existentes = await this.etiquetasDaConta()
+    if (!existentes.ok) return falha(existentes.erro)
+    const idPorNome = new Map(existentes.valor.map((t) => [t.nome.toLowerCase(), t.id]))
+
     for (const bruto of nomes) {
       const nome = normalizarNomeEtiqueta(bruto)
       if (nome.length === 0) continue
+      const chave = nome.toLowerCase()
 
-      const { data: existente, error: erroBusca } = await this.cliente
-        .from('tags')
-        .select('id, nome')
-        .eq('account_id', this.accountId)
-        .ilike('nome', nome)
-        .maybeSingle()
-      if (erroBusca) return falha(erroBusca.message)
-
-      let tagId = existente?.id
+      let tagId = idPorNome.get(chave)
       if (!tagId) {
         const { data: nova, error: erroInsert } = await this.cliente
           .from('tags')
@@ -298,6 +304,9 @@ export class SupabaseCrmStore implements CrmStore {
           .single()
         if (erroInsert) return falha(erroInsert.message)
         tagId = nova.id
+        // O mapa e a unica fonte do lote: sem isso, o mesmo nome repetido em
+        // `nomes` criaria uma segunda etiqueta identica.
+        idPorNome.set(chave, tagId)
       }
 
       const { error: erroRel } = await this.cliente.from('lead_tags').upsert(
