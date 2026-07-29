@@ -303,10 +303,11 @@ export class SupabaseCrmStore implements CrmStore {
           .select('id')
           .single()
         if (erroInsert) return falha(erroInsert.message)
-        tagId = nova.id
+        const criada: string = nova.id
+        tagId = criada
         // O mapa e a unica fonte do lote: sem isso, o mesmo nome repetido em
         // `nomes` criaria uma segunda etiqueta identica.
-        idPorNome.set(chave, tagId)
+        idPorNome.set(chave, criada)
       }
 
       const { error: erroRel } = await this.cliente.from('lead_tags').upsert(
