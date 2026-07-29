@@ -337,7 +337,12 @@ export class SupabaseCrmStore implements CrmStore {
       .from('lead_events')
       .select('id, lead_id, tipo, payload, ator_id, criado_em')
       .eq('lead_id', leadId)
+      // Duas colunas de propósito: criado_em e o criterio de negocio, mas ele
+      // empata sempre que dois eventos nascem na mesma transacao (now() e
+      // constante dentro dela). seq e monotonica e desempata na mesma direcao
+      // — mais novo primeiro —, igualando o criterio ao do InMemoryCrmStore.
       .order('criado_em', { ascending: false })
+      .order('seq', { ascending: false })
     if (error) return falha(error.message)
     return ok(
       (data ?? []).map((e) => ({

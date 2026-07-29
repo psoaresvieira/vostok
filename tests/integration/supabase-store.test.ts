@@ -1,33 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { createClient } from '@supabase/supabase-js'
 import { SupabaseCrmStore } from '@/lib/data/supabase'
 import { leadSchema } from '@/lib/domain/lead'
 import { comoServico, limparBanco } from './helpers/db'
+import { clienteDoUsuario } from './helpers/cliente'
 import { montarCenario, etapa, type Cenario } from './helpers/cenario'
-
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321'
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-/**
- * Cliente supabase-js falando pelo usuario. Assinamos um JWT local com o
- * segredo padrao do Supabase CLI, que e o mesmo em toda instalacao local.
- */
-async function clienteDoUsuario(userId: string) {
-  const { SignJWT } = await import('jose')
-  const segredo = new TextEncoder().encode(
-    'super-secret-jwt-token-with-at-least-32-characters-long',
-  )
-  const token = await new SignJWT({ sub: userId, role: 'authenticated', aud: 'authenticated' })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('1h')
-    .sign(segredo)
-
-  return createClient(URL, ANON, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-}
 
 describe('SupabaseCrmStore', () => {
   let c: Cenario
