@@ -1,9 +1,22 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { SupabaseCrmStore } from '@/lib/data/supabase'
 import { leadSchema } from '@/lib/domain/lead'
-import { comoServico, limparBanco } from './helpers/db'
+import { comoServico, limparBanco, criarUsuario } from './helpers/db'
 import { clienteDoUsuario } from './helpers/cliente'
 import { montarCenario, etapa, type Cenario } from './helpers/cenario'
+
+/** O forasteiro precisa de profiles, senao a FK barra antes da policy. */
+async function criarForasteiro(email: string): Promise<string> {
+  const id = await criarUsuario(email)
+  await comoServico((cli) =>
+    cli.query(
+      `insert into public.profiles (id, nome, email) values ($1, 'Fora', $2)
+       on conflict (id) do nothing`,
+      [id, email],
+    ),
+  )
+  return id
+}
 
 describe('SupabaseCrmStore', () => {
   let c: Cenario
@@ -182,5 +195,62 @@ describe('SupabaseCrmStore', () => {
     const etiquetas = await store.etiquetasDaConta()
     if (!etiquetas.ok) throw new Error(etiquetas.erro)
     expect(etiquetas.valor.map((e) => e.nome).sort()).toEqual(['leadXfrio', 'lead_frio'])
+  })
+
+  // Par do teste de RLS crua em 0007_responsavel_membro.test.ts: aqui e o
+  // codigo de aplicacao (Steps 5 e 6 da Task 4) que deve traduzir a negacao
+  // da policy em 'responsavel_invalido', nunca deixar a mensagem crua do
+  // PostgREST (42501) vazar para quem chama o store.
+  it('criarLead devolve responsavel_invalido quando o responsavel e de fora da conta', async () => {
+    const forasteiro = await criarForasteiro('fora-store@z.com')
+    const cliente = await clienteDoUsuario(c.adminId)
+    const store = new SupabaseCrmStore(cliente, c.accountId, c.adminId)
+
+    const r = await store.criarLead({
+      ...leadSchema.parse({ nome: 'Invasor' }),
+      pipelineId: c.pipelineId,
+      stageId: etapa(c, 'Novo lead'),
+      responsavelId: forasteiro,
+    })
+    expect(r).toEqual({ ok: false, erro: 'responsavel_invalido' })
+  })
+
+  it('atribuirResponsavel devolve responsavel_invalido quando o novo responsavel e de fora da conta', async () => {
+    const forasteiro = await criarForasteiro('fora-store2@z.com')
+    const cliente = await clienteDoUsuario(c.adminId)
+    const store = new SupabaseCrmStore(cliente, c.accountId, c.adminId)
+
+    const criado = await store.criarLead({
+      ...leadSchema.parse({ nome: 'Alvo' }),
+      pipelineId: c.pipelineId,
+      stageId: etapa(c, 'Novo lead'),
+      responsavelId: c.vendedorAId,
+    })
+    if (!criado.ok) throw new Error(criado.erro)
+
+    const r = await store.atribuirResponsavel(criado.valor, forasteiro)
+    expect(r).toEqual({ ok: false, erro: 'responsavel_invalido' })
+  })
+
+  // Caso positivo (Minor do review): a policy nova nao pode barrar a troca de
+  // responsavel legitima, so a que aponta para fora da conta.
+  it('atribuirResponsavel troca o responsavel para outro membro valido da conta', async () => {
+    const cliente = await clienteDoUsuario(c.adminId)
+    const store = new SupabaseCrmStore(cliente, c.accountId, c.adminId)
+
+    const criado = await store.criarLead({
+      ...leadSchema.parse({ nome: 'Repassado' }),
+      pipelineId: c.pipelineId,
+      stageId: etapa(c, 'Novo lead'),
+      responsavelId: c.vendedorAId,
+    })
+    if (!criado.ok) throw new Error(criado.erro)
+
+    const r = await store.atribuirResponsavel(criado.valor, c.vendedorBId)
+    expect(r).toEqual({ ok: true, valor: undefined })
+
+    const lido = await store.buscarLead(criado.valor)
+    if (!lido.ok || !lido.valor) throw new Error('lead sumiu')
+    expect(lido.valor.responsavelId).toBe(c.vendedorBId)
   })
 })

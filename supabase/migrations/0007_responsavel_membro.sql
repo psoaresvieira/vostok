@@ -31,6 +31,20 @@ as $$
   );
 $$;
 
+-- Limpeza antes de apertar o with check. move_lead_stage e SECURITY INVOKER
+-- (0004_move_lead_stage.sql) de proposito, entao a RLS continua valendo e o
+-- with check novo e reavaliado sobre a linha FINAL inteira — inclusive colunas
+-- que o update nem toca. Sem esta limpeza, qualquer lead que ja tivesse
+-- responsavel_id de fora da conta (gravavel ate aqui, exatamente o que esta
+-- migration passa a proibir) ficaria travado para todo update futuro,
+-- inclusive troca de etapa, que nada tem a ver com responsavel. Nulo e o
+-- destino certo: e_membro_da_conta devolve verdadeiro para nulo, e lead sem
+-- responsavel e o estado legitimo da fila que gestor e admin enxergam.
+update public.leads
+   set responsavel_id = null
+ where responsavel_id is not null
+   and not public.e_membro_da_conta(account_id, responsavel_id);
+
 -- Recriar as duas policies de escrita. O `using` de leads_update fica igual: ele
 -- decide QUAIS linhas podem ser alteradas, e essa regra nao mudou. O que muda e
 -- o `with check`, que decide como a linha pode FICAR depois da escrita.

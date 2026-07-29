@@ -65,6 +65,33 @@ describe('0007 — responsavel_id tem que ser membro da conta', () => {
     ).rejects.toThrow(/row-level security/i)
   })
 
+  it('aceita trocar o responsavel para outro membro valido da conta', async () => {
+    const leadId = await comoUsuario(c.adminId, async (cli) => {
+      const r = await cli.query<{ id: string }>(
+        `insert into public.leads (account_id, nome, pipeline_id, stage_id, responsavel_id)
+         values ($1, 'Repassado', $2, $3, $4) returning id`,
+        [c.accountId, c.pipelineId, etapa(c, 'Novo lead'), c.vendedorAId],
+      )
+      return r.rows[0].id
+    })
+
+    await comoUsuario(c.adminId, (cli) =>
+      cli.query('update public.leads set responsavel_id = $1 where id = $2', [
+        c.vendedorBId,
+        leadId,
+      ]),
+    )
+
+    const responsavel = await comoServico(async (cli) => {
+      const r = await cli.query<{ responsavel_id: string }>(
+        'select responsavel_id from public.leads where id = $1',
+        [leadId],
+      )
+      return r.rows[0].responsavel_id
+    })
+    expect(responsavel).toBe(c.vendedorBId)
+  })
+
   it('recusa trocar o responsavel para alguem de fora da conta', async () => {
     const forasteiro = await criarForasteiro('fora2@z.com')
     const leadId = await comoUsuario(c.adminId, async (cli) => {

@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import { normalizarNomeEtiqueta } from '@/lib/domain/normalizacao'
 import type { NovoLead } from '@/lib/domain/lead'
@@ -200,7 +200,7 @@ export class SupabaseCrmStore implements CrmStore {
       })
       .select('id')
       .single()
-    if (error) return falha(codigoDoErroPostgres(error.message))
+    if (error) return falha(codigoDoErroPostgres(error))
 
     await this.cliente.from('lead_events').insert({
       lead_id: data.id,
@@ -241,7 +241,7 @@ export class SupabaseCrmStore implements CrmStore {
       p_stage_destino: stageDestino,
       p_loss_reason_id: lossReasonId ?? null,
     })
-    if (error) return falha(codigoDoErroPostgres(error.message))
+    if (error) return falha(codigoDoErroPostgres(error))
     return ok(undefined)
   }
 
@@ -257,7 +257,7 @@ export class SupabaseCrmStore implements CrmStore {
       .from('leads')
       .update({ responsavel_id: responsavelId, atualizado_em: new Date().toISOString() })
       .eq('id', leadId)
-    if (error) return falha(codigoDoErroPostgres(error.message))
+    if (error) return falha(codigoDoErroPostgres(error))
 
     const { error: erroEvento } = await this.cliente.from('lead_events').insert({
       lead_id: leadId,
@@ -375,8 +375,27 @@ export class SupabaseCrmStore implements CrmStore {
   }
 }
 
-/** Extrai o codigo levantado por raise exception, ex: 'motivo_perda_obrigatorio'. */
-function codigoDoErroPostgres(mensagem: string): string {
+/**
+ * Extrai o codigo do erro do PostgREST.
+ *
+ * Duas fontes bem diferentes de "codigo" aqui. As strings da lista abaixo sao
+ * nossas: nos mesmas escrevemos `raise exception 'motivo_perda_obrigatorio'`
+ * em funcoes como move_lead_stage, entao o texto e estavel e cassar por ele e
+ * seguro, independente de locale.
+ *
+ * A negacao de RLS e outra historia: a policy nao levanta excecao com nome,
+ * ela apenas nega, e o PostgREST devolve o texto padrao do servidor — que muda
+ * conforme o lc_messages do Postgres. Cassar esse texto (ex.: /row-level
+ * security policy/i) vaza a mensagem crua assim que o locale nao for ingles.
+ * error.code, por outro lado, e o SQLSTATE: 42501 (insufficient_privilege) e
+ * quem o Postgres devolve para negacao de RLS, e SQLSTATE nao muda com
+ * locale. Confirmado empiricamente contra o Postgres local (supabase-js
+ * devolve exatamente esse code na negacao de leads_insert/leads_update).
+ * Em leads, a unica regra do with check que a UI consegue violar por DADO
+ * (e nao por permissao) e a do responsavel — quem nao e membro da conta nem
+ * chega a essa policy.
+ */
+function codigoDoErroPostgres(erro: Pick<PostgrestError, 'message' | 'code'>): string {
   const conhecidos = [
     'lead_nao_encontrado',
     'etapa_invalida',
@@ -387,17 +406,11 @@ function codigoDoErroPostgres(mensagem: string): string {
     'convite_ja_aceito',
     'sem_sessao',
   ]
-  const achado = conhecidos.find((c) => mensagem.includes(c))
+  const achado = conhecidos.find((c) => erro.message.includes(c))
   if (achado) return achado
 
-  // A policy nao levanta excecao com nome: ela apenas nega, e o PostgREST
-  // devolve o texto padrao. Em leads, a unica regra do with check que a UI
-  // consegue violar por DADO (e nao por permissao) e a do responsavel — quem
-  // nao e membro da conta nem chega a essa policy.
-  if (/row-level security policy/i.test(mensagem) && /"leads"/.test(mensagem)) {
-    return 'responsavel_invalido'
-  }
-  return mensagem
+  if (erro.code === '42501') return 'responsavel_invalido'
+  return erro.message
 }
 
 /** Resolve a conta ativa do usuario logado e devolve o store pronto. */
