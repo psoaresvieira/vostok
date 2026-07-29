@@ -1,0 +1,23 @@
+// Mensagens dos codigos que o fluxo de autenticacao devolve. Mesma convencao do
+// funil (ver funil/erros.ts): traduzir o codigo aqui, nunca no componente.
+//
+// O mapa vivia dentro de convite/[token]/page.tsx. Saiu de la porque agora ha
+// tres telas capazes de terminar num erro de convite — a propria pagina do
+// convite, o cadastro com ?convite= e o login com ?convite= — e a mensagem tem
+// que ser a mesma nas tres.
+//
+// Vive fora de acoes.ts porque 'use server' exige que todo export daquele
+// arquivo seja uma Server Action assincrona.
+const MENSAGENS_ERRO: Record<string, string> = {
+  convite_invalido: 'Convite não encontrado.',
+  convite_expirado: 'Este convite expirou. Peça um novo ao administrador.',
+  convite_ja_aceito: 'Este convite já foi usado.',
+  convite_de_outro_email:
+    'Este convite foi enviado para outro email. Entre com o email convidado para aceitá-lo.',
+  sem_email: 'Sua conta não tem email. Entre novamente para aceitar o convite.',
+  sem_sessao: 'Crie sua conta ou entre para aceitar o convite.',
+}
+
+export function mensagemDeErro(codigo: string): string {
+  return MENSAGENS_ERRO[codigo] ?? codigo
+}

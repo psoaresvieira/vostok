@@ -378,9 +378,18 @@ export async function criarStoreDoServidor(): Promise<
   const usuario = sessao.user
   if (!usuario) return falha('sem_sessao')
 
+  // O .eq('user_id') nao e redundante com a RLS: memberships_select libera
+  // TODAS as linhas da conta para qualquer membro (e o que faz a tela de
+  // usuarios funcionar). Sem o filtro, limit(1) devolvia a membership de outra
+  // pessoa e o papel lido era o dela — um vendedor recem-convidado era
+  // resolvido como admin (a linha do admin e a primeira da conta) e ganhava o
+  // link de Configuracao. As escritas continuavam barradas pelas policies, que
+  // olham auth.uid() no banco, mas a UI e o papel usado por criarLeadAction
+  // vinham errados.
   const { data, error } = await cliente
     .from('memberships')
     .select('papel, accounts(id, nome)')
+    .eq('user_id', usuario.id)
     .limit(1)
     .maybeSingle()
   if (error) return falha(error.message)

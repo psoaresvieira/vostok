@@ -2,16 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 import { aceitarConvite } from '../../acoes'
-
-const MENSAGENS: Record<string, string> = {
-  convite_invalido: 'Convite não encontrado.',
-  convite_expirado: 'Este convite expirou. Peça um novo ao administrador.',
-  convite_ja_aceito: 'Este convite já foi usado.',
-  convite_de_outro_email:
-    'Este convite foi enviado para outro email. Entre com o email convidado para aceitá-lo.',
-  sem_email: 'Sua conta não tem email. Entre novamente para aceitar o convite.',
-  sem_sessao: 'Crie sua conta ou entre para aceitar o convite.',
-}
+import { mensagemDeErro } from '../../erros'
 
 export default async function ConvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
@@ -21,14 +12,18 @@ export default async function ConvitePage({ params }: { params: Promise<{ token:
   } = await cliente.auth.getUser()
 
   if (!user) {
+    // O token vai junto para o cadastro e para o login. Sem isso ele morria
+    // aqui: o convidado criava uma conta propria, virava admin dela, e o
+    // convite ficava pendente para sempre.
+    const destino = `convite=${encodeURIComponent(token)}`
     return (
       <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
         <h1 className="text-2xl font-semibold">Você foi convidado</h1>
         <p className="text-sm">Crie sua conta ou entre para aceitar o convite.</p>
-        <Link href="/signup" className="underline">
+        <Link href={`/signup?${destino}`} className="underline">
           Criar conta
         </Link>
-        <Link href="/login" className="underline">
+        <Link href={`/login?${destino}`} className="underline">
           Entrar
         </Link>
       </main>
@@ -41,7 +36,7 @@ export default async function ConvitePage({ params }: { params: Promise<{ token:
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
       <h1 className="text-2xl font-semibold">Convite não aceito</h1>
-      <p className="text-sm text-red-600">{MENSAGENS[r.erro] ?? r.erro}</p>
+      <p className="text-sm text-red-600">{mensagemDeErro(r.erro)}</p>
     </main>
   )
 }

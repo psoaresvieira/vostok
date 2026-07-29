@@ -216,9 +216,14 @@ export async function criarAdminStoreDoServidor(): Promise<
   const { data: sessao } = await cliente.auth.getUser()
   if (!sessao.user) return falha('sem_sessao')
 
+  // Mesmo motivo de criarStoreDoServidor: memberships_select mostra as linhas de
+  // todos os membros da conta, entao sem .eq('user_id') o papel lido podia ser o
+  // de outra pessoa — e a checagem `papel !== 'admin'` logo abaixo passaria para
+  // um vendedor.
   const { data, error } = await cliente
     .from('memberships')
     .select('papel, accounts(id, nome)')
+    .eq('user_id', sessao.user.id)
     .limit(1)
     .maybeSingle()
   if (error) return falha(error.message)

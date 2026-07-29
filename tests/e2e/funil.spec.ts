@@ -1,40 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
-
-const SENHA = 'segredo123'
-
-// Email unico por conta: o banco local nao e limpo entre rodadas de E2E, e este
-// arquivo cria uma conta por teste. O contador tambem sobrevive a --repeat-each,
-// que reusaria o mesmo Date.now() dentro da mesma execucao.
-let contas = 0
-function carimbo(): string {
-  contas += 1
-  return `${Date.now()}-${contas}`
-}
-
-async function criarConta(page: Page): Promise<void> {
-  const id = carimbo()
-  await page.goto('/signup')
-  await page.getByPlaceholder('seu nome', { exact: true }).fill('Pedro E2E')
-  await page.getByPlaceholder('nome da empresa', { exact: true }).fill(`SE7E ${id}`)
-  await page.getByPlaceholder('email', { exact: true }).fill(`e2e-${id}@se7e.com`)
-  await page.getByPlaceholder('senha (min. 8 caracteres)', { exact: true }).fill(SENHA)
-  await page.getByRole('button', { name: 'Criar conta' }).click()
-
-  await expect(page).toHaveURL(/\/funil/)
-  await expect(page.getByRole('heading', { name: 'Novo lead', exact: true, level: 2 })).toBeVisible()
-}
-
-async function criarLead(page: Page, nome: string): Promise<void> {
-  await page.getByRole('button', { name: 'Novo lead' }).click()
-  // exact: true e obrigatorio — o filtro do quadro tem placeholder
-  // "buscar por nome, telefone ou email", que casa por substring com os tres.
-  await page.getByPlaceholder('nome', { exact: true }).fill(nome)
-  await page.getByPlaceholder('telefone', { exact: true }).fill('(83) 99999-1234')
-  await page.getByPlaceholder('valor em reais', { exact: true }).fill('1.500,00')
-  await page.getByRole('button', { name: 'Salvar' }).click()
-
-  await expect(coluna(page, 'Novo lead').getByRole('link', { name: nome })).toBeVisible()
-}
+import { criarConta, criarLead, coluna } from './apoio'
 
 // O PointerSensor do dnd-kit so ativa depois que o ponteiro anda mais de 5px, e
 // o destino so e calculado nos movimentos POSTERIORES a ativacao. Um unico pulo
@@ -85,12 +50,6 @@ async function confirmarMovimento(page: Page) {
   const resposta = respostaDoMovimento(page)
   await clicarConfirmar(page)
   await resposta
-}
-
-function coluna(page: Page, nome: string): Locator {
-  return page
-    .locator('section')
-    .filter({ has: page.getByRole('heading', { name: nome, exact: true, level: 2 }) })
 }
 
 test('do signup ate a perda com motivo, com a timeline contando a historia', async ({ page }) => {
