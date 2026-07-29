@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { Etiqueta } from '@/lib/domain/tipos'
+import { chamarAcao, FALHA_DE_CONEXAO, MENSAGEM_FALHA_DE_CONEXAO } from '@/lib/ui/acao'
 import { adicionarEtiquetas } from './acoes'
 
 // Codigos possiveis vindos de aplicarEtiquetas sao majoritariamente mensagens
@@ -12,6 +13,7 @@ const MENSAGENS: Record<string, string> = {
   lead_nao_encontrado: 'Você não tem acesso a esse lead.',
   sem_sessao: 'Sua sessão expirou. Entre novamente.',
   sem_conta: 'Você não tem uma conta ativa.',
+  [FALHA_DE_CONEXAO]: MENSAGEM_FALHA_DE_CONEXAO,
 }
 
 export function EditorEtiquetas({
@@ -34,7 +36,7 @@ export function EditorEtiquetas({
   async function aplicar(nome: string) {
     const limpo = nome.trim()
     if (!limpo) return
-    const r = await adicionarEtiquetas(leadId, [limpo])
+    const r = await chamarAcao(adicionarEtiquetas(leadId, [limpo]))
     if (!r.ok) setErro(MENSAGENS[r.erro] ?? r.erro)
     else {
       setErro(null)

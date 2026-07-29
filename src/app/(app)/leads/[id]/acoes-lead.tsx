@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { Etapa, Etiqueta, Lead, Membro, MotivoPerda } from '@/lib/domain/tipos'
 import { ModalMovimento, type PedidoMovimento } from '@/app/(app)/funil/modal-movimento'
 import { moverEtapaAction } from '@/app/(app)/funil/acoes'
+import { chamarAcao } from '@/lib/ui/acao'
 import { mensagemDeErro } from '@/app/(app)/funil/erros'
 import { trocarResponsavel } from './acoes'
 
@@ -29,7 +30,9 @@ export function AcoesLead({
 
   async function confirmar(lossReasonId: string | null, etiquetas: string[]) {
     if (!pedido) return
-    const r = await moverEtapaAction(pedido.leadId, pedido.destino.id, lossReasonId, etiquetas)
+    const r = await chamarAcao(
+      moverEtapaAction(pedido.leadId, pedido.destino.id, lossReasonId, etiquetas),
+    )
     setPedido(null)
     if (!r.ok) setErro(mensagemDeErro(r.erro))
     else {

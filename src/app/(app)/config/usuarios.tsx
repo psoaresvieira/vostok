@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { Membro, Papel } from '@/lib/domain/tipos'
 import type { Convite } from '@/lib/data/admin'
 import { convidarAction, revogarConviteAction } from './acoes'
+import { chamarAcao } from '@/lib/ui/acao'
 import { mensagemDeErro } from './erros'
 
 export function Usuarios({
@@ -49,7 +50,7 @@ export function Usuarios({
                 <button
                   type="button"
                   onClick={async () => {
-                    const r = await revogarConviteAction(c.id)
+                    const r = await chamarAcao(revogarConviteAction(c.id))
                     if (!r.ok) setErro(mensagemDeErro(r.erro))
                   }}
                   className="text-xs underline"
@@ -81,7 +82,7 @@ export function Usuarios({
         <button
           type="button"
           onClick={async () => {
-            const r = await convidarAction(email, papel)
+            const r = await chamarAcao(convidarAction(email, papel))
             if (!r.ok) {
               setErro(mensagemDeErro(r.erro))
               return

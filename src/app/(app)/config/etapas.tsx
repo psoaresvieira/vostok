@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { Etapa, StageTipo } from '@/lib/domain/tipos'
 import { criarEtapaAction, renomearEtapaAction, reordenarEtapasAction } from './acoes'
+import { chamarAcao } from '@/lib/ui/acao'
 import { mensagemDeErro } from './erros'
 
 export function Etapas({ etapas }: { etapas: Etapa[] }) {
@@ -15,7 +16,7 @@ export function Etapas({ etapas }: { etapas: Etapa[] }) {
     if (destino < 0 || destino >= etapas.length) return
     const ids = etapas.map((e) => e.id)
     ;[ids[indice], ids[destino]] = [ids[destino], ids[indice]]
-    const r = await reordenarEtapasAction(ids)
+    const r = await chamarAcao(reordenarEtapasAction(ids))
     if (!r.ok) setErro(mensagemDeErro(r.erro))
   }
 
@@ -29,7 +30,7 @@ export function Etapas({ etapas }: { etapas: Etapa[] }) {
               defaultValue={e.nome}
               onBlur={async (ev) => {
                 if (ev.target.value !== e.nome) {
-                  const r = await renomearEtapaAction(e.id, ev.target.value)
+                  const r = await chamarAcao(renomearEtapaAction(e.id, ev.target.value))
                   if (!r.ok) setErro(mensagemDeErro(r.erro))
                 }
               }}
@@ -65,7 +66,7 @@ export function Etapas({ etapas }: { etapas: Etapa[] }) {
         <button
           type="button"
           onClick={async () => {
-            const r = await criarEtapaAction(nome, tipo)
+            const r = await chamarAcao(criarEtapaAction(nome, tipo))
             if (!r.ok) setErro(mensagemDeErro(r.erro))
             else {
               setErro(null)

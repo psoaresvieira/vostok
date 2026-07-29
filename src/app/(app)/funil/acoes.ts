@@ -6,6 +6,7 @@ import { leadSchema } from '@/lib/domain/lead'
 import { normalizarEmail, normalizarTelefone } from '@/lib/domain/normalizacao'
 import { parsearReaisEmCentavos } from '@/lib/domain/formato'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
+import { codigoEtiquetasSalvas } from './erros'
 
 export type Duplicado = { id: string; nome: string; status: string }
 
@@ -89,7 +90,16 @@ export async function moverEtapaAction(
     // Devolvemos um codigo proprio para a UI contar isso em vez de dizer que
     // nada aconteceu. Repetir e seguro: aplicarEtiquetas ignora duplicadas e
     // rele a etapa atual antes de gravar o snapshot.
-    if (etiquetasSalvas) return falha('movimento_falhou_etiquetas_salvas')
+    if (etiquetasSalvas) {
+      // Revalidar ANTES de voltar: senao o banner diz que as etiquetas foram
+      // salvas enquanto o cartao na tela continua sem nenhuma — a tela
+      // contradizendo a mensagem.
+      revalidatePath('/funil')
+      // A causa vai junto: 'etapa_invalida' e 'motivo_perda_invalido' nunca
+      // passam por repeticao, e mandar "tente de novo" gasta o tempo do usuario
+      // e some com o unico diagnostico que havia.
+      return falha(codigoEtiquetasSalvas(r.erro))
+    }
     return falha(r.erro)
   }
 

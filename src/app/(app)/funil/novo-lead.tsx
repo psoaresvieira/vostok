@@ -2,12 +2,14 @@
 
 import { useState } from 'react'
 import type { Membro } from '@/lib/domain/tipos'
+import { chamarAcao, FALHA_DE_CONEXAO, MENSAGEM_FALHA_DE_CONEXAO } from '@/lib/ui/acao'
 import { criarLeadAction, verificarDuplicados, type Duplicado } from './acoes'
 
 const MENSAGENS: Record<string, string> = {
   nome_obrigatorio: 'Informe o nome do lead.',
   pipeline_sem_etapa_aberta: 'Configure ao menos uma etapa aberta antes de cadastrar leads.',
   valor_invalido: 'Digite o valor em reais, ex.: 1.500,00.',
+  [FALHA_DE_CONEXAO]: MENSAGEM_FALHA_DE_CONEXAO,
 }
 
 export function NovoLead({
@@ -23,12 +25,12 @@ export function NovoLead({
 
   async function checar(telefone: string, email: string) {
     if (!telefone && !email) return
-    const r = await verificarDuplicados(telefone, email)
+    const r = await chamarAcao(verificarDuplicados(telefone, email))
     setDuplicados(r.ok ? r.valor : [])
   }
 
   async function salvar(formData: FormData) {
-    const r = await criarLeadAction(formData)
+    const r = await chamarAcao(criarLeadAction(formData))
     if (!r.ok) {
       setErro(MENSAGENS[r.erro] ?? r.erro)
       return

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { MotivoPerda } from '@/lib/domain/tipos'
 import { alternarMotivoAction, criarMotivoAction } from './acoes'
+import { chamarAcao } from '@/lib/ui/acao'
 import { mensagemDeErro } from './erros'
 
 export function Motivos({ motivos }: { motivos: MotivoPerda[] }) {
@@ -19,7 +20,7 @@ export function Motivos({ motivos }: { motivos: MotivoPerda[] }) {
             <button
               type="button"
               onClick={async () => {
-                const r = await alternarMotivoAction(m.id, !m.ativo)
+                const r = await chamarAcao(alternarMotivoAction(m.id, !m.ativo))
                 if (!r.ok) setErro(mensagemDeErro(r.erro))
               }}
               className="text-xs underline"
@@ -40,7 +41,7 @@ export function Motivos({ motivos }: { motivos: MotivoPerda[] }) {
         <button
           type="button"
           onClick={async () => {
-            const r = await criarMotivoAction(nome)
+            const r = await chamarAcao(criarMotivoAction(nome))
             if (!r.ok) setErro(mensagemDeErro(r.erro))
             else {
               setErro(null)

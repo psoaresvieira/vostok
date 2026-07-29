@@ -11,6 +11,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core'
 import type { Etapa, Etiqueta, Lead, Membro, MotivoPerda } from '@/lib/domain/tipos'
+import { chamarAcao } from '@/lib/ui/acao'
 import { Cartao } from './cartao'
 import { ModalMovimento, type PedidoMovimento } from './modal-movimento'
 import { moverEtapaAction } from './acoes'
@@ -101,7 +102,14 @@ export function Quadro({
     // descarta o patch quando ela termina, entao o card nao volta antes da resposta.
     startTransition(async () => {
       moverOtimista({ leadId: atual.leadId, stageId: atual.destino.id })
-      const r = await moverEtapaAction(atual.leadId, atual.destino.id, lossReasonId, etiquetas)
+      // chamarAcao cobre a falha de TRANSPORTE: se o fetch por baixo da Server
+      // Action rejeita, o await lanca, a excecao escapa para o error reporting
+      // global do React e o setErro abaixo nunca roda — o cartao voltava para a
+      // coluna de origem sem uma palavra de explicacao. Recusa do servidor ja
+      // vinha como Resultado e continua vindo.
+      const r = await chamarAcao(
+        moverEtapaAction(atual.leadId, atual.destino.id, lossReasonId, etiquetas),
+      )
       if (!r.ok) setErro(mensagemDeErro(r.erro))
     })
   }
