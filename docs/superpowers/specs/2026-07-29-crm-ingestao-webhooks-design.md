@@ -46,7 +46,9 @@ Com o OAuth dentro do escopo, são três frentes independentes. Um plano só ser
 
 **Armadilha herdada (continua valendo):** nesta versão do `supabase/postgres` (17.6) o default ACL do schema `public` concede a `anon`/`authenticated` apenas `Dxtm`. Toda tabela nova precisa de `grant` explícito para `authenticated`, ou o erro é `permission denied` e a RLS nem chega a ser avaliada.
 
-## 3. Modelo de dados — migration `0006`
+## 3. Modelo de dados
+
+Repartido por consumidor, uma migration por propósito, para que nenhum plano crie tabela que ele mesmo não usa: `0006` (`lead_events.seq`) e `0007` (predicado de `responsavel_id`) são os itens de backlog; `0008` traz `lead_sources`, `source_credentials` e `ingestion_config`, tudo consumido pelo Plano 3; `integration_log` e `notifications` ficam para a `0009`, no Plano 4, junto do código que os lê.
 
 ```
 lead_sources        id, account_id, provedor (meta|google), external_id?,
@@ -85,7 +87,9 @@ O webhook do Meta é do **app**, não da conta, e traz só o `page_id`. Se duas 
 
 ### Por que `lead_events.seq` entra agora
 
-É o item #10 do backlog, e ele deixa de ser latente exatamente aqui: a ingestão grava lead, evento e notificação numa transação só, então dois eventos com `criado_em` idêntico passam a ser rotina em vez de impossibilidade. Os dois stores passam a ordenar por `(criado_em desc, seq desc)`, e o store in-memory ganha um contador monotônico equivalente. Sem isso a timeline do lead ingerido embaralha de forma não determinística e os testes ficam intermitentes.
+É o item #10 do backlog, e ele deixa de ser latente exatamente aqui: a ingestão grava lead e evento na mesma transação, então dois eventos com `criado_em` idêntico passam a ser rotina em vez de impossibilidade.
+
+A divergência é de um lado só. O `InMemoryCrmStore` **já** desempata pelo índice de inserção, com o comentário explicando por quê; quem não tem critério é o `SupabaseCrmStore`, que ordena apenas por `criado_em desc` e devolve ordem arbitrária no empate. `seq` dá ao Postgres o mesmo desempate que o fake já tem, e a ordenação passa a `(criado_em desc, seq desc)`. Sem isso a timeline do lead ingerido embaralha de forma não determinística — e, pior, os testes contra o fake continuariam passando enquanto a produção erra.
 
 ## 4. Modelo de privilégio
 
