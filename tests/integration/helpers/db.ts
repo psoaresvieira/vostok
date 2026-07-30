@@ -77,8 +77,6 @@ export async function limparBanco(): Promise<void> {
         public.invites, public.memberships, public.accounts, public.profiles
       restart identity cascade
     `)
-    // ingestion_config tem linha unica e fixa: zerar o segredo, nao apagar a linha.
-    await c.query('update public.ingestion_config set segredo_hash = null')
     await c.query('delete from auth.users')
   })
 }
