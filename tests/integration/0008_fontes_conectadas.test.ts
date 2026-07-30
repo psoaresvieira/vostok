@@ -321,6 +321,59 @@ describe('0008 — fontes conectadas', () => {
     ).rejects.toThrow(/segredo_vazio/)
   })
 
+  it('nao anula external_id de fonte meta por update direto (grant nao inclui a coluna)', async () => {
+    const sourceId = await comoUsuario(c.adminId, async (cli) => {
+      const r = await cli.query<{ id: string }>(
+        'select public.conectar_fonte_meta($1, $2, $3, $4, null) as id',
+        [c.accountId, '881', 'Page', TOKEN],
+      )
+      return r.rows[0].id
+    })
+    await expect(
+      comoUsuario(c.adminId, (cli) =>
+        cli.query('update public.lead_sources set external_id = null where id = $1', [sourceId]),
+      ),
+    ).rejects.toThrow(/permission denied/i)
+  })
+
+  it('conectar_fonte_meta recusa page id vazio, traduzido para codigo de dominio', async () => {
+    await expect(
+      comoUsuario(c.adminId, (cli) =>
+        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, null)', [
+          c.accountId,
+          null,
+          'Page',
+          TOKEN,
+        ]),
+      ),
+    ).rejects.toThrow(/page_id_invalido/)
+  })
+
+  it('admin carimba atualizado_em por update direto (grant inclui a coluna)', async () => {
+    const sourceId = await comoUsuario(c.adminId, async (cli) => {
+      const r = await cli.query<{ id: string }>(
+        'select public.conectar_fonte_meta($1, $2, $3, $4, null) as id',
+        [c.accountId, '882', 'Page', TOKEN],
+      )
+      return r.rows[0].id
+    })
+    const novaData = new Date().toISOString()
+    await comoUsuario(c.adminId, (cli) =>
+      cli.query('update public.lead_sources set atualizado_em = $1 where id = $2', [
+        novaData,
+        sourceId,
+      ]),
+    )
+    const linha = await comoServico(async (cli) => {
+      const r = await cli.query<{ atualizado_em: string }>(
+        'select atualizado_em from public.lead_sources where id = $1',
+        [sourceId],
+      )
+      return r.rows[0]
+    })
+    expect(new Date(linha.atualizado_em).toISOString()).toBe(novaData)
+  })
+
   it('funcoes de fonte recusam chamada sem sessao', async () => {
     await expect(
       comoServico((cli) =>
@@ -329,6 +382,25 @@ describe('0008 — fontes conectadas', () => {
           '778',
           'Page',
           TOKEN,
+        ]),
+      ),
+    ).rejects.toThrow(/sem_sessao/)
+
+    await expect(
+      comoServico((cli) =>
+        cli.query('select public.conectar_fonte_google($1, $2, $3, $4, null)', [
+          c.accountId,
+          'Formulario sem sessao',
+          'token-x',
+          'chave-x',
+        ]),
+      ),
+    ).rejects.toThrow(/sem_sessao/)
+
+    await expect(
+      comoServico((cli) =>
+        cli.query('select public.desconectar_fonte($1)', [
+          '00000000-0000-0000-0000-000000000000',
         ]),
       ),
     ).rejects.toThrow(/sem_sessao/)
