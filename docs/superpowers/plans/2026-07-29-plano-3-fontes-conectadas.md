@@ -1683,12 +1683,13 @@ O token de página **nunca chega ao navegador**. O retorno do OAuth guarda o tok
 - Create: `src/lib/integracoes/meta-falso.ts`
 - Create: `src/lib/integracoes/meta-real.ts`
 - Create: `src/lib/integracoes/fabrica.ts`
+- Create: `src/lib/integracoes/fabrica.test.ts`
 - Create: `src/lib/integracoes/estado-oauth.ts`
 - Create: `src/lib/integracoes/estado-oauth.test.ts`
 - Create: `src/lib/integracoes/meta-falso.test.ts`
 - Create: `src/app/api/integracoes/meta/iniciar/route.ts`
 - Create: `src/app/api/integracoes/meta/retorno/route.ts`
-- Create: `.env.example`
+- Modify: `.env.local.example`
 
 **Interfaces:**
 - Consumes: `Resultado`, `ok`, `falha` de `@/lib/domain/resultado`; `criarAdminStoreDoServidor` de `@/lib/data/admin`.
@@ -1920,23 +1921,28 @@ export class MetaGraphFalso implements MetaGraph {
     return this.falharEm === metodo
   }
 
-  async trocarCodePorTokenLongo(code: string): Promise<Resultado<string>> {
+  // Os dois parametros em cada assinatura, mesmo os que o falso ignora, nao sao
+  // enfeite: MetaGraph os declara, e uma classe que implementa a interface com
+  // menos parametros do que ela exige nao compila (TS2554) no exato ponto em
+  // que o teste chama o metodo com os dois argumentos. Prefixo `_` marca "nao
+  // usado de proposito" e o eslint.config.mjs deste repo reconhece o prefixo.
+  async trocarCodePorTokenLongo(code: string, _redirectUri: string): Promise<Resultado<string>> {
     if (this.barrado('trocarCodePorTokenLongo')) return falha('meta_indisponivel')
     return ok(`token-longo-para-${code}`)
   }
 
-  async listarPaginas(): Promise<Resultado<PaginaDoMeta[]>> {
+  async listarPaginas(_tokenDoUsuario: string): Promise<Resultado<PaginaDoMeta[]>> {
     if (this.barrado('listarPaginas')) return falha('meta_indisponivel')
     return ok([...this.paginas])
   }
 
-  async assinarLeadgen(pageId: string): Promise<Resultado<void>> {
+  async assinarLeadgen(pageId: string, _tokenDaPagina: string): Promise<Resultado<void>> {
     if (this.barrado('assinarLeadgen')) return falha('meta_indisponivel')
     this.assinadas.push(pageId)
     return ok(undefined)
   }
 
-  async desassinarLeadgen(pageId: string): Promise<Resultado<void>> {
+  async desassinarLeadgen(pageId: string, _tokenDaPagina: string): Promise<Resultado<void>> {
     if (this.barrado('desassinarLeadgen')) return falha('meta_indisponivel')
     this.desassinadas.push(pageId)
     return ok(undefined)
@@ -2078,17 +2084,15 @@ export function metaGraph(): MetaGraph {
 - [ ] **Step 8: Rodar e ver passar**
 
 Run: `npx vitest run src/lib/integracoes/`
-Expected: PASS, 14 testes (8 do estado + 6 do falso).
+Expected: PASS, 17 testes (8 do estado + 6 do falso + 3 de `usarFalso`, que cobrem o invariante de nao rodar a falsa em producao).
 
 - [ ] **Step 9: Documentar as variáveis de ambiente**
 
-Crie `.env.example` (ou acrescente ao que já existir):
+`.env.example` é nome errado neste repo: `.gitignore` ignora `.env*` e abre exceção só para `.env.local.example`, que já existe e já está versionado (Supabase local dos Planos 1 e 2). Criar `.env.example` à parte nasceria ignorado pelo git — silenciosamente, sem erro nenhum. Acrescente as variáveis novas ao `.env.local.example` existente em vez de criar arquivo novo.
+
+Acrescente ao final de `.env.local.example`:
 
 ```
-# Supabase local — ja usados pelos Planos 1 e 2
-NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-
 # Meta Lead Ads (Plano 3)
 META_APP_ID=
 META_APP_SECRET=
@@ -2216,7 +2220,7 @@ Expected: typecheck limpo e build concluído, listando `/api/integracoes/meta/in
 - [ ] **Step 13: Commit**
 
 ```bash
-git add src/lib/integracoes "src/app/api/integracoes" .env.example
+git add src/lib/integracoes "src/app/api/integracoes" .env.local.example
 git commit -m "feat: port do Graph API do Meta e fluxo de OAuth"
 ```
 
@@ -2856,7 +2860,7 @@ Run: `npm run dev`
 - [ ] **Step 8: Rodar a suíte inteira**
 
 Run: `npm test && npm run test:integration && npm run typecheck && npm run build`
-Expected: 94 unitários PASS (80 + 14 da Task 6), 80 de integração PASS, typecheck e build limpos.
+Expected: 97 unitários PASS (80 + 17 da Task 6), 80 de integração PASS, typecheck e build limpos.
 
 - [ ] **Step 9: Commit**
 
@@ -2972,7 +2976,7 @@ Se `admin conecta uma Page do Meta` falhar em `/config?meta=escolher` com a list
 - [ ] **Step 4: Rodar tudo**
 
 Run: `npm test && npm run test:integration && npm run test:e2e && npm run typecheck && npm run build`
-Expected: 94 unitários, 80 de integração, 6 E2E, typecheck e build limpos.
+Expected: 97 unitários, 80 de integração, 6 E2E, typecheck e build limpos.
 
 - [ ] **Step 5: Commit**
 
@@ -3014,7 +3018,7 @@ Nota: `.superpowers/sdd/progress.md` é gitignored no repo. Se o `git add` recus
 
 ## Pronto quando
 
-- `npm test` (94), `npm run test:integration` (80), `npm run test:e2e` (6), `npm run typecheck` e `npm run build` todos limpos, rodados no resultado do merge e não só antes dele.
+- `npm test` (97), `npm run test:integration` (80), `npm run test:e2e` (6), `npm run typecheck` e `npm run build` todos limpos, rodados no resultado do merge e não só antes dele.
 - Um admin abre `/config`, clica em **Conectar Facebook**, escolhe a Page, define o responsável padrão e vê a fonte listada.
 - O mesmo admin gera a URL secreta do Google, ela aparece uma vez e não volta no recarregamento.
 - `select * from public.source_credentials` como `authenticated` responde `permission denied`.
