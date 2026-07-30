@@ -1695,7 +1695,9 @@ O token de página **nunca chega ao navegador**. O retorno do OAuth guarda o tok
 - Produces:
   - `meta.ts`: `type PaginaDoMeta = { id: string; nome: string; token: string }` e `interface MetaGraph` com `trocarCodePorTokenLongo`, `listarPaginas`, `assinarLeadgen`, `desassinarLeadgen`.
   - `meta-falso.ts`: `class MetaGraphFalso implements MetaGraph`, com `assinadas: string[]`, `desassinadas: string[]` e `falharEm: string | null`.
-  - `fabrica.ts`: `metaGraph(): MetaGraph` e `metaFalso(): MetaGraphFalso`.
+  - `fabrica.ts`: `metaGraph(): MetaGraph`, `metaFalso(): MetaGraphFalso` e
+    `usarFalso(): boolean` — o predicado unico de "estamos em teste", consumido
+    tambem pela rota que inicia o OAuth.
   - `estado-oauth.ts`: `COOKIE_ESTADO`, `COOKIE_TOKEN`, `gerarEstado()`, `conferirEstado(doCookie, daUrl)`.
   - Rotas `GET /api/integracoes/meta/iniciar` e `GET /api/integracoes/meta/retorno`. A Task 7 consome o cookie `COOKIE_TOKEN` que o retorno deixa.
 
@@ -2053,12 +2055,22 @@ export function metaFalso(): MetaGraphFalso {
 }
 
 /**
- * META_FAKE=1 vale em teste e so em teste. O `next build` de producao nao
- * define a variavel, entao a real e o padrao — mas confira o painel da Vercel
- * antes de subir, porque a falsa aceita qualquer credencial em silencio.
+ * META_FAKE=1 vale em teste e so em teste, e quem garante isso e o codigo, nao
+ * um humano conferindo painel. A falsa aceita qualquer credencial em silencio:
+ * se ela subisse em producao por variavel mal configurada, o CRM nao daria erro
+ * nenhum — so passaria a confiar em token que nunca foi validado pelo Meta.
+ * Trocar um check humano por invariante custa uma linha.
+ *
+ * `NODE_ENV !== 'production'` nao atrapalha nada que precisamos: o E2E sobe o
+ * app por `npm run dev`, e em preview a gente quer o Graph real de proposito,
+ * porque preview e onde a verificacao manual contra o provedor acontece.
  */
+export function usarFalso(): boolean {
+  return process.env.META_FAKE === '1' && process.env.NODE_ENV !== 'production'
+}
+
 export function metaGraph(): MetaGraph {
-  if (process.env.META_FAKE === '1') return metaFalso()
+  if (usarFalso()) return metaFalso()
   return new MetaGraphReal(process.env.META_APP_ID ?? '', process.env.META_APP_SECRET ?? '')
 }
 ```
@@ -2102,6 +2114,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { criarAdminStoreDoServidor } from '@/lib/data/admin'
 import { COOKIE_ESTADO, gerarEstado } from '@/lib/integracoes/estado-oauth'
+import { usarFalso } from '@/lib/integracoes/fabrica'
 
 const VERSAO = process.env.META_API_VERSION ?? 'v21.0'
 
@@ -2129,7 +2142,10 @@ export async function GET() {
 
   // Em teste nao existe facebook.com: pula direto para o retorno, que e o
   // trecho do fluxo que o codigo do CRM realmente controla.
-  if (process.env.META_FAKE === '1') {
+  // Usa o mesmo predicado da fabrica de proposito. Se esta rota desviasse para
+  // o retorno falso enquanto metaGraph() devolvesse a implementacao real, o
+  // fluxo quebraria no meio — duas copias da condicao e como elas divergem.
+  if (usarFalso()) {
     redirect(`/api/integracoes/meta/retorno?code=code-falso&state=${estado}`)
   }
 
