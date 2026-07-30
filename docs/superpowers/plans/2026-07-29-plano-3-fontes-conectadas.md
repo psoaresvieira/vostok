@@ -1469,21 +1469,26 @@ insert into public.ingestion_config (id, segredo_hash) values (true, null);
 -- GRANTS
 --
 -- lead_sources: select completo, update restrito as colunas que a tela de
--- Integracoes edita direto (nome, responsavel_padrao_id, ativo). provedor e
+-- Integracoes precisa escrever direto: nome, responsavel_padrao_id e ativo
+-- (edicao manual da fonte) e atualizado_em (o definirResponsavel da Task 7
+-- carimba a hora junto com a troca de responsavel — sem a coluna aqui esse
+-- update morre com permission denied assim que a Task 7 existir). provedor e
 -- external_id ficam de fora do update de proposito: o `with check` da policy
 -- abaixo so valida papel e responsavel, entao sem essa restricao de coluna um
 -- admin podia, direto pelo PostgREST, anular external_id (tirando a fonte do
 -- indice unico global sem soltar o token da Page) ou trocar provedor (criando
--- uma linha meta com external_id nulo). O check da tabela cobre a mesma
--- garantia por baixo, como segunda linha de defesa. Insert e delete NAO tem
--- grant — passam pelas funcoes abaixo, as unicas que sabem escrever a
--- credencial junto, na mesma transacao.
+-- uma linha meta com external_id nulo). Nenhuma dessas duas colunas carrega
+-- risco equivalente: um admin carimbar a propria atualizado_em nao e
+-- diferente de qualquer outra escrita nela. O check da tabela cobre a mesma
+-- garantia de external_id/provedor por baixo, como segunda linha de defesa.
+-- Insert e delete NAO tem grant — passam pelas funcoes abaixo, as unicas que
+-- sabem escrever a credencial junto, na mesma transacao.
 --
 -- source_credentials e ingestion_config: nenhum grant, de proposito. Sem
 -- privilegio a RLS nem chega a ser avaliada e o erro e `permission denied`, que
 -- e o que os testes asseguram. As funcoes SECURITY DEFINER rodam como postgres
 -- e nao dependem desse ACL.
-grant select, update (nome, responsavel_padrao_id, ativo) on public.lead_sources to authenticated;
+grant select, update (nome, responsavel_padrao_id, ativo, atualizado_em) on public.lead_sources to authenticated;
 
 alter table public.lead_sources enable row level security;
 alter table public.source_credentials enable row level security;
