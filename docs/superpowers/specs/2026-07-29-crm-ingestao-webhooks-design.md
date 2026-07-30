@@ -81,6 +81,12 @@ O webhook do Meta é do **app**, não da conta, e traz só o `page_id`. Se duas 
 
 `external_id` é **anulável de propósito**: no Google não existe identificador estável da fonte no payload — quem resolve a conta é o token da URL. Índice único do Postgres não compara `NULL` com `NULL`, então várias fontes Google convivem na mesma conta sem colidir, enquanto o Meta continua travado a uma Page por conta. Marcar a coluna como `not null` quebraria o Google.
 
+#### Risco nomeado: squat de Page ID em `conectar_fonte_meta`
+
+A justificativa acima parte de "duas contas reivindicam a mesma Page" como disputa entre dois donos legítimos, mas o índice não distingue esse caso do outro: **o segundo a chegar pode ser o dono legítimo, e o primeiro um invasor**. `conectar_fonte_meta` prova só que o chamador é admin da conta que ele mesmo passou — não prova que ele controla `p_page_id`, e `p_token` é texto arbitrário não validado. Como nenhuma migration revoga `execute` de `public` nas funções, a RPC é alcançável direto pelo PostgREST, então qualquer pessoa que faça signup, crie a própria conta e chame `conectar_fonte_meta(minha_conta, '<page id de um concorrente>', 'x', 'x', null)` — Page IDs são públicos — trava a Page para si. A vítima passa a receber `page_ja_conectada` para sempre e não tem recurso: não enxerga nem apaga a linha do invasor.
+
+**Decisão consciente do Plano 3: não consertar aqui.** Consertar direito exige validar o token contra o Graph API — o port que a Task 6 constrói —, e a decisão foi aceitar o risco em troca de escopo, com o produto ainda fora de produção. **Dono: Plano 4**, que passa a ter um caminho de reivindicação — um chamador que apresente token de página válido toma a linha de quem estava lá antes.
+
 ### Por que as credenciais moram em tabela separada
 
 `source_credentials` não recebe `grant`, nem de `select`. Só funções `security definer` a leem. Consequência: uma sessão de admin comprometida não extrai o token da Page nem o segredo do Google. Se esses campos fossem colunas de `lead_sources`, qualquer `select *` da tela os traria para o payload RSC — exatamente a armadilha que a `AdminStore` já documenta para o token de convite.

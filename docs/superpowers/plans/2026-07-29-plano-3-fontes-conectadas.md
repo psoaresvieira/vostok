@@ -1516,6 +1516,12 @@ as $$
   select encode(sha256(p_valor::bytea), 'hex');
 $$;
 
+-- Esta funcao prova que o chamador e admin da conta que ele mesmo passou, mas
+-- NAO prova que ele controla p_page_id — risco nomeado e com dono, aceito
+-- conscientemente para o Plano 3, no README de riscos da spec (secao "Por que
+-- unique (provedor, external_id) e global", em
+-- docs/superpowers/specs/2026-07-29-crm-ingestao-webhooks-design.md). Nao
+-- "consertar" aqui sem ler aquela secao primeiro.
 create or replace function public.conectar_fonte_meta(
   p_account_id uuid,
   p_page_id text,
