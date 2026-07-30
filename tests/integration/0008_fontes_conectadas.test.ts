@@ -288,4 +288,58 @@ describe('0008 — fontes conectadas', () => {
     expect(dono).toBe(c.vendedorBId)
   })
 
+  it('nao troca responsavel padrao para usuario de outra conta por update direto', async () => {
+    const outra = await outraContaComAdmin('Conta F', 'f@f.com')
+    const sourceId = await comoUsuario(c.adminId, async (cli) => {
+      const r = await cli.query<{ id: string }>(
+        'select public.conectar_fonte_meta($1, $2, $3, $4, null) as id',
+        [c.accountId, '667', 'Page', TOKEN],
+      )
+      return r.rows[0].id
+    })
+
+    await expect(
+      comoUsuario(c.adminId, (cli) =>
+        cli.query('update public.lead_sources set responsavel_padrao_id = $1 where id = $2', [
+          outra.adminId,
+          sourceId,
+        ]),
+      ),
+    ).rejects.toThrow(/row-level security/i)
+  })
+
+  it('conectar_fonte_google recusa token de URL vazio', async () => {
+    await expect(
+      comoUsuario(c.adminId, (cli) =>
+        cli.query('select public.conectar_fonte_google($1, $2, $3, $4, null)', [
+          c.accountId,
+          'Formulario',
+          '   ',
+          'chave',
+        ]),
+      ),
+    ).rejects.toThrow(/segredo_vazio/)
+  })
+
+  it('funcoes de fonte recusam chamada sem sessao', async () => {
+    await expect(
+      comoServico((cli) =>
+        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, null)', [
+          c.accountId,
+          '778',
+          'Page',
+          TOKEN,
+        ]),
+      ),
+    ).rejects.toThrow(/sem_sessao/)
+  })
+
+  it('desconectar_fonte de id inexistente devolve fonte_nao_encontrada', async () => {
+    await expect(
+      comoUsuario(c.adminId, (cli) =>
+        cli.query('select public.desconectar_fonte($1)', ['00000000-0000-0000-0000-000000000000']),
+      ),
+    ).rejects.toThrow(/fonte_nao_encontrada/)
+  })
+
 })
