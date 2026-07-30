@@ -14,6 +14,13 @@ const MENSAGENS_ERRO: Record<string, string> = {
   sem_conta: 'Você ainda não está em nenhuma conta.',
   pipeline_nao_encontrado: 'Não encontramos o funil da sua conta.',
   responsavel_invalido: 'Esse responsável não faz parte da sua conta. Recarregue a página e escolha de novo.',
+  conexao_expirada: 'A conexão com o Meta expirou. Clique em "Conectar Facebook" de novo.',
+  meta_indisponivel: 'O Facebook não respondeu. Tente de novo em alguns minutos.',
+  pagina_nao_encontrada: 'Essa página não está mais disponível na sua conta do Facebook.',
+  page_ja_conectada: 'Essa página do Facebook já está conectada a outra conta do CRM.',
+  page_id_invalido: 'O Facebook não devolveu o identificador dessa página. Tente conectar de novo.',
+  fonte_nao_encontrada: 'Essa integração não existe mais. Recarregue a página.',
+  segredo_vazio: 'O segredo não pode ficar em branco.',
 }
 
 export function mensagemDeErro(codigo: string): string {
