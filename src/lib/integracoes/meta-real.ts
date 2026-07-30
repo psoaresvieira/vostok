@@ -42,7 +42,13 @@ async function chamar<T>(url: URL, init?: RequestInit): Promise<Resultado<T>> {
     const r = await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) })
     return await corpo<T>(r)
   } catch (e) {
-    console.error('graph api inalcancavel', e)
+    // So o nome do erro, igual a disciplina de corpo() duas funcoes acima
+    // (que loga so status/codigo/mensagem, nunca o objeto cru). Nenhuma
+    // versao conhecida do undici embute a URL completa — que aqui carrega
+    // client_secret e access_token na query string — no TypeError nem no
+    // DOMException de AbortSignal.timeout, entao nada vaza hoje; e
+    // consistencia com o resto do arquivo, nao correcao de vazamento.
+    console.error('graph api inalcancavel', e instanceof Error ? e.name : 'desconhecido')
     return falha('meta_indisponivel')
   }
 }

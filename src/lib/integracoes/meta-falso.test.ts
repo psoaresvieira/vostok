@@ -46,6 +46,18 @@ describe('MetaGraphFalso', () => {
     expect(g.assinadas).toEqual([])
   })
 
+  it('falharEm so aceita nomes reais de metodo — typo vira erro de compilacao', () => {
+    // npm run typecheck passando aqui nao prova so que a uniao ACEITA os
+    // literais validos ja usados nos testes acima — prova que ela RECUSA um
+    // typo. @ts-expect-error exige que a linha seguinte falhe o typecheck;
+    // se `falharEm` voltar a ser `string` (regressao), a linha passaria a
+    // compilar e o proprio @ts-expect-error, agora sem erro para suprimir,
+    // vira erro de compilacao no lugar.
+    const g = new MetaGraphFalso()
+    // @ts-expect-error typo no nome do metodo tem que ser erro de compilacao
+    g.falharEm = 'assinarLeadGen'
+  })
+
   it('a pagina devolvida nao compartilha objeto com a constante padrao', async () => {
     // metaFalso() e singleton de processo: se listarPaginas devolvesse os
     // MESMOS objetos de PAGINAS_PADRAO (so o array seria novo), mutar um

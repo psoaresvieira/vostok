@@ -19,6 +19,8 @@ describe('MetaGraphReal — falhas de rede nao escapam do contrato do port', () 
   afterEach(() => {
     global.fetch = fetchOriginal
     vi.unstubAllEnvs()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('devolve meta_indisponivel quando o fetch rejeita (DNS/conexao/TLS/timeout)', async () => {
@@ -59,19 +61,56 @@ describe('MetaGraphReal — falhas de rede nao escapam do contrato do port', () 
     expect(r.erro).toBe('meta_indisponivel')
   })
 
-  it('limita cada chamada com um AbortSignal de timeout', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ data: [] }),
+  it('resolve para meta_indisponivel quando a requisicao trava alem do prazo do port', async () => {
+    // Versao anterior deste teste so espiava a chamada
+    // (`toHaveBeenCalledTimes` + inspecionar `init.signal`): provava que
+    // "algum" AbortSignal foi anexado, mas nao que o prazo e de 10s, nao que
+    // uma requisicao realmente pendurada aborta, e nao que o abort vira
+    // `falha('meta_indisponivel')` em vez de excecao. Uma regressao que
+    // anexasse o signal com duracao errada, ou que engolisse o abort,
+    // passaria verde do mesmo jeito.
+    //
+    // `vi.useFakeTimers()` sozinho NAO adianta aqui — confirmado
+    // empiricamente: o timer que AbortSignal.timeout() agenda por baixo dos
+    // panos e interno ao Node (nao passa por globalThis.setTimeout), entao
+    // avancar o relogio falso do vitest nunca dispara o abort de um
+    // AbortSignal.timeout real. Por isso substituimos o metodo estatico
+    // AbortSignal.timeout por uma versao equivalente apoiada em setTimeout,
+    // que o relogio falso ja controla. O resto do mecanismo real continua de
+    // pe sem nenhuma modificacao: chamar() em meta-real.ts chama
+    // AbortSignal.timeout(TIMEOUT_MS) sem saber que foi substituido, passa o
+    // signal resultante para fetch, e o fetch (aqui, um double que nunca
+    // resolve sozinho) so rejeita quando esse signal aborta.
+    vi.useFakeTimers()
+    const chamadas: number[] = []
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+      chamadas.push(ms)
+      const controller = new AbortController()
+      setTimeout(() => controller.abort(new DOMException('TimeoutError', 'TimeoutError')), ms)
+      return controller.signal
     })
-    global.fetch = fetchMock
+
+    // Um fetch que nunca resolve por conta propria: e exatamente como uma
+    // requisicao pendurada de verdade se comporta (header nunca chega, ou
+    // corpo trava). So reage ao abort do signal recebido.
+    global.fetch = vi.fn((_url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('This operation was aborted', 'AbortError'))
+        })
+      })
+    })
+
     const g = new MetaGraphReal('app-id', 'app-secret')
+    const promessa = g.listarPaginas('token-de-usuario')
 
-    await g.listarPaginas('token-de-usuario')
+    await vi.advanceTimersByTimeAsync(10_000)
+    const r = await promessa
 
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    const init = fetchMock.mock.calls[0][1] as RequestInit | undefined
-    expect(init?.signal).toBeInstanceOf(AbortSignal)
+    // Prova o prazo exato, e nao so "algum" prazo.
+    expect(chamadas).toEqual([10_000])
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('meta_indisponivel')
   })
 })

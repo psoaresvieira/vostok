@@ -17,13 +17,28 @@ import type { NextRequest } from 'next/server'
  * qualquer outro teste automatizado deste projeto.
  */
 
-const cookieStore = new Map<string, { value: string }>()
+/**
+ * O mock anterior de `set` descartava o terceiro argumento (as opcoes do
+ * cookie). Consequencia: nenhum teste deste repositorio conseguia pegar
+ * regressao em httpOnly/sameSite/secure/path/maxAge em nenhum dos dois
+ * cookies do fluxo — justamente os atributos mais escrutinados no primeiro
+ * review, e os menos defendidos por teste ate agora.
+ */
+type OpcoesCookie = {
+  httpOnly?: boolean
+  sameSite?: 'lax' | 'strict' | 'none'
+  secure?: boolean
+  path?: string
+  maxAge?: number
+}
+
+const cookieStore = new Map<string, { value: string; opcoes?: OpcoesCookie }>()
 
 vi.mock('next/headers', () => ({
   cookies: async () => ({
     get: (name: string) => cookieStore.get(name),
-    set: (name: string, value: string) => {
-      cookieStore.set(name, { value })
+    set: (name: string, value: string, opcoes?: OpcoesCookie) => {
+      cookieStore.set(name, { value, opcoes })
     },
     delete: (name: string) => {
       cookieStore.delete(name)
@@ -57,15 +72,30 @@ function requisicao(query: string): NextRequest {
 }
 
 describe('GET /api/integracoes/meta/retorno', () => {
+  const fetchOriginal = global.fetch
+
   beforeEach(() => {
     cookieStore.clear()
     adminMock.mockReset()
     metaFalso().reiniciar()
     vi.stubEnv('META_FAKE', '1')
     vi.stubEnv('NODE_ENV', 'test')
+
+    // A garantia de "sem rede" deste arquivo era incidental: so existia
+    // porque META_FAKE=1 estava no beforeEach, e metaGraph() so consulta
+    // esse stub em tempo de chamada. Se o stub fosse removido, reordenado, ou
+    // se metaGraph() um dia decidisse por outro caminho a instancia real,
+    // nada aqui pegaria — o teste dispararia request de verdade contra
+    // graph.facebook.com antes de falhar. Mesma tecnica de
+    // meta-real.test.ts: substitui fetch por um double que estoura se for
+    // chamado, tornando a ausencia de rede estrutural em vez de incidental.
+    global.fetch = () => {
+      throw new Error('teste tentou tocar rede: metaGraph() nao esta usando o falso')
+    }
   })
 
   afterEach(() => {
+    global.fetch = fetchOriginal
     vi.unstubAllEnvs()
   })
 
@@ -97,6 +127,7 @@ describe('GET /api/integracoes/meta/retorno', () => {
 
     const cookie = cookieStore.get(COOKIE_TOKEN)
     expect(cookie?.value).toBe('conta-xyz:token-longo-para-algum-code')
+    expect(cookie?.opcoes?.httpOnly).toBe(true)
   })
 
   it('nao amarra nada quando a autorizacao falha, mesmo com state e code validos', async () => {
