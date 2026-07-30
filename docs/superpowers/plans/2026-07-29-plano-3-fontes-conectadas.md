@@ -1421,8 +1421,14 @@ create table public.lead_sources (
   -- migration futura que amplie o grant sem revisar isto. Sem ele, anular
   -- external_id de uma fonte meta a tira do indice unico global sem soltar a
   -- Page, e trocar provedor cria uma linha meta com external_id nulo que
-  -- nenhum caminho de codigo espera.
-  check (provedor <> 'meta' or external_id is not null)
+  -- nenhum caminho de codigo espera. Nomeada (em vez do automatico
+  -- lead_sources_check) porque conectar_fonte_meta precisa reconhecer o nome
+  -- para traduzir a violacao em page_id_invalido, no mesmo padrao de
+  -- unique_violation -> page_ja_conectada. String vazia entra no mesmo check
+  -- que nulo: '' passaria em "is not null" e ainda assim participaria do
+  -- indice unico global com uma chave sem sentido.
+  constraint lead_sources_meta_tem_external_id
+    check (provedor <> 'meta' or (external_id is not null and external_id <> ''))
 );
 
 -- Unico GLOBAL, nao por conta. O webhook do Meta e do app, nao da conta, e o
@@ -1557,10 +1563,16 @@ begin
       (account_id, provedor, external_id, nome, responsavel_padrao_id)
     values (p_account_id, 'meta', p_page_id, p_nome, p_responsavel)
     returning id into v_id;
-  exception when unique_violation then
-    -- O indice global e a unica unicidade possivel aqui; traduzir para um
-    -- codigo que a UI saiba explicar, em vez de vazar o nome do indice.
-    raise exception 'page_ja_conectada';
+  exception
+    when unique_violation then
+      -- O indice global e a unica unicidade possivel aqui; traduzir para um
+      -- codigo que a UI saiba explicar, em vez de vazar o nome do indice.
+      raise exception 'page_ja_conectada';
+    when check_violation then
+      -- lead_sources_meta_tem_external_id: p_page_id nulo ou vazio. Mesmo
+      -- tratamento do unique_violation acima — a UI nao deveria ver o nome
+      -- cru da constraint.
+      raise exception 'page_id_invalido';
   end;
 
   insert into public.source_credentials (source_id, meta_page_token)
@@ -2281,6 +2293,7 @@ const CODIGOS = [
   'sem_sessao',
   'sem_permissao',
   'page_ja_conectada',
+  'page_id_invalido',
   'fonte_nao_encontrada',
   'responsavel_invalido',
   'segredo_vazio',
