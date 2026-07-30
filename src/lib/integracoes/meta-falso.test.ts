@@ -45,4 +45,19 @@ describe('MetaGraphFalso', () => {
     g.reiniciar()
     expect(g.assinadas).toEqual([])
   })
+
+  it('a pagina devolvida nao compartilha objeto com a constante padrao', async () => {
+    // metaFalso() e singleton de processo: se listarPaginas devolvesse os
+    // MESMOS objetos de PAGINAS_PADRAO (so o array seria novo), mutar um
+    // campo aqui corromperia a constante para todo teste seguinte do
+    // processo, inclusive de outros arquivos.
+    const g = new MetaGraphFalso()
+    const r1 = await g.listarPaginas('t')
+    if (!r1.ok) throw new Error(r1.erro)
+    r1.valor[0].nome = 'Mutada'
+
+    const r2 = await g.listarPaginas('t')
+    if (!r2.ok) throw new Error(r2.erro)
+    expect(r2.valor[0].nome).not.toBe('Mutada')
+  })
 })

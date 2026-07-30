@@ -4,6 +4,9 @@ import type { MetaGraph, PaginaDoMeta } from './meta'
 const VERSAO = process.env.META_API_VERSION ?? 'v21.0'
 const BASE = `https://graph.facebook.com/${VERSAO}`
 
+/** Nenhum fetch fica pendurado alem disso — a plataforma mataria o route handler de qualquer forma. */
+const TIMEOUT_MS = 10_000
+
 type RespostaErro = { error?: { message?: string; code?: number } }
 
 /**
@@ -18,6 +21,30 @@ async function corpo<T>(r: Response): Promise<Resultado<T>> {
     return falha('meta_indisponivel')
   }
   return ok(dados)
+}
+
+/**
+ * Envolve fetch + corpo num try/catch. O undici do Node levanta `TypeError:
+ * fetch failed` em falha de DNS, conexao resetada, TLS ou timeout de socket —
+ * nada disso e uma resposta HTTP, entao `corpo()` nunca chega a rodar. Sem
+ * este helper a excecao subia crua ate o route handler e virava 500 em vez de
+ * `/config?meta=indisponivel`, contradizendo o contrato que o proprio port
+ * declara (meta.ts: "Todo metodo devolve Resultado"). O Graph ficar
+ * inalcancavel e de longe a falha mais provavel que este codigo vai ver.
+ *
+ * `AbortSignal.timeout` entra aqui, e nao em cada chamada: um Graph pendurado
+ * (sem recusar nem responder) nao e coberto pelo catch de rejeicao — ele so
+ * nunca resolve — e sem prazo o route handler ficaria preso ate a plataforma
+ * matar o processo.
+ */
+async function chamar<T>(url: URL, init?: RequestInit): Promise<Resultado<T>> {
+  try {
+    const r = await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) })
+    return await corpo<T>(r)
+  } catch (e) {
+    console.error('graph api inalcancavel', e)
+    return falha('meta_indisponivel')
+  }
 }
 
 export class MetaGraphReal implements MetaGraph {
@@ -39,7 +66,7 @@ export class MetaGraphReal implements MetaGraph {
     url.searchParams.set('redirect_uri', redirectUri)
     url.searchParams.set('code', code)
 
-    const curto = await corpo<{ access_token: string }>(await fetch(url))
+    const curto = await chamar<{ access_token: string }>(url)
     if (!curto.ok) return falha(curto.erro)
 
     const troca = new URL(`${BASE}/oauth/access_token`)
@@ -48,7 +75,7 @@ export class MetaGraphReal implements MetaGraph {
     troca.searchParams.set('client_secret', this.appSecret)
     troca.searchParams.set('fb_exchange_token', curto.valor.access_token)
 
-    const longo = await corpo<{ access_token: string }>(await fetch(troca))
+    const longo = await chamar<{ access_token: string }>(troca)
     if (!longo.ok) return falha(longo.erro)
     return ok(longo.valor.access_token)
   }
@@ -58,10 +85,13 @@ export class MetaGraphReal implements MetaGraph {
     url.searchParams.set('fields', 'id,name,access_token')
     url.searchParams.set('access_token', tokenDoUsuario)
 
-    const r = await corpo<{ data: { id: string; name: string; access_token: string }[] }>(
-      await fetch(url),
-    )
+    const r = await chamar<{ data: { id: string; name: string; access_token: string }[] }>(url)
     if (!r.ok) return falha(r.erro)
+    // Resposta 200 sem `error` mas com formato inesperado (ex.: corpo vazio)
+    // e possivel — o Graph tambem falha assim, nao so com status != 2xx.
+    // Sem esta guarda, `.map` num `undefined` levantava TypeError e a
+    // excecao escapava do mesmo jeito que um fetch rejeitado.
+    if (!Array.isArray(r.valor.data)) return falha('meta_indisponivel')
     return ok(r.valor.data.map((p) => ({ id: p.id, nome: p.name, token: p.access_token })))
   }
 
@@ -70,7 +100,7 @@ export class MetaGraphReal implements MetaGraph {
     url.searchParams.set('subscribed_fields', 'leadgen')
     url.searchParams.set('access_token', tokenDaPagina)
 
-    const r = await corpo<{ success: boolean }>(await fetch(url, { method: 'POST' }))
+    const r = await chamar<{ success: boolean }>(url, { method: 'POST' })
     if (!r.ok) return falha(r.erro)
     return ok(undefined)
   }
@@ -79,7 +109,7 @@ export class MetaGraphReal implements MetaGraph {
     const url = new URL(`${BASE}/${pageId}/subscribed_apps`)
     url.searchParams.set('access_token', tokenDaPagina)
 
-    const r = await corpo<{ success: boolean }>(await fetch(url, { method: 'DELETE' }))
+    const r = await chamar<{ success: boolean }>(url, { method: 'DELETE' })
     if (!r.ok) return falha(r.erro)
     return ok(undefined)
   }

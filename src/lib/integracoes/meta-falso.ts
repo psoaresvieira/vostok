@@ -13,8 +13,14 @@ const PAGINAS_PADRAO: PaginaDoMeta[] = [
 export class MetaGraphFalso implements MetaGraph {
   readonly assinadas: string[] = []
   readonly desassinadas: string[] = []
-  /** Nome do metodo que deve falhar, para exercitar o caminho de erro. */
-  falharEm: string | null = null
+  /**
+   * Nome do metodo que deve falhar, para exercitar o caminho de erro.
+   * `keyof MetaGraph`, e nao `string`: um typo como 'assinarLeadGen' nunca
+   * bateria em `barrado()`, e o teste que deveria cobrir o caminho de erro
+   * passaria vazio, sem falhar e sem avisar ninguem. Tipar pelo proprio port
+   * custa uma linha e transforma o typo em erro de compilacao.
+   */
+  falharEm: keyof MetaGraph | null = null
 
   constructor(private paginas: PaginaDoMeta[] = PAGINAS_PADRAO) {}
 
@@ -24,7 +30,7 @@ export class MetaGraphFalso implements MetaGraph {
     this.falharEm = null
   }
 
-  private barrado(metodo: string): boolean {
+  private barrado(metodo: keyof MetaGraph): boolean {
     return this.falharEm === metodo
   }
 
@@ -35,7 +41,12 @@ export class MetaGraphFalso implements MetaGraph {
 
   async listarPaginas(_tokenDoUsuario: string): Promise<Resultado<PaginaDoMeta[]>> {
     if (this.barrado('listarPaginas')) return falha('meta_indisponivel')
-    return ok([...this.paginas])
+    // Objeto novo por pagina, nao so array novo: `[...this.paginas]` clonava o
+    // array mas mantinha os MESMOS objetos de PAGINAS_PADRAO (ou do array
+    // passado no construtor). metaFalso() e singleton de processo, entao um
+    // teste que mutasse pagina.nome corromperia a constante para todo teste
+    // seguinte, inclusive de outros arquivos.
+    return ok(this.paginas.map((p) => ({ ...p })))
   }
 
   async assinarLeadgen(pageId: string, _tokenDaPagina: string): Promise<Resultado<void>> {

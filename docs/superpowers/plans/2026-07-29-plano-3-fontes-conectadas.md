@@ -1687,8 +1687,10 @@ O token de página **nunca chega ao navegador**. O retorno do OAuth guarda o tok
 - Create: `src/lib/integracoes/estado-oauth.ts`
 - Create: `src/lib/integracoes/estado-oauth.test.ts`
 - Create: `src/lib/integracoes/meta-falso.test.ts`
+- Create: `src/lib/integracoes/meta-real.test.ts`
 - Create: `src/app/api/integracoes/meta/iniciar/route.ts`
 - Create: `src/app/api/integracoes/meta/retorno/route.ts`
+- Create: `src/app/api/integracoes/meta/retorno/route.test.ts`
 - Modify: `.env.local.example`
 
 **Interfaces:**
@@ -1959,6 +1961,9 @@ import type { MetaGraph, PaginaDoMeta } from './meta'
 const VERSAO = process.env.META_API_VERSION ?? 'v21.0'
 const BASE = `https://graph.facebook.com/${VERSAO}`
 
+/** Nenhum fetch fica pendurado alem disso — a plataforma mataria o route handler de qualquer forma. */
+const TIMEOUT_MS = 10_000
+
 type RespostaErro = { error?: { message?: string; code?: number } }
 
 /**
@@ -1973,6 +1978,30 @@ async function corpo<T>(r: Response): Promise<Resultado<T>> {
     return falha('meta_indisponivel')
   }
   return ok(dados)
+}
+
+/**
+ * Envolve fetch + corpo num try/catch. O undici do Node levanta `TypeError:
+ * fetch failed` em falha de DNS, conexao resetada, TLS ou timeout de socket —
+ * nada disso e uma resposta HTTP, entao `corpo()` nunca chega a rodar. Sem
+ * este helper a excecao subia crua ate o route handler e virava 500 em vez de
+ * `/config?meta=indisponivel`, contradizendo o contrato que o proprio port
+ * declara (meta.ts: "Todo metodo devolve Resultado"). O Graph ficar
+ * inalcancavel e de longe a falha mais provavel que este codigo vai ver.
+ *
+ * `AbortSignal.timeout` entra aqui, e nao em cada chamada: um Graph pendurado
+ * (sem recusar nem responder) nao e coberto pelo catch de rejeicao — ele so
+ * nunca resolve — e sem prazo o route handler ficaria preso ate a plataforma
+ * matar o processo.
+ */
+async function chamar<T>(url: URL, init?: RequestInit): Promise<Resultado<T>> {
+  try {
+    const r = await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) })
+    return await corpo<T>(r)
+  } catch (e) {
+    console.error('graph api inalcancavel', e)
+    return falha('meta_indisponivel')
+  }
 }
 
 export class MetaGraphReal implements MetaGraph {
@@ -1994,7 +2023,7 @@ export class MetaGraphReal implements MetaGraph {
     url.searchParams.set('redirect_uri', redirectUri)
     url.searchParams.set('code', code)
 
-    const curto = await corpo<{ access_token: string }>(await fetch(url))
+    const curto = await chamar<{ access_token: string }>(url)
     if (!curto.ok) return falha(curto.erro)
 
     const troca = new URL(`${BASE}/oauth/access_token`)
@@ -2003,7 +2032,7 @@ export class MetaGraphReal implements MetaGraph {
     troca.searchParams.set('client_secret', this.appSecret)
     troca.searchParams.set('fb_exchange_token', curto.valor.access_token)
 
-    const longo = await corpo<{ access_token: string }>(await fetch(troca))
+    const longo = await chamar<{ access_token: string }>(troca)
     if (!longo.ok) return falha(longo.erro)
     return ok(longo.valor.access_token)
   }
@@ -2013,10 +2042,13 @@ export class MetaGraphReal implements MetaGraph {
     url.searchParams.set('fields', 'id,name,access_token')
     url.searchParams.set('access_token', tokenDoUsuario)
 
-    const r = await corpo<{ data: { id: string; name: string; access_token: string }[] }>(
-      await fetch(url),
-    )
+    const r = await chamar<{ data: { id: string; name: string; access_token: string }[] }>(url)
     if (!r.ok) return falha(r.erro)
+    // Resposta 200 sem `error` mas com formato inesperado (ex.: corpo vazio)
+    // e possivel — o Graph tambem falha assim, nao so com status != 2xx. Sem
+    // esta guarda, `.map` num `undefined` levantava TypeError e a excecao
+    // escapava do mesmo jeito que um fetch rejeitado.
+    if (!Array.isArray(r.valor.data)) return falha('meta_indisponivel')
     return ok(r.valor.data.map((p) => ({ id: p.id, nome: p.name, token: p.access_token })))
   }
 
@@ -2025,7 +2057,7 @@ export class MetaGraphReal implements MetaGraph {
     url.searchParams.set('subscribed_fields', 'leadgen')
     url.searchParams.set('access_token', tokenDaPagina)
 
-    const r = await corpo<{ success: boolean }>(await fetch(url, { method: 'POST' }))
+    const r = await chamar<{ success: boolean }>(url, { method: 'POST' })
     if (!r.ok) return falha(r.erro)
     return ok(undefined)
   }
@@ -2034,7 +2066,7 @@ export class MetaGraphReal implements MetaGraph {
     const url = new URL(`${BASE}/${pageId}/subscribed_apps`)
     url.searchParams.set('access_token', tokenDaPagina)
 
-    const r = await corpo<{ success: boolean }>(await fetch(url, { method: 'DELETE' }))
+    const r = await chamar<{ success: boolean }>(url, { method: 'DELETE' })
     if (!r.ok) return falha(r.erro)
     return ok(undefined)
   }
@@ -2084,7 +2116,7 @@ export function metaGraph(): MetaGraph {
 - [ ] **Step 8: Rodar e ver passar**
 
 Run: `npx vitest run src/lib/integracoes/`
-Expected: PASS, 17 testes (8 do estado + 6 do falso + 3 de `usarFalso`, que cobrem o invariante de nao rodar a falsa em producao).
+Expected: PASS, 25 testes (8 do estado + 7 do falso + 6 da fabrica + 4 do real). Os 3 testes de `src/app/api/integracoes/meta/retorno/route.test.ts` (autorizacao e amarra de conta) rodam a parte, por estarem fora desta pasta.
 
 - [ ] **Step 9: Documentar as variáveis de ambiente**
 
@@ -2100,8 +2132,13 @@ META_API_VERSION=v21.0
 # URL publica que o Meta chama de volta. Em desenvolvimento exige tunel ou
 # deploy de preview: localhost nao e alcancavel pelo Meta.
 META_REDIRECT_URI=http://localhost:3000/api/integracoes/meta/retorno
-# 1 troca o Graph API pela implementacao falsa. So para teste.
-META_FAKE=
+# 1 troca o Graph API pela implementacao falsa. So para teste. Vem 1 por
+# padrao neste exemplo: sem credencial real de META_APP_ID/META_APP_SECRET, o
+# Graph real falharia em qualquer chamada, e o passo de verificacao manual do
+# plano (Task 8) presume META_FAKE=1 sem repetir a instrucao. Troque para
+# vazio so ao testar contra o Meta de verdade, com credencial real e
+# NODE_ENV=production ou tunel/preview — nunca em dev com localhost.
+META_FAKE=1
 
 # Segredo de ingestao (o Plano 4 consome). Configuracao de operador, nao de
 # tenant: nenhuma tela o registra. Em desenvolvimento entra pelo seed.sql, em
@@ -2171,10 +2208,23 @@ Crie `src/app/api/integracoes/meta/retorno/route.ts`:
 import type { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { criarAdminStoreDoServidor } from '@/lib/data/admin'
 import { COOKIE_ESTADO, COOKIE_TOKEN, conferirEstado } from '@/lib/integracoes/estado-oauth'
 import { metaGraph } from '@/lib/integracoes/fabrica'
 
 export async function GET(req: NextRequest) {
+  // O cookie de state prova so que UMA sessao de admin existia quando o
+  // dialogo do Facebook comecou — nunca que ainda existe, nem que e a mesma.
+  // Cenario sem exploit, so troca de sessao: admin A completa o dialogo numa
+  // maquina compartilhada e sai sem escolher a Page; o COOKIE_TOKEN fica com
+  // o token de usuario de A por 15 minutos; se o usuario B entrar no mesmo
+  // navegador dentro da janela, nada aqui provava que o token nao era de B —
+  // a Task 7 listaria as Pages de A para B conectar no tenant errado. Por
+  // isso este check vem antes de qualquer outra coisa, igual a rota de
+  // inicio ja faz.
+  const contexto = await criarAdminStoreDoServidor()
+  if (!contexto.ok) redirect('/login')
+
   const jar = await cookies()
   const doCookie = jar.get(COOKIE_ESTADO)?.value
   const daUrl = req.nextUrl.searchParams.get('state')
@@ -2200,7 +2250,15 @@ export async function GET(req: NextRequest) {
   // Token de USUARIO, nao de pagina. Vive 15 minutos, o suficiente para
   // escolher a Page na tela seguinte; o token da Page e buscado no servidor no
   // momento de conectar e vai direto para source_credentials.
-  jar.set(COOKIE_TOKEN, troca.valor, {
+  //
+  // Prefixo `${conta.id}:` amarra o token a identidade do CRM, e nao so ao
+  // navegador: o check de admin acima prova a sessao no INICIO deste
+  // handler, mas quem LE o cookie depois (Task 7) roda numa request
+  // diferente, sem garantia nenhuma de que e a mesma sessao. O consumidor
+  // tem que separar o prefixo, comparar com a conta ativa dele, e recusar o
+  // cookie inteiro se as contas nao baterem — cookie de conta errada e
+  // cookie invalido, nao "confia e tenta".
+  jar.set(COOKIE_TOKEN, `${contexto.valor.conta.id}:${troca.valor}`, {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
@@ -2211,6 +2269,18 @@ export async function GET(req: NextRequest) {
   redirect('/config?meta=escolher')
 }
 ```
+
+**Teste a rota estar fechada a quem nao e admin.** Crie
+`src/app/api/integracoes/meta/retorno/route.test.ts` mockando `next/headers`,
+`next/navigation` e `@/lib/data/admin` (nenhum servidor HTTP nem rede — o
+Graph continua sendo `metaFalso()`, o mesmo double de sempre). Cubra:
+
+- `criarAdminStoreDoServidor()` falhando redireciona para `/login` e nao toca
+  no `COOKIE_TOKEN`, mesmo com `state` e `code` validos na URL.
+- Com autorizacao ok, o `COOKIE_TOKEN` gravado comeca com `${conta.id}:`.
+
+Run: `npx vitest run "src/app/api/integracoes/meta/retorno/route.test.ts"`
+Expected: PASS, 3 testes.
 
 - [ ] **Step 12: Verificar que o build aceita as rotas**
 
@@ -2241,7 +2311,7 @@ O segredo do Google aparece **uma vez**, no retorno da ação que o cria. Se o a
 - Modify: `src/app/(app)/config/erros.ts`
 
 **Interfaces:**
-- Consumes: `resolverContaAtiva` (Task 2), funções da `0008` (Task 5), `metaGraph`/`COOKIE_TOKEN` (Task 6), `chamarAcao` de `@/lib/ui/acao`, `Membro` de `@/lib/domain/tipos`.
+- Consumes: `resolverContaAtiva` (Task 2), funções da `0008` (Task 5), `metaGraph`/`COOKIE_TOKEN` (Task 6), `chamarAcao` de `@/lib/ui/acao`, `Membro` de `@/lib/domain/tipos`. **Formato do `COOKIE_TOKEN` mudou na Task 6**: não é mais o token cru, é `${conta.id}:${token}` — todo consumo tem que separar o prefixo e recusar (`conexao_expirada`) se a conta não bater com `contexto.valor.conta.id`, exatamente como no helper `tokenDaConta` do Step 3 abaixo.
 - Produces:
   - `fonte.ts`: `type Provedor = 'meta' | 'google'`, `type Fonte = { id, provedor, externalId, nome, responsavelPadraoId, ativo, criadoEm }`.
   - `fontes.ts`: `interface FonteStore` e `criarFonteStoreDoServidor(): Promise<Resultado<{ fontes: FonteStore; conta: Conta }>>`.
@@ -2469,6 +2539,25 @@ import { metaGraph } from '@/lib/integracoes/fabrica'
 export type PaginaOferecida = { id: string; nome: string }
 
 /**
+ * A Task 6 grava o COOKIE_TOKEN como `${conta.id}:${token}`, nao so o token.
+ * Sem separar e conferir o prefixo aqui, um cookie deixado por OUTRA sessao
+ * de admin no mesmo navegador (troca de sessao numa maquina compartilhada,
+ * dentro da janela de 15 minutos) seria aceito de olhos fechados, e listaria
+ * ou conectaria as Pages de quem nao e o admin desta requisicao. Cookie de
+ * conta errada e cookie invalido, nao "confia e tenta" — por isso devolve
+ * `null` e nao so o token cru.
+ */
+function tokenDaConta(valorDoCookie: string | undefined, contaId: string): string | null {
+  if (!valorDoCookie) return null
+  const i = valorDoCookie.indexOf(':')
+  if (i < 0) return null
+  const conta = valorDoCookie.slice(0, i)
+  const token = valorDoCookie.slice(i + 1)
+  if (conta !== contaId || !token) return null
+  return token
+}
+
+/**
  * Lista as Pages sem o token de cada uma. O token e segredo de servidor: se
  * fosse devolvido aqui, iria para o payload RSC e para o HTML.
  */
@@ -2477,7 +2566,10 @@ export async function listarPaginasDoMetaAction(): Promise<Resultado<PaginaOfere
   if (!contexto.ok) return falha(contexto.erro)
 
   const jar = await cookies()
-  const token = jar.get(COOKIE_TOKEN)?.value
+  // Mesmo codigo de erro para "sem cookie" e "cookie de outra conta" de
+  // proposito: distinguir os dois na tela vazaria que outra sessao esteve
+  // ativa neste navegador.
+  const token = tokenDaConta(jar.get(COOKIE_TOKEN)?.value, contexto.valor.conta.id)
   if (!token) return falha('conexao_expirada')
 
   const r = await metaGraph().listarPaginas(token)
@@ -2490,7 +2582,7 @@ export async function conectarPaginaAction(pageId: string): Promise<Resultado<vo
   if (!contexto.ok) return falha(contexto.erro)
 
   const jar = await cookies()
-  const token = jar.get(COOKIE_TOKEN)?.value
+  const token = tokenDaConta(jar.get(COOKIE_TOKEN)?.value, contexto.valor.conta.id)
   if (!token) return falha('conexao_expirada')
 
   // Buscar de novo em vez de confiar no que veio do cliente: o token da Page
@@ -2846,7 +2938,7 @@ E acrescente a seção ao JSX, depois de `<Usuarios ... />`:
 
 - [ ] **Step 7: Verificar no navegador**
 
-Com o stack local rodando (`npx supabase start`) e `META_FAKE=1` no `.env.local`:
+Com o stack local rodando (`npx supabase start`) e `.env.local` copiado de `.env.local.example` (que já vem com `META_FAKE=1` por padrão — troque para vazio só ao testar contra o Meta real):
 
 Run: `npm run dev`
 
@@ -2860,7 +2952,7 @@ Run: `npm run dev`
 - [ ] **Step 8: Rodar a suíte inteira**
 
 Run: `npm test && npm run test:integration && npm run typecheck && npm run build`
-Expected: 97 unitários PASS (80 + 17 da Task 6), 80 de integração PASS, typecheck e build limpos.
+Expected: 108 unitários PASS (80 + 28 da Task 6: 25 em src/lib/integracoes/ + 3 da rota de retorno), 80 de integração PASS, typecheck e build limpos.
 
 - [ ] **Step 9: Commit**
 
@@ -2976,7 +3068,7 @@ Se `admin conecta uma Page do Meta` falhar em `/config?meta=escolher` com a list
 - [ ] **Step 4: Rodar tudo**
 
 Run: `npm test && npm run test:integration && npm run test:e2e && npm run typecheck && npm run build`
-Expected: 97 unitários, 80 de integração, 6 E2E, typecheck e build limpos.
+Expected: 108 unitários, 80 de integração, 6 E2E, typecheck e build limpos.
 
 - [ ] **Step 5: Commit**
 
@@ -3018,7 +3110,7 @@ Nota: `.superpowers/sdd/progress.md` é gitignored no repo. Se o `git add` recus
 
 ## Pronto quando
 
-- `npm test` (97), `npm run test:integration` (80), `npm run test:e2e` (6), `npm run typecheck` e `npm run build` todos limpos, rodados no resultado do merge e não só antes dele.
+- `npm test` (108), `npm run test:integration` (80), `npm run test:e2e` (6), `npm run typecheck` e `npm run build` todos limpos, rodados no resultado do merge e não só antes dele.
 - Um admin abre `/config`, clica em **Conectar Facebook**, escolhe a Page, define o responsável padrão e vê a fonte listada.
 - O mesmo admin gera a URL secreta do Google, ela aparece uma vez e não volta no recarregamento.
 - `select * from public.source_credentials` como `authenticated` responde `permission denied`.

@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { usarFalso } from './fabrica'
+import { usarFalso, metaGraph, metaFalso } from './fabrica'
+import { MetaGraphReal } from './meta-real'
 
 /**
  * usarFalso() e o unico predicado de "estamos em teste", e a fabrica de
@@ -35,5 +36,37 @@ describe('usarFalso', () => {
     vi.stubEnv('META_FAKE', undefined)
     vi.stubEnv('NODE_ENV', 'test')
     expect(usarFalso()).toBe(false)
+  })
+})
+
+/**
+ * `fabrica.test.ts` so afirmava sobre `usarFalso()`, nunca sobre `metaGraph()`
+ * em si — que e a invariante que de fato importa (a rota de OAuth so chama
+ * `metaGraph()`, nunca `usarFalso()` diretamente). `fabrica.ts:33` podia ser
+ * editado para quebrar a escolha (ex.: sempre devolver o falso, ou nunca)
+ * com os tres testes de usarFalso() acima continuando verdes, porque nenhum
+ * deles olha o que `metaGraph()` devolve.
+ */
+describe('metaGraph', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('devolve a instancia compartilhada do falso quando usarFalso() e true', () => {
+    vi.stubEnv('META_FAKE', '1')
+    vi.stubEnv('NODE_ENV', 'test')
+    expect(metaGraph()).toBe(metaFalso())
+  })
+
+  it('devolve MetaGraphReal em producao, mesmo com META_FAKE=1', () => {
+    vi.stubEnv('META_FAKE', '1')
+    vi.stubEnv('NODE_ENV', 'production')
+    expect(metaGraph()).toBeInstanceOf(MetaGraphReal)
+  })
+})
+
+describe('metaFalso', () => {
+  it('e singleton no processo — o E2E depende disso para a Page assinada num request continuar assinada no seguinte', () => {
+    expect(metaFalso()).toBe(metaFalso())
   })
 })
