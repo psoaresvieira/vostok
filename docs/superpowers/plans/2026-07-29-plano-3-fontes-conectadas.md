@@ -1697,7 +1697,7 @@ O token de página **nunca chega ao navegador**. O retorno do OAuth guarda o tok
 - Consumes: `Resultado`, `ok`, `falha` de `@/lib/domain/resultado`; `criarAdminStoreDoServidor` de `@/lib/data/admin`.
 - Produces:
   - `meta.ts`: `type PaginaDoMeta = { id: string; nome: string; token: string }` e `interface MetaGraph` com `trocarCodePorTokenLongo`, `listarPaginas`, `assinarLeadgen`, `desassinarLeadgen`.
-  - `meta-falso.ts`: `class MetaGraphFalso implements MetaGraph`, com `assinadas: string[]`, `desassinadas: string[]` e `falharEm: string | null`.
+  - `meta-falso.ts`: `class MetaGraphFalso implements MetaGraph`, com `assinadas: string[]`, `desassinadas: string[]` e `falharEm: keyof MetaGraph | null`.
   - `fabrica.ts`: `metaGraph(): MetaGraph`, `metaFalso(): MetaGraphFalso` e
     `usarFalso(): boolean` — o predicado unico de "estamos em teste", consumido
     tambem pela rota que inicia o OAuth.
@@ -1908,8 +1908,13 @@ const PAGINAS_PADRAO: PaginaDoMeta[] = [
 export class MetaGraphFalso implements MetaGraph {
   readonly assinadas: string[] = []
   readonly desassinadas: string[] = []
-  /** Nome do metodo que deve falhar, para exercitar o caminho de erro. */
-  falharEm: string | null = null
+  /**
+   * Nome do metodo que deve falhar, para exercitar o caminho de erro.
+   * `keyof MetaGraph` e nao `string`: com string solta, um typo como
+   * 'assinarLeadGen' nunca dispara e o teste do caminho de erro passa vazio,
+   * afirmando cobertura que nao existe. Assim o typo vira erro de compilacao.
+   */
+  falharEm: keyof MetaGraph | null = null
 
   constructor(private paginas: PaginaDoMeta[] = PAGINAS_PADRAO) {}
 
