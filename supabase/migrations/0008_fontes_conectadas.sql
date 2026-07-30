@@ -12,7 +12,15 @@ create table public.lead_sources (
   responsavel_padrao_id uuid references public.profiles(id),
   ativo boolean not null default true,
   criado_em timestamptz not null default now(),
-  atualizado_em timestamptz not null default now()
+  atualizado_em timestamptz not null default now(),
+  -- O grant abaixo ja restringe update de authenticated a colunas que nao
+  -- incluem external_id/provedor, mas o check fica na tabela como a garantia
+  -- de verdade: vale tambem para as funcoes SECURITY DEFINER e para qualquer
+  -- migration futura que amplie o grant sem revisar isto. Sem ele, anular
+  -- external_id de uma fonte meta a tira do indice unico global sem soltar a
+  -- Page, e trocar provedor cria uma linha meta com external_id nulo que
+  -- nenhum caminho de codigo espera.
+  check (provedor <> 'meta' or external_id is not null)
 );
 
 -- Unico GLOBAL, nao por conta. O webhook do Meta e do app, nao da conta, e o
@@ -73,7 +81,14 @@ insert into public.ingestion_config (id, segredo_hash) values (true, null);
 
 -- GRANTS
 --
--- lead_sources: select e update para authenticated. Insert e delete NAO tem
+-- lead_sources: select completo, update restrito as colunas que a tela de
+-- Integracoes edita direto (nome, responsavel_padrao_id, ativo). provedor e
+-- external_id ficam de fora do update de proposito: o `with check` da policy
+-- abaixo so valida papel e responsavel, entao sem essa restricao de coluna um
+-- admin podia, direto pelo PostgREST, anular external_id (tirando a fonte do
+-- indice unico global sem soltar o token da Page) ou trocar provedor (criando
+-- uma linha meta com external_id nulo). O check da tabela cobre a mesma
+-- garantia por baixo, como segunda linha de defesa. Insert e delete NAO tem
 -- grant — passam pelas funcoes abaixo, as unicas que sabem escrever a
 -- credencial junto, na mesma transacao.
 --
@@ -81,7 +96,7 @@ insert into public.ingestion_config (id, segredo_hash) values (true, null);
 -- privilegio a RLS nem chega a ser avaliada e o erro e `permission denied`, que
 -- e o que os testes asseguram. As funcoes SECURITY DEFINER rodam como postgres
 -- e nao dependem desse ACL.
-grant select, update on public.lead_sources to authenticated;
+grant select, update (nome, responsavel_padrao_id, ativo) on public.lead_sources to authenticated;
 
 alter table public.lead_sources enable row level security;
 alter table public.source_credentials enable row level security;
