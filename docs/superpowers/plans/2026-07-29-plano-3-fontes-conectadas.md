@@ -2236,7 +2236,7 @@ Crie `src/lib/data/fontes.ts`:
 
 ```ts
 import { randomUUID } from 'node:crypto'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient, PostgrestError } from '@supabase/supabase-js'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import type { Conta } from '@/lib/domain/tipos'
 import type { Fonte, Provedor } from '@/lib/domain/fonte'
@@ -2281,8 +2281,30 @@ const CODIGOS = [
   'segredo_vazio',
 ]
 
-function codigo(mensagem: string): string {
-  return CODIGOS.find((c) => mensagem.includes(c)) ?? mensagem
+/**
+ * Duas fontes de "codigo", como em codigoDoErroPostgres (supabase.ts) — o
+ * mesmo desenho, pelo mesmo motivo, decidido na Task 4.
+ *
+ * Os nomes de CODIGOS sao nossos: nos escrevemos `raise exception
+ * 'page_ja_conectada'` na 0008, entao o texto e estavel e casar por ele e
+ * seguro em qualquer locale.
+ *
+ * Negacao de RLS nao tem nome: a policy so nega e o PostgREST devolve o texto
+ * padrao do servidor, que muda com o lc_messages do Postgres. Casar esse texto
+ * (ex.: /row-level security policy/i) vaza a mensagem crua assim que o locale
+ * nao for ingles. Use o SQLSTATE, que nao muda com locale.
+ *
+ * RESSALVA que nao existe em leads: o grant de update em lead_sources e por
+ * coluna. Update numa coluna sem grant tambem devolve 42501 e cairia aqui
+ * rotulado como responsavel_invalido — o sintoma seria "responsavel invalido"
+ * para um responsavel valido. Hoje a tela so escreve colunas concedidas
+ * (responsavel_padrao_id e atualizado_em); se isso mudar, o rotulo mente.
+ */
+function codigo(erro: Pick<PostgrestError, 'message' | 'code'>): string {
+  const achado = CODIGOS.find((c) => erro.message.includes(c))
+  if (achado) return achado
+  if (erro.code === '42501') return 'responsavel_invalido'
+  return erro.message
 }
 
 export class SupabaseFonteStore implements FonteStore {
@@ -2360,10 +2382,7 @@ export class SupabaseFonteStore implements FonteStore {
       .eq('id', sourceId)
       .eq('account_id', this.accountId)
       .select('id')
-    if (error) {
-      if (/row-level security policy/i.test(error.message)) return falha('responsavel_invalido')
-      return falha(error.message)
-    }
+    if (error) return falha(codigo(error))
     // Zero linhas depois da RLS e "nao encontrado", nunca erro de permissao.
     if (!data || data.length === 0) return falha('fonte_nao_encontrada')
     return ok(undefined)
