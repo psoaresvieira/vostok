@@ -2070,7 +2070,9 @@ META_REDIRECT_URI=http://localhost:3000/api/integracoes/meta/retorno
 # 1 troca o Graph API pela implementacao falsa. So para teste.
 META_FAKE=
 
-# Segredo de ingestao (o Plano 4 consome; a tela do Plano 3 ja o registra)
+# Segredo de ingestao (o Plano 4 consome). Configuracao de operador, nao de
+# tenant: nenhuma tela o registra. Em desenvolvimento entra pelo seed.sql, em
+# producao por SQL. Ver a secao "definir_segredo_ingestao" da spec.
 INGESTAO_SEGREDO=
 ```
 
