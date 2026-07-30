@@ -21,7 +21,10 @@
 - Nenhum componente cliente importa `@supabase/*`. Dados chegam por props de Server Component; mutações por Server Action.
 - Toda Server Action devolve `Resultado<T>` e nenhuma exception vaza para a UI. Toda chamada de Server Action feita de componente cliente passa por `chamarAcao` de `@/lib/ui/acao`.
 - Toda leitura que devolve zero linhas por RLS é tratada como "não encontrado", nunca como erro de permissão.
-- **Nenhum teste automatizado faz requisição de rede.** O Graph API do Meta é sempre a implementação falsa do port. A prova contra o provedor real é verificação manual, fora deste plano.
+- **Nenhum teste automatizado alcança o Graph API real.** Nenhuma credencial, nenhuma Page de verdade, nenhum pacote saindo da máquina. A prova contra o provedor real é verificação manual, fora deste plano.
+  - A única implementação que faz chamada de rede é `MetaGraphReal`, e ela só aparece em teste com o `fetch` global substituído e restaurado no `afterEach` — é assim que `meta-real.test.ts` cobre os caminhos de falha de transporte, que não têm como ser provocados contra o Graph de verdade.
+  - Em todo o resto, o port é a implementação falsa.
+  - **Redação anterior dizia "o Graph API do Meta é sempre a implementação falsa do port".** Isso era o mecanismo escrito como se fosse o objetivo, e passou a contradizer a própria lista de arquivos da Task 6. Não restaure: quem reconciliar as duas coisas pela redação velha apaga um teste bom em nome de uma conformidade que nunca foi real.
 - **Segredo nunca volta em listagem.** Token de página e segredo de URL só aparecem no retorno da ação que os gera, seguindo o precedente de `AdminStore.convidar`.
 - Componente cliente nunca copia props do servidor para `useState`. Se precisar de estado derivado de props, use `useOptimistic` ou `router.refresh()`.
 
@@ -2552,13 +2555,33 @@ export type PaginaOferecida = { id: string; nome: string }
  * conta errada e cookie invalido, nao "confia e tenta" — por isso devolve
  * `null` e nao so o token cru.
  */
-function tokenDaConta(valorDoCookie: string | undefined, contaId: string): string | null {
+ * Recebe o jar e nao so o valor porque, ao recusar, ele **apaga** o cookie. Sem
+ * isso o token de usuario do Meta de outro admin fica pegando carona em todo
+ * request pelo resto dos 15 minutos, ja tendo sido reconhecido como imprestavel.
+ *
+ * A comparacao e `!==` simples de proposito. `conta.id` e identificador, nao
+ * segredo portador, e o cookie e `httpOnly` — nao ha segredo cujo prefixo um
+ * canal de tempo pudesse revelar aqui. Nao troque por comparacao de tempo
+ * constante achando que e endurecimento; seria ruido.
+ */
+function tokenDaConta(jar: Awaited<ReturnType<typeof cookies>>, contaId: string): string | null {
+  const valorDoCookie = jar.get(COOKIE_TOKEN)?.value
   if (!valorDoCookie) return null
+
+  const recusar = () => {
+    jar.delete(COOKIE_TOKEN)
+    return null
+  }
+
   const i = valorDoCookie.indexOf(':')
-  if (i < 0) return null
+  // Sem `:` e cookie do formato antigo, anterior a amarracao por conta. Falha
+  // fechado: melhor mandar reconectar do que adivinhar de quem e o token.
+  if (i < 0) return recusar()
   const conta = valorDoCookie.slice(0, i)
+  // `slice` a partir do primeiro `:`, e nao `split`, para que token com `:`
+  // dentro chegue inteiro.
   const token = valorDoCookie.slice(i + 1)
-  if (conta !== contaId || !token) return null
+  if (conta !== contaId || !token) return recusar()
   return token
 }
 
@@ -2574,7 +2597,7 @@ export async function listarPaginasDoMetaAction(): Promise<Resultado<PaginaOfere
   // Mesmo codigo de erro para "sem cookie" e "cookie de outra conta" de
   // proposito: distinguir os dois na tela vazaria que outra sessao esteve
   // ativa neste navegador.
-  const token = tokenDaConta(jar.get(COOKIE_TOKEN)?.value, contexto.valor.conta.id)
+  const token = tokenDaConta(jar, contexto.valor.conta.id)
   if (!token) return falha('conexao_expirada')
 
   const r = await metaGraph().listarPaginas(token)
@@ -2587,7 +2610,7 @@ export async function conectarPaginaAction(pageId: string): Promise<Resultado<vo
   if (!contexto.ok) return falha(contexto.erro)
 
   const jar = await cookies()
-  const token = tokenDaConta(jar.get(COOKIE_TOKEN)?.value, contexto.valor.conta.id)
+  const token = tokenDaConta(jar, contexto.valor.conta.id)
   if (!token) return falha('conexao_expirada')
 
   // Buscar de novo em vez de confiar no que veio do cliente: o token da Page
@@ -2656,6 +2679,32 @@ export async function desconectarFonteAction(sourceId: string): Promise<Resultad
 ```
 
 Nota sobre `desconectarFonteAction`: ela **não** chama `desassinarLeadgen`. Desassinar exige o token da Page, que só existe em `source_credentials`, e ler credencial fora do banco é justamente o que este plano proibiu. O Plano 4, que já vai precisar ler o token para a ingestão, é onde a desinscrição no Meta entra. Até lá, desconectar remove a fonte do CRM e o webhook que chegar cai como Page desconhecida — comportamento correto, e o Plano 4 o registra em `integration_log`.
+
+- [ ] **Step 3b: Testar a amarração do token à conta — OBRIGATÓRIO**
+
+Crie `src/app/(app)/config/acoes-fontes.test.ts`. Este é o portão que fecha a
+outra metade do buraco cross-tenant achado no review da Task 6: **a Task 6 grava
+a amarração, esta task é quem recusa.** Hoje o lado da Task 6 tem três testes
+defendendo a metade dele e este lado está defendido só por prosa — se um refactor
+futuro derrubar a checagem, nenhum teste da Task 6 fica vermelho e o buraco
+reabre em silêncio.
+
+Cubra, com `cookies()` mockado:
+
+1. `COOKIE_TOKEN` com o id de **outra** conta → `listarPaginasDoMetaAction`
+   devolve `conexao_expirada` **e não chega a chamar** `metaGraph().listarPaginas`.
+   A segunda metade importa tanto quanto a primeira: recusar depois de já ter
+   usado o token não fecha nada.
+2. Mesma coisa para `conectarPaginaAction`.
+3. Cookie ausente → `conexao_expirada`, com a mesma mensagem do caso 1. Se os
+   dois divergirem, a tela passa a revelar que outra sessão esteve ativa naquele
+   navegador.
+4. Cookie sem `:`, do formato anterior à amarração → `conexao_expirada`.
+5. Em qualquer recusa, o `COOKIE_TOKEN` é apagado.
+
+Escreva cada um vermelho primeiro: derrube a checagem de conta, veja o caso 1
+falhar, restaure. Teste de guarda que passa dos dois jeitos é pior que teste
+nenhum, porque anuncia proteção que não existe.
 
 - [ ] **Step 4: Acrescentar as mensagens de erro**
 
