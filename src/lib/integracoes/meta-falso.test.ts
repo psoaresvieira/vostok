@@ -42,8 +42,28 @@ describe('MetaGraphFalso', () => {
   it('reiniciar zera o estado gravado', async () => {
     const g = new MetaGraphFalso()
     await g.assinarLeadgen('1', 't')
+    await g.listarPaginas('t')
     g.reiniciar()
     expect(g.assinadas).toEqual([])
+    // metaFalso() e singleton de processo: uma entrada em listadas que
+    // sobrevivesse ao reiniciar() vazaria de um teste (ou arquivo) para o
+    // seguinte, e a Task 7 depende de listadas comecar vazio a cada teste.
+    expect(g.listadas).toEqual([])
+  })
+
+  it('registra o token recebido em listadas quando a listagem da certo', async () => {
+    const g = new MetaGraphFalso()
+    const r = await g.listarPaginas('token-x')
+    if (!r.ok) throw new Error(r.erro)
+    expect(g.listadas).toEqual(['token-x'])
+  })
+
+  it('nao registra em listadas quando listarPaginas esta configurado para falhar', async () => {
+    const g = new MetaGraphFalso()
+    g.falharEm = 'listarPaginas'
+    const r = await g.listarPaginas('token-x')
+    expect(r.ok).toBe(false)
+    expect(g.listadas).toEqual([])
   })
 
   it('falharEm so aceita nomes reais de metodo — typo vira erro de compilacao', () => {

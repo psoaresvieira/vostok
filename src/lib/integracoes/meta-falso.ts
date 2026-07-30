@@ -14,6 +14,13 @@ export class MetaGraphFalso implements MetaGraph {
   readonly assinadas: string[] = []
   readonly desassinadas: string[] = []
   /**
+   * Registra cada `listarPaginas`, guardando o token recebido. Existe para a
+   * Task 7 poder afirmar que uma acao recusada **nao** chegou a listar — recusar
+   * depois de ja ter gasto o token nao fecha nada. Asercao sobre o estado do
+   * duplo, que e o que este projeto aceita, em vez de espionar a chamada.
+   */
+  readonly listadas: string[] = []
+  /**
    * Nome do metodo que deve falhar, para exercitar o caminho de erro.
    * `keyof MetaGraph`, e nao `string`: um typo como 'assinarLeadGen' nunca
    * bateria em `barrado()`, e o teste que deveria cobrir o caminho de erro
@@ -27,6 +34,7 @@ export class MetaGraphFalso implements MetaGraph {
   reiniciar(): void {
     this.assinadas.length = 0
     this.desassinadas.length = 0
+    this.listadas.length = 0
     this.falharEm = null
   }
 
@@ -39,8 +47,9 @@ export class MetaGraphFalso implements MetaGraph {
     return ok(`token-longo-para-${code}`)
   }
 
-  async listarPaginas(_tokenDoUsuario: string): Promise<Resultado<PaginaDoMeta[]>> {
+  async listarPaginas(tokenDoUsuario: string): Promise<Resultado<PaginaDoMeta[]>> {
     if (this.barrado('listarPaginas')) return falha('meta_indisponivel')
+    this.listadas.push(tokenDoUsuario)
     // Objeto novo por pagina, nao so array novo: `[...this.paginas]` clonava o
     // array mas mantinha os MESMOS objetos de PAGINAS_PADRAO (ou do array
     // passado no construtor). metaFalso() e singleton de processo, entao um

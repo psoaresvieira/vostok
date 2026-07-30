@@ -73,11 +73,20 @@ function requisicao(query: string): NextRequest {
 
 describe('GET /api/integracoes/meta/retorno', () => {
   const fetchOriginal = global.fetch
+  // Se o guard de fetch abaixo disparar dentro de chamar() (meta-real.ts), o
+  // try/catch de la converte a excecao em falha('meta_indisponivel') antes
+  // que qualquer coisa escape — o teste falharia com um redirect para
+  // /config?meta=indisponivel em vez do esperado, e quem le a falha nunca
+  // veria a mensagem "teste tentou tocar rede" que a explicaria. Esta flag
+  // torna o proprio nome da falha no afterEach, em vez de deixar a causa
+  // real escondida atras de um mismatch de redirect confuso.
+  let tocouRede = false
 
   beforeEach(() => {
     cookieStore.clear()
     adminMock.mockReset()
     metaFalso().reiniciar()
+    tocouRede = false
     vi.stubEnv('META_FAKE', '1')
     vi.stubEnv('NODE_ENV', 'test')
 
@@ -90,6 +99,7 @@ describe('GET /api/integracoes/meta/retorno', () => {
     // meta-real.test.ts: substitui fetch por um double que estoura se for
     // chamado, tornando a ausencia de rede estrutural em vez de incidental.
     global.fetch = () => {
+      tocouRede = true
       throw new Error('teste tentou tocar rede: metaGraph() nao esta usando o falso')
     }
   })
@@ -97,6 +107,7 @@ describe('GET /api/integracoes/meta/retorno', () => {
   afterEach(() => {
     global.fetch = fetchOriginal
     vi.unstubAllEnvs()
+    expect(tocouRede, 'teste tentou tocar rede: metaGraph() nao esta usando o falso').toBe(false)
   })
 
   it('fecha a rota pra quem nao tem sessao de admin, mesmo com state valido', async () => {

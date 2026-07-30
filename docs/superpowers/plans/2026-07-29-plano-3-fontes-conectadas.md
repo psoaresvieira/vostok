@@ -22,7 +22,7 @@
 - Toda Server Action devolve `Resultado<T>` e nenhuma exception vaza para a UI. Toda chamada de Server Action feita de componente cliente passa por `chamarAcao` de `@/lib/ui/acao`.
 - Toda leitura que devolve zero linhas por RLS é tratada como "não encontrado", nunca como erro de permissão.
 - **Nenhum teste automatizado alcança o Graph API real.** Nenhuma credencial, nenhuma Page de verdade, nenhum pacote saindo da máquina. A prova contra o provedor real é verificação manual, fora deste plano.
-  - A única implementação que faz chamada de rede é `MetaGraphReal`, e ela só aparece em teste com o `fetch` global substituído e restaurado no `afterEach` — é assim que `meta-real.test.ts` cobre os caminhos de falha de transporte, que não têm como ser provocados contra o Graph de verdade.
+  - A única implementação que faz chamada de rede é `MetaGraphReal`, e ela só é **invocada** em teste com o `fetch` global substituído e restaurado no `afterEach` — é assim que `meta-real.test.ts` cobre os caminhos de falha de transporte, que não têm como ser provocados contra o Graph de verdade. (Instanciar sem invocar é inofensivo e acontece: `fabrica.test.ts` faz `toBeInstanceOf(MetaGraphReal)`.)
   - Em todo o resto, o port é a implementação falsa.
   - **Redação anterior dizia "o Graph API do Meta é sempre a implementação falsa do port".** Isso era o mecanismo escrito como se fosse o objetivo, e passou a contradizer a própria lista de arquivos da Task 6. Não restaure: quem reconciliar as duas coisas pela redação velha apaga um teste bom em nome de uma conformidade que nunca foi real.
 - **Segredo nunca volta em listagem.** Token de página e segredo de URL só aparecem no retorno da ação que os gera, seguindo o precedente de `AdminStore.convidar`.
@@ -1700,7 +1700,7 @@ O token de página **nunca chega ao navegador**. O retorno do OAuth guarda o tok
 - Consumes: `Resultado`, `ok`, `falha` de `@/lib/domain/resultado`; `criarAdminStoreDoServidor` de `@/lib/data/admin`.
 - Produces:
   - `meta.ts`: `type PaginaDoMeta = { id: string; nome: string; token: string }` e `interface MetaGraph` com `trocarCodePorTokenLongo`, `listarPaginas`, `assinarLeadgen`, `desassinarLeadgen`.
-  - `meta-falso.ts`: `class MetaGraphFalso implements MetaGraph`, com `assinadas: string[]`, `desassinadas: string[]` e `falharEm: keyof MetaGraph | null`.
+  - `meta-falso.ts`: `class MetaGraphFalso implements MetaGraph`, com `assinadas: string[]`, `desassinadas: string[]`, `listadas: string[]` e `falharEm: keyof MetaGraph | null`.
   - `fabrica.ts`: `metaGraph(): MetaGraph`, `metaFalso(): MetaGraphFalso` e
     `usarFalso(): boolean` — o predicado unico de "estamos em teste", consumido
     tambem pela rota que inicia o OAuth.
@@ -1912,6 +1912,13 @@ export class MetaGraphFalso implements MetaGraph {
   readonly assinadas: string[] = []
   readonly desassinadas: string[] = []
   /**
+   * Registra cada `listarPaginas`, guardando o token recebido. Existe para a
+   * Task 7 poder afirmar que uma acao recusada **nao** chegou a listar — recusar
+   * depois de ja ter gasto o token nao fecha nada. Asercao sobre o estado do
+   * duplo, que e o que este projeto aceita, em vez de espionar a chamada.
+   */
+  readonly listadas: string[] = []
+  /**
    * Nome do metodo que deve falhar, para exercitar o caminho de erro.
    * `keyof MetaGraph` e nao `string`: com string solta, um typo como
    * 'assinarLeadGen' nunca dispara e o teste do caminho de erro passa vazio,
@@ -1924,6 +1931,7 @@ export class MetaGraphFalso implements MetaGraph {
   reiniciar(): void {
     this.assinadas.length = 0
     this.desassinadas.length = 0
+    this.listadas.length = 0
     this.falharEm = null
   }
 
@@ -1941,9 +1949,15 @@ export class MetaGraphFalso implements MetaGraph {
     return ok(`token-longo-para-${code}`)
   }
 
-  async listarPaginas(_tokenDoUsuario: string): Promise<Resultado<PaginaDoMeta[]>> {
+  async listarPaginas(tokenDoUsuario: string): Promise<Resultado<PaginaDoMeta[]>> {
     if (this.barrado('listarPaginas')) return falha('meta_indisponivel')
-    return ok([...this.paginas])
+    this.listadas.push(tokenDoUsuario)
+    // Objeto novo por pagina, nao so array novo: `[...this.paginas]` clonava o
+    // array mas mantinha os MESMOS objetos de PAGINAS_PADRAO (ou do array
+    // passado no construtor). metaFalso() e singleton de processo, entao um
+    // teste que mutasse pagina.nome corromperia a constante para todo teste
+    // seguinte, inclusive de outros arquivos.
+    return ok(this.paginas.map((p) => ({ ...p })))
   }
 
   async assinarLeadgen(pageId: string, _tokenDaPagina: string): Promise<Resultado<void>> {
@@ -2124,7 +2138,7 @@ export function metaGraph(): MetaGraph {
 - [ ] **Step 8: Rodar e ver passar**
 
 Run: `npx vitest run src/lib/integracoes/`
-Expected: PASS, 25 testes (8 do estado + 7 do falso + 6 da fabrica + 4 do real). Os 3 testes de `src/app/api/integracoes/meta/retorno/route.test.ts` (autorizacao e amarra de conta) rodam a parte, por estarem fora desta pasta.
+Expected: PASS, 28 testes (8 do estado + 10 do falso + 6 da fabrica + 4 do real). Os 3 testes de `src/app/api/integracoes/meta/retorno/route.test.ts` (autorizacao e amarra de conta) rodam a parte, por estarem fora desta pasta.
 
 - [ ] **Step 9: Documentar as variáveis de ambiente**
 
@@ -2555,7 +2569,7 @@ export type PaginaOferecida = { id: string; nome: string }
  * ou conectaria as Pages de quem nao e o admin desta requisicao. Cookie de
  * conta errada e cookie invalido, nao "confia e tenta" — por isso devolve
  * `null` e nao so o token cru.
- */
+ *
  * Recebe o jar e nao so o valor porque, ao recusar, ele **apaga** o cookie. Sem
  * isso o token de usuario do Meta de outro admin fica pegando carona em todo
  * request pelo resto dos 15 minutos, ja tendo sido reconhecido como imprestavel.
@@ -2696,6 +2710,13 @@ Cubra, com `cookies()` mockado:
    devolve `conexao_expirada` **e não chega a chamar** `metaGraph().listarPaginas`.
    A segunda metade importa tanto quanto a primeira: recusar depois de já ter
    usado o token não fecha nada.
+
+   **Mecanismo, e não é `vi.spyOn`:** o `MetaGraphFalso` registra as listagens em
+   `listadas: string[]`, do mesmo jeito que já registra `assinadas` e
+   `desassinadas`. Afirme que `metaFalso().listadas` continua vazio. É asserção
+   sobre o estado do duplo, não espionagem de chamada — a distinção que este
+   projeto já decidiu e que vale aqui. Lembre de `reiniciar()` entre os testes,
+   porque `metaFalso()` é singleton de processo.
 2. Mesma coisa para `conectarPaginaAction`.
 3. Cookie ausente → `conexao_expirada`, com a mesma mensagem do caso 1. Se os
    dois divergirem, a tela passa a revelar que outra sessão esteve ativa naquele
@@ -3007,7 +3028,7 @@ Run: `npm run dev`
 - [ ] **Step 8: Rodar a suíte inteira**
 
 Run: `npm test && npm run test:integration && npm run typecheck && npm run build`
-Expected: 108 unitários PASS (80 + 28 da Task 6: 25 em src/lib/integracoes/ + 3 da rota de retorno), 80 de integração PASS, typecheck e build limpos.
+Expected: 111 unitários PASS (80 + 31 da Task 6: 28 em src/lib/integracoes/ + 3 da rota de retorno), 80 de integração PASS, typecheck e build limpos.
 
 - [ ] **Step 9: Commit**
 
@@ -3123,7 +3144,7 @@ Se `admin conecta uma Page do Meta` falhar em `/config?meta=escolher` com a list
 - [ ] **Step 4: Rodar tudo**
 
 Run: `npm test && npm run test:integration && npm run test:e2e && npm run typecheck && npm run build`
-Expected: 108 unitários, 80 de integração, 6 E2E, typecheck e build limpos.
+Expected: 111 unitários, 80 de integração, 6 E2E, typecheck e build limpos.
 
 - [ ] **Step 5: Commit**
 
@@ -3165,7 +3186,7 @@ Nota: `.superpowers/sdd/progress.md` é gitignored no repo. Se o `git add` recus
 
 ## Pronto quando
 
-- `npm test` (108), `npm run test:integration` (80), `npm run test:e2e` (6), `npm run typecheck` e `npm run build` todos limpos, rodados no resultado do merge e não só antes dele.
+- `npm test` (111), `npm run test:integration` (80), `npm run test:e2e` (6), `npm run typecheck` e `npm run build` todos limpos, rodados no resultado do merge e não só antes dele.
 - Um admin abre `/config`, clica em **Conectar Facebook**, escolhe a Page, define o responsável padrão e vê a fonte listada.
 - O mesmo admin gera a URL secreta do Google, ela aparece uma vez e não volta no recarregamento.
 - `select * from public.source_credentials` como `authenticated` responde `permission denied`.
