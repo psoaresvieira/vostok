@@ -1654,14 +1654,14 @@ $$;
 - [ ] **Step 5: Aplicar e rodar**
 
 Run: `npm run db:reset && npx vitest run --config vitest.integration.config.ts tests/integration/0008_fontes_conectadas.test.ts`
-Expected: PASS, 13 testes.
+Expected: PASS, 20 testes.
 
 Se `authenticated nao le source_credentials` falhar dizendo que a consulta devolveu zero linhas em vez de estourar, a tabela ganhou grant em algum lugar. Ache o grant e remova. **Não** troque a asserção por "devolve vazio": zero linhas por RLS e ausência de privilégio são coisas diferentes, e só a segunda sobrevive a uma policy mal escrita no futuro.
 
 - [ ] **Step 6: Rodar a suíte inteira**
 
 Run: `npm test && npm run test:integration && npm run typecheck`
-Expected: 80 unitários PASS, 73 de integração PASS (60 + 13), typecheck limpo.
+Expected: 80 unitários PASS, 80 de integração PASS (60 + 20), typecheck limpo.
 
 - [ ] **Step 7: Commit**
 
@@ -2839,7 +2839,7 @@ Run: `npm run dev`
 - [ ] **Step 8: Rodar a suíte inteira**
 
 Run: `npm test && npm run test:integration && npm run typecheck && npm run build`
-Expected: 94 unitários PASS (80 + 14 da Task 6), 73 de integração PASS, typecheck e build limpos.
+Expected: 94 unitários PASS (80 + 14 da Task 6), 80 de integração PASS, typecheck e build limpos.
 
 - [ ] **Step 9: Commit**
 
@@ -2955,7 +2955,7 @@ Se `admin conecta uma Page do Meta` falhar em `/config?meta=escolher` com a list
 - [ ] **Step 4: Rodar tudo**
 
 Run: `npm test && npm run test:integration && npm run test:e2e && npm run typecheck && npm run build`
-Expected: 94 unitários, 73 de integração, 6 E2E, typecheck e build limpos.
+Expected: 94 unitários, 80 de integração, 6 E2E, typecheck e build limpos.
 
 - [ ] **Step 5: Commit**
 
@@ -2997,7 +2997,7 @@ Nota: `.superpowers/sdd/progress.md` é gitignored no repo. Se o `git add` recus
 
 ## Pronto quando
 
-- `npm test` (94), `npm run test:integration` (73), `npm run test:e2e` (6), `npm run typecheck` e `npm run build` todos limpos, rodados no resultado do merge e não só antes dele.
+- `npm test` (94), `npm run test:integration` (80), `npm run test:e2e` (6), `npm run typecheck` e `npm run build` todos limpos, rodados no resultado do merge e não só antes dele.
 - Um admin abre `/config`, clica em **Conectar Facebook**, escolhe a Page, define o responsável padrão e vê a fonte listada.
 - O mesmo admin gera a URL secreta do Google, ela aparece uma vez e não volta no recarregamento.
 - `select * from public.source_credentials` como `authenticated` responde `permission denied`.
