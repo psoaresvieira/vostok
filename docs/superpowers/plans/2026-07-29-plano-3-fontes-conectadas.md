@@ -2101,7 +2101,7 @@ META_FAKE=
 
 # Segredo de ingestao (o Plano 4 consome). Configuracao de operador, nao de
 # tenant: nenhuma tela o registra. Em desenvolvimento entra pelo seed.sql, em
-# producao por SQL. Ver a secao "definir_segredo_ingestao" da spec.
+# producao por SQL. Ver "Modelo de privilegio" na spec.
 INGESTAO_SEGREDO=
 ```
 
@@ -2380,7 +2380,7 @@ export class SupabaseFonteStore implements FonteStore {
       p_token: tokenDaPagina,
       p_responsavel: responsavelId,
     })
-    if (error) return falha(codigo(error.message))
+    if (error) return falha(codigo(error))
     return ok(data as string)
   }
 
@@ -2400,7 +2400,7 @@ export class SupabaseFonteStore implements FonteStore {
       p_google_key: googleKey,
       p_responsavel: responsavelId,
     })
-    if (error) return falha(codigo(error.message))
+    if (error) return falha(codigo(error))
     return ok({ id: data as string, urlToken, googleKey })
   }
 
@@ -2424,7 +2424,7 @@ export class SupabaseFonteStore implements FonteStore {
 
   async desconectar(sourceId: string): Promise<Resultado<void>> {
     const { error } = await this.cliente.rpc('desconectar_fonte', { p_source_id: sourceId })
-    if (error) return falha(codigo(error.message))
+    if (error) return falha(codigo(error))
     return ok(undefined)
   }
 
@@ -2565,6 +2565,7 @@ Em `src/app/(app)/config/erros.ts`, acrescente ao `MENSAGENS_ERRO`:
   meta_indisponivel: 'O Facebook não respondeu. Tente de novo em alguns minutos.',
   pagina_nao_encontrada: 'Essa página não está mais disponível na sua conta do Facebook.',
   page_ja_conectada: 'Essa página do Facebook já está conectada a outra conta do CRM.',
+  page_id_invalido: 'O Facebook não devolveu o identificador dessa página. Tente conectar de novo.',
   fonte_nao_encontrada: 'Essa integração não existe mais. Recarregue a página.',
   segredo_vazio: 'O segredo não pode ficar em branco.',
 ```
