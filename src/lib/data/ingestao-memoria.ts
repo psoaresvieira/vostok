@@ -40,6 +40,14 @@ export class InMemoryIngestaoStore implements IngestaoStore {
   readonly falhas: { logId: string; erro: string }[] = []
 
   /**
+   * ExternalId que deve fazer `registrarEntrega` devolver falha, no mesmo
+   * estilo do `MetaGraphFalso.falharEm` (Task 7): sem este seletor nao havia
+   * como simular a RPC real recusando uma entrega (`external_id_invalido`,
+   * `segredo_invalido`) e testar que o resto do lote sobrevive.
+   */
+  falharRegistrarEntregaPara: string | null = null
+
+  /**
    * So para teste: injeta um log pronto sem passar por `registrarEntrega`.
    * E o jeito direto de simular o estado que a rota ou o cron encontrariam --
    * por exemplo um log ja 'processado' por uma corrida entre o after() da
@@ -72,6 +80,10 @@ export class InMemoryIngestaoStore implements IngestaoStore {
     googleKey?: string | null
   }): Promise<Resultado<ResultadoEntrega>> {
     this.entregas.push({ ...e, googleKey: e.googleKey ?? null })
+
+    if (this.falharRegistrarEntregaPara === e.externalId) {
+      return falha('external_id_invalido')
+    }
 
     // Mesma regra do indice unico da 0009: reenvio do provedor (mesmo par
     // provedor+externalId) e no-op, nunca card duplicado.

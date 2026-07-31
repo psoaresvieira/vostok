@@ -14,7 +14,7 @@ const ROTAS_PUBLICAS = [
   // POST do Meta sem cookie de sessao era redirecionado para /login antes de
   // chegar no route handler; o Meta trata o redirect como falha de entrega e,
   // apos reprovacoes repetidas, desinscreve o app da Page.
-  '/api/webhooks',
+  '/api/webhooks/',
 ]
 
 export async function middleware(request: NextRequest) {

@@ -69,7 +69,15 @@ export async function processarEntrega(
     return falha('token_ausente')
   }
 
-  const leadgenId = textoDoPayload(e.payload, 'leadgen_id') ?? ''
+  // Sem leadgen_id nao ha o que buscar: chamar o Graph com id vazio devolve
+  // 400 real, que sem este guard vira o generico 'meta_indisponivel' (o
+  // codigo de erro de rede/HTTP do double e do cliente real) e esconde o
+  // diagnostico verdadeiro do operador.
+  const leadgenId = textoDoPayload(e.payload, 'leadgen_id')
+  if (!leadgenId) {
+    await deps.ingestao.registrarFalha(e.logId, 'leadgen_id_ausente')
+    return falha('leadgen_id_ausente')
+  }
   const resultadoBusca = await deps.graph.buscarLead(leadgenId, e.token)
   if (!resultadoBusca.ok) {
     await deps.ingestao.registrarFalha(e.logId, resultadoBusca.erro)

@@ -29,6 +29,39 @@ describe('processarEntrega', () => {
     expect(ingestao.ingeridos).toHaveLength(1)
     expect(ingestao.ingeridos[0]?.dados.nome).toBe('Fulano de Tal')
     expect(ingestao.falhas).toHaveLength(0)
+    // LEAD_PADRAO (meta-falso.ts) traz adId: 'ad-padrao', e
+    // MetaGraphFalso.campanhaDoAnuncio devolve `Campanha ${adId}` -- prova
+    // de que o nome real da campanha, e nao so o ad_id cru, e o que chega
+    // ate o lead quando a segunda chamada da certo.
+    expect(ingestao.ingeridos[0]?.dados.campanhaOrigem).toBe('Campanha ad-padrao')
+  })
+
+  it('Meta sem leadgen_id no payload registra falha especifica e nao chama o Graph', async () => {
+    const ingestao = new InMemoryIngestaoStore()
+    const graph = new MetaGraphFalso()
+    ingestao.semearLog('log-sem-leadgen-id', 'pendente', null, {
+      provedor: 'meta',
+      externalId: '',
+      payload: {},
+      token: 'tok',
+    })
+    const entrega: EntregaParaProcessar = {
+      logId: 'log-sem-leadgen-id',
+      provedor: 'meta',
+      payload: {},
+      token: 'tok',
+    }
+
+    const resultado = await processarEntrega(entrega, { ingestao, graph })
+
+    expect(resultado.ok).toBe(false)
+    // Prova de que buscarLead nunca roda com id vazio: sem este guard, o
+    // Graph real responderia 400 e o operador veria o generico
+    // 'meta_indisponivel' em vez do diagnostico real.
+    expect(graph.buscados).toEqual([])
+    expect(ingestao.falhas).toHaveLength(1)
+    expect(ingestao.falhas[0]?.logId).toBe('log-sem-leadgen-id')
+    expect(ingestao.falhas[0]?.erro).toBe('leadgen_id_ausente')
   })
 
   it('Meta sem token registra falha e nao chama o Graph', async () => {

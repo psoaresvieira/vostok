@@ -52,10 +52,14 @@ export async function POST(req: NextRequest) {
 
   const store = criarIngestaoStore()
   if (!store.ok) {
-    // Sem segredo de ingestao configurado no servidor nao ha como registrar
-    // nada, mas o Meta nao pode ser punido pela configuracao do operador —
-    // 200 e sai, igual a um corpo invalido.
-    return new Response(null, { status: 200 })
+    // Diferente do corpo invalido: aqui a culpa e nossa (env var ausente) e
+    // e transitoria. 200 diria ao Meta "recebido e guardado" para um lote
+    // que foi jogado fora inteiro -- e o Meta nunca reenvia um 200. 500 faz
+    // o Meta retentar por horas, o suficiente para o operador corrigir o
+    // env e os leads sobreviverem. Loga o codigo: e o unico rastro que essa
+    // falha deixa, porque nada foi gravado em integration_log.
+    console.error('webhook meta: store de ingestao indisponivel', store.erro)
+    return new Response(null, { status: 500 })
   }
   const ingestao = store.valor
 
@@ -76,16 +80,30 @@ export async function POST(req: NextRequest) {
       const leadgenId = typeof valor.leadgen_id === 'string' ? valor.leadgen_id : ''
       const pageId = typeof valor.page_id === 'string' ? valor.page_id : ''
 
+      if (leadgenId === '') {
+        // Sem leadgen_id nao ha o que registrar: a RPC recusaria com
+        // external_id_invalido de qualquer forma, so depois de ja ter
+        // gravado a tentativa. Loga aqui, antes de gastar a chamada.
+        console.error('webhook meta: leadgen_id ausente no payload', pageId)
+        continue
+      }
+
       // Uma entrega que falhe ao registrar nao pode derrubar as outras do
       // mesmo lote: registrarEntrega devolve Resultado, nunca lanca, entao o
-      // loop segue por conta propria para o proximo change.
+      // loop segue por conta propria para o proximo change. Mas a falha nao
+      // pode ficar muda -- sem log ela some sem rastro nenhum (nem
+      // integration_log tem linha, e exatamente isso que falhou em gravar).
       const resultado = await ingestao.registrarEntrega({
         provedor: 'meta',
         externalId: leadgenId,
         payload: valor,
         chaveDaFonte: pageId,
       })
-      if (resultado.ok && resultado.valor.status === 'pendente' && resultado.valor.logId) {
+      if (!resultado.ok) {
+        console.error('webhook meta: registrarEntrega falhou', resultado.erro, leadgenId)
+        continue
+      }
+      if (resultado.valor.status === 'pendente' && resultado.valor.logId) {
         pendentes.push({
           logId: resultado.valor.logId,
           provedor: 'meta',

@@ -2,7 +2,8 @@ import { createHmac } from 'node:crypto'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import { InMemoryIngestaoStore } from '@/lib/data/ingestao-memoria'
-import { ok } from '@/lib/domain/resultado'
+import { metaFalso } from '@/lib/integracoes/fabrica'
+import { ok, falha } from '@/lib/domain/resultado'
 
 /**
  * `after()` real exige o AsyncLocalStorage de request scope que so existe
@@ -65,6 +66,10 @@ describe('/api/webhooks/meta', () => {
     vi.stubEnv('META_VERIFY_TOKEN', VERIFY_TOKEN)
     vi.stubEnv('META_FAKE', '1')
     vi.stubEnv('NODE_ENV', 'test')
+    // metaGraph() com META_FAKE=1 devolve o singleton de processo
+    // (metaFalso()) -- sem reiniciar aqui, o estado (`buscados` etc) de um
+    // teste vazaria para o proximo.
+    metaFalso().reiniciar()
   })
 
   afterEach(() => {
@@ -169,6 +174,23 @@ describe('/api/webhooks/meta', () => {
       expect(res.status).toBe(200)
       expect(ingestao.entregas).toHaveLength(2)
       expect(ingestao.entregas.map((e) => e.externalId).sort()).toEqual(['leadgen-1', 'leadgen-2'])
+
+      // after() agenda exatamente uma tarefa para o POST inteiro (ela
+      // processa as duas entregas pendentes por dentro, via Promise.all) --
+      // sem isto, nada prova que o trabalho foi de fato agendado.
+      expect(agendados).toHaveLength(1)
+      // No instante em que o 200 ja voltou, nenhuma chamada externa rodou
+      // ainda: e a garantia "200 antes de qualquer chamada externa" do
+      // comentario da rota, provada em estado, nao em ordem de execucao.
+      expect(ingestao.ingeridos).toHaveLength(0)
+      expect(metaFalso().buscados).toHaveLength(0)
+
+      // Agora invoca o que foi agendado e confirma que a ingestao de fato
+      // aconteceu -- uma vez por entrega pendente do lote.
+      await Promise.all(agendados.map((tarefa) => tarefa()))
+
+      expect(ingestao.ingeridos).toHaveLength(2)
+      expect(metaFalso().buscados.sort()).toEqual(['leadgen-1', 'leadgen-2'])
     })
 
     it('change.field diferente de leadgen e ignorado', async () => {
@@ -230,6 +252,85 @@ describe('/api/webhooks/meta', () => {
       expect(res.status).toBe(200)
       expect(ingestao.entregas).toHaveLength(1)
       expect(ingestao.entregas[0]?.externalId).toBe('leadgen-10')
+    })
+
+    it('leadgen_id ausente no payload nao registra a entrega e nao agenda nada', async () => {
+      const corpoSemLeadgenId = JSON.stringify({
+        object: 'page',
+        entry: [
+          {
+            id: 'page-1',
+            time: 1,
+            changes: [{ field: 'leadgen', value: { page_id: 'page-1' } }],
+          },
+        ],
+      })
+
+      const res = await POST(requisicaoPost(corpoSemLeadgenId, assinar(corpoSemLeadgenId, SEGREDO)))
+
+      expect(res.status).toBe(200)
+      // Nunca chega a chamar registrarEntrega com externalId vazio: a RPC
+      // recusaria de qualquer forma, so depois de gravar a tentativa.
+      expect(ingestao.entregas).toHaveLength(0)
+      expect(agendados).toHaveLength(1)
+      await Promise.all(agendados.map((tarefa) => tarefa()))
+      expect(ingestao.ingeridos).toHaveLength(0)
+    })
+
+    it('com criarIngestaoStore falhando (servidor sem INGESTAO_SEGREDO) devolve 500, nunca 200, e nao agenda nada', async () => {
+      const consoleErro = vi.spyOn(console, 'error').mockImplementation(() => {})
+      ingestaoMock.mockReturnValue(falha('ingestao_nao_configurada'))
+
+      const res = await POST(requisicaoPost(corpoUmaEntrega, assinar(corpoUmaEntrega, SEGREDO)))
+
+      // 500, nao 200: e um erro nosso e transitorio, e o Meta so retenta
+      // 5xx. Um 200 aqui diria "recebido e guardado" para um lote jogado
+      // fora inteiro, e o Meta nunca reenvia um 200.
+      expect(res.status).toBe(500)
+      expect(agendados).toHaveLength(0)
+      // O codigo do erro tem que ficar em algum lugar: nada foi gravado em
+      // integration_log, entao o log e o unico rastro que sobra.
+      expect(consoleErro).toHaveBeenCalled()
+
+      consoleErro.mockRestore()
+    })
+
+    it('registrarEntrega falhando para uma entrega do lote nao derruba as outras, e loga o erro', async () => {
+      const consoleErro = vi.spyOn(console, 'error').mockImplementation(() => {})
+      ingestao.falharRegistrarEntregaPara = 'leadgen-1'
+
+      const corpoDoisEntry = JSON.stringify({
+        object: 'page',
+        entry: [
+          {
+            id: 'page-1',
+            time: 1,
+            changes: [{ field: 'leadgen', value: { leadgen_id: 'leadgen-1', page_id: 'page-1' } }],
+          },
+          {
+            id: 'page-2',
+            time: 2,
+            changes: [{ field: 'leadgen', value: { leadgen_id: 'leadgen-2', page_id: 'page-2' } }],
+          },
+        ],
+      })
+
+      const res = await POST(requisicaoPost(corpoDoisEntry, assinar(corpoDoisEntry, SEGREDO)))
+
+      // O 200 nao muda: a garantia de entrega ao Meta e por lote, nao por
+      // change individual.
+      expect(res.status).toBe(200)
+      // As duas tentativas de registro aconteceram, mas so leadgen-2 virou
+      // log pendente -- leadgen-1 falhou e foi logado, nao silenciado.
+      expect(ingestao.entregas.map((e) => e.externalId).sort()).toEqual(['leadgen-1', 'leadgen-2'])
+      expect(consoleErro).toHaveBeenCalled()
+
+      await Promise.all(agendados.map((tarefa) => tarefa()))
+
+      expect(ingestao.ingeridos).toHaveLength(1)
+      expect(metaFalso().buscados).toEqual(['leadgen-2'])
+
+      consoleErro.mockRestore()
     })
   })
 })

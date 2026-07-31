@@ -146,14 +146,28 @@ export class SupabaseIngestaoStore implements IngestaoStore {
  * o erro tem que apontar para a configuracao do servidor (env var ausente),
  * nao para o banco, que responderia exatamente da mesma forma para um
  * segredo digitado errado.
+ *
+ * As env vars do Supabase levam a mesma guarda, em vez de `!` (non-null
+ * assertion): um `!` deixaria a var ausente estourar dentro do POST do
+ * webhook, virando 500 sem `Resultado` -- e a chamada da Task 7
+ * (`criarIngestaoStore()` -> `if (!store.ok) 500`) so sabe responder direito
+ * a uma falha que chega como valor, nunca a uma excecao.
  */
 export function criarIngestaoStore(): Resultado<IngestaoStore> {
   const segredo = process.env.INGESTAO_SEGREDO ?? ''
   if (segredo.length === 0) return falha('ingestao_nao_configurada')
 
-  const cliente = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+  if (url.length === 0 || anonKey.length === 0) return falha('ingestao_nao_configurada')
+
+  // Sem sessao para persistir (webhook nao tem usuario logado, ver acima) e
+  // sem refresh para agendar: declarar as duas coisas como `false` torna o
+  // client "sem estado de auth" um invariante do codigo, nao um acidente de
+  // defaults do supabase-js -- e evita o client montar timers/listeners de
+  // refresh a toa a cada chamada deste factory.
+  const cliente = createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
   return ok(new SupabaseIngestaoStore(cliente, segredo))
 }
