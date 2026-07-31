@@ -104,10 +104,19 @@ begin
     v_status := 'ignorado';
     v_erro := 'fonte_nao_encontrada';
   elsif p_provedor = 'google'
-        and v_key_hash is distinct from public.hash_segredo(p_google_key) then
+        and (v_key_hash is null
+             or v_key_hash is distinct from public.hash_segredo(p_google_key)) then
     -- A URL resolveu, a chave do corpo nao bate. Aqui SABEMOS a conta, entao
     -- esta linha aparece no painel de /config — e o que transforma "configurei
     -- a chave errada no Google Ads" de misterio em diagnostico.
+    --
+    -- O `v_key_hash is null` NAO e redundante, e tirar essa clausula abre um
+    -- fail-open: `is distinct from` com os DOIS lados nulos devolve falso, entao
+    -- uma fonte sem google_key_hash configurado passaria direto por este check
+    -- justamente quando a entrega tambem nao apresenta chave. A assimetria era o
+    -- pior da versao anterior — sem chave passava, COM chave era recusada.
+    -- Fonte sem chave configurada nao aceita entrega nenhuma. Verificado contra
+    -- o Postgres: `null is distinct from hash_segredo(null)` e false.
     v_status := 'ignorado';
     v_erro := 'chave_invalida';
   elsif coalesce(p_payload ->> 'is_test', '') in ('true', 't', '1') then
@@ -148,9 +157,12 @@ $$;
 -- Varredura do cron. Devolve tudo que o processamento precisa para nao ter que
 -- voltar ao banco: o payload cru e, no Meta, o token da Page.
 --
--- Backoff por numero de tentativas: 3^n minutos, ou seja 1, 3, 9, 27 e 81.
--- Desiste em 5 — alem disso a falha nao e transitoria, e retentar so gasta cota
--- do Graph e enche o log.
+-- Backoff por numero de tentativas: 3^n minutos. Na pratica a janela observada
+-- comeca em 3 e nao em 1, porque so registrar_falha marca 'falhou' e ela sempre
+-- incrementa antes — entao toda linha que chega aqui em 'falhou' ja tem
+-- tentativas >= 1. A sequencia real e 3, 9, 27 e 81 minutos. Desiste em 5:
+-- alem disso a falha nao e transitoria, e retentar so gasta cota do Graph e
+-- enche o log.
 create or replace function public.entregas_pendentes(p_segredo text, p_limite integer)
 returns table (
   log_id uuid,

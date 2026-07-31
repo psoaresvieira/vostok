@@ -73,6 +73,28 @@ async function criarFonteGoogle(c: Cenario, urlToken: string, googleKey: string)
   })
 }
 
+/**
+ * Cria uma fonte Google com `google_key_hash` NULO — estado que a RPC
+ * `conectar_fonte_google` de hoje ainda deixa representavel (a validacao que a
+ * fecha e da Task 10). `criarFonteGoogle` sempre grava uma chave real, entao
+ * este helper insere direto, sem passar `google_key_hash` nenhum.
+ */
+async function criarFonteGoogleSemChave(c: Cenario, urlToken: string): Promise<string> {
+  return comoServico(async (cli) => {
+    const r = await cli.query<{ id: string }>(
+      `insert into public.lead_sources (account_id, provedor, external_id, nome)
+       values ($1, 'google', null, $2) returning id`,
+      [c.accountId, `Formulario ${urlToken}`],
+    )
+    await cli.query(
+      `insert into public.source_credentials (source_id, url_token_hash)
+       values ($1, public.hash_segredo($2))`,
+      [r.rows[0].id, urlToken],
+    )
+    return r.rows[0].id
+  })
+}
+
 type ResultadoEntrega = { log_id: string | null; status: string; token: string | null }
 
 /** Chama registrar_entrega como o cliente webhook (sem sessao). */
@@ -254,6 +276,33 @@ describe('0010 — RPCs de entrega gateadas no segredo de ingestao', () => {
     const linha = await buscarLog(resultado.log_id!)
     expect(linha.erro).toBe('chave_invalida')
     expect(linha.account_id).toBe(c.accountId)
+  })
+
+  // Caso 7b
+  it('google com google_key_hash nulo recusa qualquer entrega, com ou sem chave apresentada', async () => {
+    await criarFonteGoogleSemChave(c, 'url-token-sem-chave')
+
+    const semChave = await registrarEntrega(
+      'google',
+      'ext-google-sem-chave-1',
+      {},
+      'url-token-sem-chave',
+      null,
+    )
+    expect(semChave.status).toBe('ignorado')
+    const linhaSemChave = await buscarLog(semChave.log_id!)
+    expect(linhaSemChave.erro).toBe('chave_invalida')
+
+    const comChave = await registrarEntrega(
+      'google',
+      'ext-google-sem-chave-2',
+      {},
+      'url-token-sem-chave',
+      'alguma-chave',
+    )
+    expect(comChave.status).toBe('ignorado')
+    const linhaComChave = await buscarLog(comChave.log_id!)
+    expect(linhaComChave.erro).toBe('chave_invalida')
   })
 
   // Caso 8
