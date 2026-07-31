@@ -1,5 +1,9 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Antes de expor em produção
+
+**O Plano 3 (conexão de fontes via Meta OAuth, `conectar_fonte_meta`) não pode ser exposto em URL pública até o Plano 4 entregar o caminho de reivindicação de Page.** Risco aceito conscientemente, com dono: qualquer pessoa pode fazer signup, criar a própria conta e travar a Page de um concorrente para si (`page_id` é público e o Plano 3 não valida posse contra o Graph API). Detalhe completo, e o runbook de operador para o caso de isso acontecer antes do Plano 4, em `docs/superpowers/specs/2026-07-29-crm-ingestao-webhooks-design.md`, seção "Risco nomeado: squat de Page ID em `conectar_fonte_meta`".
+
 ## Getting Started
 
 First, run the development server:

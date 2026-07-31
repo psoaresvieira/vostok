@@ -87,6 +87,27 @@ A justificativa acima parte de "duas contas reivindicam a mesma Page" como dispu
 
 **Decisão consciente do Plano 3: não consertar aqui.** Consertar direito exige validar o token contra o Graph API — o port que a Task 6 constrói —, e a decisão foi aceitar o risco em troca de escopo, com o produto ainda fora de produção. **Dono: Plano 4**, que passa a ter um caminho de reivindicação — um chamador que apresente token de página válido toma a linha de quem estava lá antes. Esse caminho é portanto controle de roteamento e confidencialidade dos leads, não conveniência de suporte para destravar uma Page presa.
 
+#### Portão de deploy do risco aceito
+
+A aceitação acima se apoia explicitamente em "com o produto ainda fora de produção". Isso só protege alguém se virar regra em que um humano tropece antes de expor o produto, não só uma frase numa spec que ninguém relê. Registrando aqui, para não expirar em silêncio quando esta branch entrar em `master` e a `/config` ficar completa:
+
+> **O Plano 3 não pode ser exposto em URL pública até o Plano 4 entregar o caminho de reivindicação de Page descrito acima.**
+
+**Saída de operador, enquanto isso não existir.** Se um squat acontecer antes do Plano 4, não há caminho de autoatendimento: o projeto não usa `service_role` por desenho (ver §4), e `desconectar_fonte` exige ser admin da conta **do invasor** — a vítima não enxerga nem apaga a linha. Um operador com acesso ao SQL Editor do painel do Supabase resolve manualmente:
+
+```sql
+-- 1. Auditoria: quem detém a Page X hoje.
+select ls.id, ls.account_id, a.nome as conta, ls.nome, ls.criado_em
+from public.lead_sources ls
+join public.accounts a on a.id = ls.account_id
+where ls.provedor = 'meta' and ls.external_id = '<page_id>';
+
+-- 2. Solta a linha squattada (on delete cascade apaga source_credentials junto).
+delete from public.lead_sources where id = '<id da linha acima>';
+```
+
+Isto é operação manual fora de qualquer RPC da aplicação — por isso exige acesso de operador ao painel, não deixa trilha de auditoria além do que a consulta acima mostra na hora, e existe só porque não há `service_role` nem caminho de reivindicação ainda. É o que transforma um incidente sem limite num chamado de suporte, em vez de deixar o próximo operador inventar o SQL sob pressão.
+
 ### Por que as credenciais moram em tabela separada
 
 `source_credentials` não recebe `grant`, nem de `select`. Só funções `security definer` a leem. Consequência: uma sessão de admin comprometida não extrai o token da Page nem o segredo do Google. Se esses campos fossem colunas de `lead_sources`, qualquer `select *` da tela os traria para o payload RSC — exatamente a armadilha que a `AdminStore` já documenta para o token de convite.
