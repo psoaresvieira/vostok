@@ -733,10 +733,13 @@ A transação que decide se nasce card ou aviso. É o coração do sub-projeto.
 10. **Idempotência:** chamar duas vezes com o mesmo `log_id` devolve `ja_processado` na segunda e não cria nada.
 11. **Entrega `ignorado` não vira lead:** `ingerir_lead` sobre um log `ignorado` devolve `ja_processado`.
 12. **Entrega `falhou` é reprocessável:** um log em `falhou` é aceito e vira `processado`.
-13. **`nome` ausente ou em branco vira `'Lead sem nome'`,** porque `leads.nome` é `not null` e perder o lead por falta de nome é o pior desfecho possível.
+13. **`nome` ausente ou em branco vira `'Lead sem nome'`,** porque `leads.nome` é `not null` e perder o lead por falta de nome é o pior desfecho possível. **Atenção à armadilha que já derrubou este caso uma vez:** se as duas ingestões deste teste compartilharem `email_norm` ou `telefone_e164`, a segunda cai no ramo de dedup, nenhum lead novo nasce, e a asserção acaba lendo o lead da primeira — o `btrim` fica sem cobertura nenhuma. Dê contatos distintos a cada ingestão e **asserte o `status` de cada retorno** (`criado` nas duas, `lead_id` diferente); é o `status` não-asserido que deixa esse tipo de teste passar pelo motivo errado.
 14. **Responsável padrão que não é mais membro da conta é nulificado, não gravado.** Remova a membership do responsável padrão e ingira: o lead nasce com `responsavel_id` nulo. Sem esta guarda o lead nasceria invisível para todo vendedor da conta, sem erro nenhum — é o backlog #4 voltando por dentro do definer.
 15. **Log sem `source_id` levanta `fonte_nao_encontrada`.**
 16. **Sem telefone e sem email não deduplica com ninguém** — cria card novo mesmo havendo lead aberto sem contato.
+17. **A etapa escolhida é a primeira ABERTA, não a de menor `ordem`.** O pipeline semeado por `criar_conta` põe uma etapa `aberta` em `ordem = 1`, então nos casos acima "primeira aberta" e "primeira por ordem" coincidem sempre e **nenhum deles discrimina**. Reordene para que uma etapa de tipo `ganho` fique com `ordem` menor que qualquer aberta, e asserte o `stage_id` resolvido. Não asserte `lead.status` aqui: ele tem default `'aberto'` e nenhum trigger o altera no insert, então a asserção passaria com qualquer etapa e não diria nada.
+18. **`log_nao_encontrado`** quando o `p_log_id` não existe — com o segredo **correto**, senão a função para no portão do segredo e o caminho nunca é exercitado.
+19. **A entrega bem-sucedida limpa o `erro` do log.** Sobre um log que `registrar_falha` deixou com erro, uma ingestão bem-sucedida tem que zerar a coluna. Sem esta asserção, remover `erro = null` dos dois `update` deixaria a suíte verde e um erro velho visível para sempre no painel de diagnóstico.
 
 Rode `npm run test:integration -- tests/integration/0011_ingerir_lead.test.ts`.
 Esperado: FAIL, a função não existe.
@@ -818,10 +821,13 @@ begin
     raise exception 'pipeline_nao_encontrado';
   end if;
 
-  -- Primeira etapa ABERTA, e nao `ordem = 1`: leads.status e derivado do tipo
-  -- da etapa dentro de move_lead_stage, entao se a conta reordenar e puser uma
-  -- etapa de ganho na frente, o lead nasceria ganho sem ninguem ter vendido
-  -- nada.
+  -- Primeira etapa ABERTA, e nao `ordem = 1`. Se a conta reordenar e puser uma
+  -- etapa de ganho na frente, `ordem = 1` poria o lead na coluna Ganho — e
+  -- `leads.status` NAO acompanharia, porque ele so muda dentro de
+  -- move_lead_stage e o default da coluna e 'aberto'. O resultado seria um card
+  -- na coluna de Ganho com status 'aberto': dessincronizado, contando como
+  -- ganho em toda leitura por etapa e como aberto em toda leitura por status —
+  -- e, de quebra, elegivel a dedup para sempre.
   select s.id into v_stage
     from public.stages s
    where s.pipeline_id = v_pipeline and s.tipo = 'aberta'
@@ -858,7 +864,13 @@ begin
          (v_tel is not null and l.telefone_e164 = v_tel)
          or (v_email is not null and l.email_norm = v_email)
        )
-     order by l.criado_em desc
+     -- `l.id desc` como desempate, e nao so criado_em: duas leads abertas com o
+     -- mesmo telefone existem (cadastro manual nao bloqueia duplicata), e sem
+     -- criterio de desempate qual delas recebe o evento de reingestao e quem e
+     -- notificado ficam por conta do plano de execucao. E o mesmo defeito que a
+     -- 0006 corrigiu em lead_events com a coluna seq; aqui `id` ja serve, so
+     -- precisa estar escrito.
+     order by l.criado_em desc, l.id desc
      limit 1;
   end if;
 
