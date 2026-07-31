@@ -39,10 +39,11 @@
 - `src/lib/data/conta.ts` — resolução determinística da conta ativa, compartilhada (backlog #3)
 - `src/lib/data/filtro.ts` — escape de valor para filtro PostgREST (backlog #9)
 - `src/lib/data/fontes.ts` — port `FonteStore` e `SupabaseFonteStore`
-- `src/lib/domain/fonte.ts` — tipos `Fonte`, `Provedor`, `PaginaDoMeta`
+- `src/lib/domain/fonte.ts` — tipos `Fonte`, `Provedor`
 
 **Integração**
-- `src/lib/integracoes/meta.ts` — port `MetaGraph`, tipos e erros
+- `src/lib/integracoes/meta.ts` — port `MetaGraph`, tipo `PaginaDoMeta` (conceito do
+  Graph, não do domínio — por isso mora aqui e não em `domain/fonte.ts`) e erros
 - `src/lib/integracoes/meta-real.ts` — implementação contra o Graph API
 - `src/lib/integracoes/meta-falso.ts` — implementação de teste
 - `src/lib/integracoes/estado-oauth.ts` — geração e verificação do `state` anti-CSRF

@@ -21,6 +21,12 @@ const eslintConfig = [
     ],
   },
   {
+    // Sem `files`, este objeto de regras nominalmente valeria tambem para
+    // `.mjs`/`.js` (este proprio arquivo, por exemplo). So e seguro hoje porque
+    // `next lint` limita a varredura aos diretorios de fonte TS — `eslint .`
+    // direto mudaria o comportamento em silencio. Achado do review final de
+    // branch.
+    files: ["**/*.ts", "**/*.tsx"],
     rules: {
       // O prefixo `_` so vale como "nao usado de proposito" se o linter for
       // configurado para reconhece-lo — sem isso e so uma convencao que
