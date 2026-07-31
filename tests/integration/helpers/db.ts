@@ -79,6 +79,7 @@ export async function limparBanco(): Promise<void> {
     await c.query(`
       truncate table
         public.source_credentials, public.lead_sources,
+        public.integration_log, public.notifications,
         public.lead_events, public.stage_history, public.lead_tags, public.tags,
         public.leads, public.loss_reasons, public.stages, public.pipelines,
         public.invites, public.memberships, public.accounts, public.profiles
