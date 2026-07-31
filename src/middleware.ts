@@ -1,7 +1,21 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const ROTAS_PUBLICAS = ['/login', '/signup', '/convite']
+const ROTAS_PUBLICAS = [
+  '/login',
+  '/signup',
+  '/convite',
+  // Webhook nao tem sessao por definicao: quem chama e o Meta, o Google ou o
+  // cron da Vercel, nunca um navegador logado. "Publico no middleware" aqui
+  // significa so "nao passa pelo portao de sessao" -- nunca "nao autenticado".
+  // A autorizacao real de cada rota de webhook e outra e mais forte: HMAC no
+  // Meta (assinaturaValida, ver src/lib/ingestao/hmac.ts), token secreto na
+  // URL no Google, e CRON_SECRET no reprocessamento. Sem esta entrada, um
+  // POST do Meta sem cookie de sessao era redirecionado para /login antes de
+  // chegar no route handler; o Meta trata o redirect como falha de entrega e,
+  // apos reprovacoes repetidas, desinscreve o app da Page.
+  '/api/webhooks',
+]
 
 export async function middleware(request: NextRequest) {
   let resposta = NextResponse.next({ request })
