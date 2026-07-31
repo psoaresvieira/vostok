@@ -28,25 +28,38 @@ type Props = {
 export function Integracoes({ fontes, membros, origem, etapa }: Props) {
   const router = useRouter()
   const [pendente, iniciar] = useTransition()
-  const [erro, setErro] = useState<string | null>(
+
+  // Derivado a cada render a partir da prop `etapa`, NUNCA copiado para dentro
+  // de useState: essa e a regra do plano ("componente cliente nunca copia
+  // prop do servidor para useState") e ela existe por um motivo concreto
+  // aqui. Se `etapa` virasse o valor inicial de um useState, o componente
+  // ficaria preso a mensagem de quando montou — numa navegacao soft que so
+  // troca a query string (o router.replace mais abaixo, depois de conectar
+  // uma Page, e exatamente isso), o componente nao remonta e o initializer do
+  // useState nao roda de novo. `erroLocal` continua sendo estado de verdade
+  // (erro de uma acao que o proprio usuario disparou agora), so a parte
+  // derivada da URL nao pode morar em estado.
+  const erroDeEtapa =
     etapa === 'estado_invalido'
       ? 'A conexão não pôde ser verificada. Comece de novo.'
       : etapa === 'recusado'
         ? 'Você não autorizou o acesso às páginas.'
         : etapa === 'indisponivel'
           ? mensagemDeErro('meta_indisponivel')
-          : null,
-  )
+          : null
+  const [erroLocal, setErroLocal] = useState<string | null>(null)
+  const erro = erroLocal ?? erroDeEtapa
+
   const [paginas, setPaginas] = useState<PaginaOferecida[] | null>(null)
   const [nomeGoogle, setNomeGoogle] = useState('')
   const [segredoGoogle, setSegredoGoogle] = useState<SegredoDoGoogle | null>(null)
 
   function rodar(promessa: Promise<Resultado<void>>, aoDarCerto?: () => void) {
     iniciar(async () => {
-      setErro(null)
+      setErroLocal(null)
       const r = await chamarAcao(promessa)
       if (!r.ok) {
-        setErro(mensagemDeErro(r.erro))
+        setErroLocal(mensagemDeErro(r.erro))
         return
       }
       aoDarCerto?.()
@@ -54,11 +67,31 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
     })
   }
 
+  function conectarPagina(pageId: string) {
+    iniciar(async () => {
+      setErroLocal(null)
+      const r = await chamarAcao(conectarPaginaAction(pageId))
+      if (!r.ok) {
+        setErroLocal(mensagemDeErro(r.erro))
+        return
+      }
+      setPaginas(null)
+      // router.replace, e nao router.refresh(): refresh mantem a URL como
+      // esta, entao ?meta=escolher sobreviveria. Num reload seguinte o
+      // componente remonta com `etapa` ainda 'escolher', o efeito abaixo
+      // chama listarPaginasDoMetaAction de novo, o COOKIE_TOKEN ja foi apagado
+      // no sucesso desta acao (linha abaixo, no servidor), e a tela pintaria
+      // "a conexao com o Meta expirou" por cima de uma fonte que conectou
+      // perfeitamente — o achado do review que motivou esta troca.
+      router.replace('/config')
+    })
+  }
+
   async function carregarPaginas() {
-    setErro(null)
+    setErroLocal(null)
     const r = await chamarAcao(listarPaginasDoMetaAction())
     if (!r.ok) {
-      setErro(mensagemDeErro(r.erro))
+      setErroLocal(mensagemDeErro(r.erro))
       return
     }
     setPaginas(r.valor)
@@ -99,9 +132,7 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
               type="button"
               disabled={pendente}
               className="rounded border px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:opacity-50"
-              onClick={() =>
-                rodar(conectarPaginaAction(p.id), () => setPaginas(null))
-              }
+              onClick={() => conectarPagina(p.id)}
             >
               {p.nome}
             </button>
@@ -172,10 +203,10 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
           className="rounded border px-3 py-2 text-sm disabled:opacity-50"
           onClick={() =>
             iniciar(async () => {
-              setErro(null)
+              setErroLocal(null)
               const r = await chamarAcao(conectarGoogleAction(nomeGoogle, origem))
               if (!r.ok) {
-                setErro(mensagemDeErro(r.erro))
+                setErroLocal(mensagemDeErro(r.erro))
                 return
               }
               setSegredoGoogle(r.valor)
@@ -198,6 +229,10 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
           <p className="text-xs text-gray-700">
             No Google Ads, cole os dois em Ativo de formulário de lead → Integração via
             webhook.
+          </p>
+          <p className="text-xs text-gray-700">
+            Fechou sem copiar? Não há como reabrir esta caixa: desconecte esta
+            integração e conecte de novo para gerar uma URL e uma chave novas.
           </p>
         </div>
       )}

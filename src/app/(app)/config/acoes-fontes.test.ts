@@ -114,11 +114,40 @@ describe('acoes-fontes — amarracao do COOKIE_TOKEN a conta', () => {
     expect(metaFalso().listadas).toEqual([])
   })
 
-  it('qualquer recusa apaga o COOKIE_TOKEN', async () => {
-    cookieStore.set(COOKIE_TOKEN, { value: 'conta-de-outro-admin:token-longo-xyz' })
+  // As tres formas de cookie que fazem tokenDaConta chamar recusar(): conta
+  // errada, formato antigo (sem ':') e token vazio depois do ':'. "Cookie
+  // ausente" fica de fora de proposito: nesse caso nao ha nada em
+  // cookieStore para apagar, entao a asercao seria verdadeira so porque
+  // nunca houve cookie — nao prova que a deleção aconteceu.
+  it.each([
+    ['conta errada', 'conta-de-outro-admin:token-longo-xyz'],
+    ['formato antigo, sem ":"', 'token-cru-sem-prefixo-de-conta'],
+    ['token vazio depois do ":"', `${CONTA_ATIVA.id}:`],
+  ])('recusa por %s apaga o COOKIE_TOKEN', async (_descricao, valorDoCookie) => {
+    cookieStore.set(COOKIE_TOKEN, { value: valorDoCookie })
 
-    await listarPaginasDoMetaAction()
+    const r = await listarPaginasDoMetaAction()
 
+    expect(r).toEqual({ ok: false, erro: 'conexao_expirada' })
     expect(cookieStore.has(COOKIE_TOKEN)).toBe(false)
+  })
+
+  // Invariante positiva, no caminho feliz: o token de cada Page nunca sai do
+  // servidor (iria para o payload RSC e o HTML se saisse). Antes desta task
+  // essa garantia so tinha sido conferida uma vez, a mao, no experimento de
+  // mutacao do Step 3b — nao pela suite. De quebra, prova que `listadas` E
+  // preenchido de verdade num sucesso real, e nao so ausente nas recusas
+  // acima.
+  it('listarPaginasDoMetaAction nunca devolve o token da Page', async () => {
+    const tokenDeUsuario = 'token-de-usuario-valido'
+    cookieStore.set(COOKIE_TOKEN, { value: `${CONTA_ATIVA.id}:${tokenDeUsuario}` })
+
+    const r = await listarPaginasDoMetaAction()
+
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.valor.length).toBeGreaterThan(0)
+    expect(r.valor.every((p) => !('token' in p))).toBe(true)
+    expect(metaFalso().listadas).toEqual([tokenDeUsuario])
   })
 })
