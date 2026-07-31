@@ -153,7 +153,7 @@ Nada do resto do plano roda sem o segredo registrado no banco: `segredo_hash` fi
 - Modify: `tests/e2e/global-setup.ts` (topo do arquivo, onde `CONN` é montado)
 - Modify: `.env.local.example`
 - Modify: `playwright.config.ts` (bloco `webServer.env`)
-- Test: `tests/integration/0009_seed_segredo.test.ts`
+- Test: `tests/integration/seed-e-guarda-host.test.ts`
 
 **Interfaces:**
 - Produces: `SEGREDO_DEV = 'segredo-de-ingestao-local'` — o valor literal que o `seed.sql` registra e que `.env.local.example` traz em `INGESTAO_SEGREDO`. Todas as tasks seguintes presumem que `db reset` deixa esse segredo válido.
@@ -161,14 +161,14 @@ Nada do resto do plano roda sem o segredo registrado no banco: `segredo_hash` fi
 
 - [ ] **Step 1: Escrever o teste da guarda de host, e vê-lo falhar**
 
-`tests/integration/0009_seed_segredo.test.ts` começa com dois casos para `exigirHostLocal`, sem tocar o banco:
+`tests/integration/seed-e-guarda-host.test.ts` começa com dois casos para `exigirHostLocal`, sem tocar o banco:
 
 1. `exigirHostLocal('postgresql://postgres:postgres@127.0.0.1:54322/postgres')` devolve a string inalterada.
 2. `exigirHostLocal('postgresql://user:pw@db.projeto.supabase.co:5432/postgres')` lança, e a mensagem nomeia o host recusado.
 
 Adicione também `localhost` como aceito e uma string que não é URL nenhuma como recusada — parse que falha tem que **recusar**, nunca deixar passar por não conseguir opinar.
 
-Rode `npx vitest run --config vitest.integration.config.ts tests/integration/0009_seed_segredo.test.ts`.
+Rode `npx vitest run --config vitest.integration.config.ts tests/integration/seed-e-guarda-host.test.ts`.
 Esperado: FAIL, por o módulo não existir.
 
 - [ ] **Step 2: Implementar `exigirHostLocal` e ligá-la nos dois consumidores**
@@ -189,7 +189,7 @@ No mesmo arquivo, um caso de integração:
 
 - `select public.hash_segredo('segredo-de-ingestao-local') = segredo_hash from public.ingestion_config where id` devolve `true`.
 
-Rode `npm run test:integration -- tests/integration/0009_seed_segredo.test.ts`.
+Rode `npm run test:integration -- tests/integration/seed-e-guarda-host.test.ts`.
 Esperado: FAIL — `segredo_hash` é nulo, e o `db reset` mais recente não semeou nada.
 
 - [ ] **Step 4: Escrever o `seed.sql`**
@@ -239,7 +239,7 @@ Esperado: verde. O teste do Step 3 agora passa porque o seed rodou no reset.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add supabase/seed.sql tests/integration/helpers/guarda-host.ts tests/integration/helpers/db.ts tests/e2e/global-setup.ts tests/integration/0009_seed_segredo.test.ts .env.local.example playwright.config.ts
+git add supabase/seed.sql tests/integration/helpers/guarda-host.ts tests/integration/helpers/db.ts tests/e2e/global-setup.ts tests/integration/seed-e-guarda-host.test.ts .env.local.example playwright.config.ts
 git commit -m "feat: semeia o segredo de ingestao em dev e recusa SUPABASE_DB_URL nao local"
 ```
 
@@ -1609,6 +1609,7 @@ git commit -m "feat: fecha o squat de Page com posse provada e caminho de reivin
 - Create: `src/app/(app)/acoes-notificacoes.ts`
 - Create: `src/app/(app)/sino.tsx`
 - Create: `tests/integration/notificacoes-store.test.ts`
+- Create: `tests/e2e/sino.spec.ts`
 - Modify: `src/app/(app)/layout.tsx`
 
 **Interfaces:**
@@ -1658,21 +1659,39 @@ Sem `filter` de propósito: **a RLS é o filtro**. `notifications_dono_select` j
 
 A limpeza no `return` do `useEffect` não é opcional: sem `removeChannel`, cada navegação soft deixa um canal aberto e o `router.refresh()` passa a disparar N vezes por notificação.
 
-- [ ] **Step 4: Verificar o roteamento na prática**
+- [ ] **Step 4: Escrever o E2E do sino, e vê-lo falhar**
 
-Verificação manual, com dois navegadores (ou um normal e um anônimo): admin numa janela, vendedor na outra, ambos em `/funil`. Dispare uma ingestão pelo endpoint do Google com o vendedor como responsável padrão da fonte. Confirme, nesta ordem:
+Nesta altura as Tasks 1 a 10 estão prontas, inclusive o webhook do Google — então o sino dá para provar automatizado, e esta task não fecha com o entregável principal só em verificação manual.
 
-1. O sino do **vendedor** acende sem reload.
-2. O card aparece no quadro dele sem reload.
-3. O sino do **admin** **não** acende — e confirme isso *depois* de ter visto o do vendedor acender, nunca antes. Asserção negativa observada antes da mudança chegar não afirma nada; é a lição do portão de E2E do Plano 3.
+`tests/e2e/sino.spec.ts`:
 
-Se o sino não acender, o suspeito número um é o token de autenticação do Realtime: o canal precisa da sessão para a RLS ser avaliada com `auth.uid()` preenchido. Sem sessão o assinante é `anon`, a policy nega tudo, e o sintoma é exatamente "não chega nada, sem erro". Se for o caso, chame `cliente.realtime.setAuth(...)` com o token da sessão antes de `subscribe()`, e **escreva no código por que a linha existe**.
+1. `criarConta(page)` — o admin recém-criado é o único membro, então ele mesmo é o responsável.
+2. Em `/config`, gere a URL do Google e capture URL e chave. Defina o responsável padrão da fonte como o próprio admin, **esperando a resposta POST da Server Action** — o `selectOption` só espera o evento de DOM, e o passo seguinte passa na frente da escrita (é a corrida que o Plano 3 encontrou; o padrão correto já existe em `tests/e2e/funil.spec.ts`).
+3. Vá para `/funil` e **fique lá**, sem navegar nem recarregar.
+4. Com `request.post` do Playwright, poste um lead na URL capturada, com a chave capturada e `lead_id` único (`carimbo()` de `tests/e2e/apoio.ts`).
+5. **Asserção positiva:** o indicador de não-lidas do sino aparece **sem reload**, com timeout generoso. É o Realtime disparando `router.refresh()`.
+6. Abrir o painel do sino mostra a entrada, e ela linka para a ficha daquele lead.
 
-- [ ] **Step 5: Suíte e commit**
+Rode `npm run test:e2e -- sino.spec.ts`, com o `npm run dev` derrubado antes.
+Esperado: FAIL.
+
+**Se o sino não acender, o suspeito número um é o token de autenticação do Realtime:** o canal precisa da sessão para a RLS ser avaliada com `auth.uid()` preenchido. Sem sessão o assinante é `anon`, `notifications_dono_select` nega tudo, e o sintoma é exatamente "não chega nada, sem erro nenhum". Se for o caso, chame `cliente.realtime.setAuth(...)` com o token da sessão antes de `subscribe()`, e **escreva no código por que a linha existe** — é o tipo de linha que alguém apaga por parecer supérflua.
+
+- [ ] **Step 5: Experimento de discriminação**
+
+Prove que a asserção 5 discrimina: remova a assinatura do Realtime, rode, confirme o vermelho, restaure. **Não substitua isto por leitura de código.** No Plano 3, duas leituras independentes concluíram que asserções discriminavam e as duas estavam erradas; o que separou foi rodar o experimento.
+
+- [ ] **Step 6: Verificação manual do isolamento entre usuários**
+
+O E2E acima prova que a notificação **chega** a quem deve. Que ela **não chega** a quem não deve está coberto no nível do banco pelo caso 2 do teste de integração (vendedor B não lê a notificação de A), que é onde a garantia realmente mora — a policy é o roteamento.
+
+Confirme uma vez à mão, com dois navegadores (um normal e um anônimo), que o Realtime respeita isso na prática: admin numa janela, vendedor na outra, ambos em `/funil`, ingestão com o vendedor como responsável. O sino do vendedor acende; o do admin não. **Confirme o "não acende" depois de ter visto o do vendedor acender, nunca antes** — asserção negativa observada antes de a mudança chegar não afirma nada.
+
+- [ ] **Step 7: Suíte e commit**
 
 ```bash
 npm run test:integration && npm test && npm run typecheck && npm run lint && npm run build
-git add src/lib/data/notificacoes.ts src/app/\(app\)/sino.tsx src/app/\(app\)/acoes-notificacoes.ts src/app/\(app\)/layout.tsx tests/integration/notificacoes-store.test.ts
+git add src/lib/data/notificacoes.ts src/app/\(app\)/sino.tsx src/app/\(app\)/acoes-notificacoes.ts src/app/\(app\)/layout.tsx tests/integration/notificacoes-store.test.ts tests/e2e/sino.spec.ts
 git commit -m "feat: sino de notificacoes com roteamento por RLS no Realtime"
 ```
 
@@ -1752,10 +1771,10 @@ O `external_id` único por rodada é justamente o que impede colisão, então o 
 4. Vá para `/funil` e **fique lá**.
 5. Com `request.post` do Playwright, poste na URL capturada um payload de lead do Google, com a chave capturada e `lead_id` único (use `carimbo()`).
 6. **Asserção positiva primeiro:** o card com o nome do lead aparece na coluna "Novo lead" **sem reload**, com timeout generoso. É o Realtime disparando `router.refresh()`. Esta asserção é a que dá segurança para todas as seguintes.
-7. Depois dela, o indicador de não-lidas do sino mostra pelo menos uma.
-8. Abra o painel do sino e confirme que a entrada linka para a ficha daquele lead.
-9. Poste **de novo**, com `lead_id` diferente e o mesmo telefone. Espere a asserção positiva de que a timeline do lead existente ganhou o evento de reingestão, e **só então** afirme que continua havendo um card só com aquele nome. Nunca o contrário — asserção negativa antes da mudança chegar passa observando o instante anterior.
-10. Vá a `/config` e confirme que as duas entregas aparecem no painel, com status de processado.
+7. Poste **de novo**, com `lead_id` diferente e o mesmo telefone. Espere a asserção positiva de que a timeline do lead existente ganhou o evento de reingestão, e **só então** afirme que continua havendo um card só com aquele nome. Nunca o contrário — asserção negativa antes da mudança chegar passa observando o instante anterior.
+8. Vá a `/config` e confirme que as duas entregas aparecem no painel, com status de processado.
+
+O sino **não** é asserido aqui: a Task 11 já o cobre em `tests/e2e/sino.spec.ts`, e repetir a asserção em dois arquivos faz os dois falharem juntos pelo mesmo motivo sem dizer nada a mais.
 
 Rode `npm run test:e2e -- ingestao.spec.ts` (com o `npm run dev` derrubado antes).
 Esperado: FAIL, e por motivo relacionado ao que falta, não por setup.
@@ -1766,7 +1785,7 @@ Se alguma asserção ficar vermelha, **conserte o produto, não o teste**. Foi e
 
 - [ ] **Step 4: Experimento de discriminação**
 
-Para as asserções 6 e 9, prove que discriminam: quebre o comportamento de propósito (remova a assinatura do Realtime para a 6; remova o ramo de dedup do `ingerir_lead` para a 9), rode, confirme o vermelho, restaure.
+Para as asserções 6 e 7, prove que discriminam: quebre o comportamento de propósito (remova a assinatura do Realtime para a 6; remova o ramo de dedup do `ingerir_lead` para a 7), rode, confirme o vermelho, restaure.
 
 **Este passo não é opcional e não pode ser substituído por leitura.** No Plano 3, duas leituras independentes de código concluíram que duas asserções discriminavam, e as duas estavam erradas — o que separou foi rodar o experimento. Rode uma asserção por vez: o Playwright aborta no primeiro `expect` que falha, então um experimento com as três juntas só valida a primeira.
 
