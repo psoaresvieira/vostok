@@ -89,7 +89,18 @@ export async function conectarPaginaAction(pageId: string): Promise<Resultado<vo
   if (!assinou.ok) return falha(assinou.erro)
 
   const r = await contexto.valor.fontes.conectarMeta(pagina.id, pagina.nome, pagina.token, null)
-  if (!r.ok) return falha(r.erro)
+  if (!r.ok) {
+    // Compensa a assinatura de `:88`. Sem isto, o dono legitimo de uma Page
+    // squattada por outra conta (o caso realista de `page_ja_conectada` aqui)
+    // clica em Conectar, a assinatura em leadgen sobe, a gravacao falha, e a
+    // acao devolve o erro deixando a Page real inscrita — a mesma escalada de
+    // negacao de servico para roubo de lead que a spec nomeia (ver "Risco
+    // nomeado: squat de Page ID"), so que iniciada por quem tem toda razao de
+    // clicar em Conectar. Best-effort: se a desinscricao tambem falhar, o erro
+    // original de conectarMeta e o que importa para quem esta na tela.
+    await metaGraph().desassinarLeadgen(pagina.id, pagina.token)
+    return falha(r.erro)
+  }
 
   jar.delete(COOKIE_TOKEN)
   revalidatePath('/config')

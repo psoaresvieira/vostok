@@ -151,3 +151,54 @@ describe('acoes-fontes — amarracao do COOKIE_TOKEN a conta', () => {
     expect(metaFalso().listadas).toEqual([tokenDeUsuario])
   })
 })
+
+/**
+ * Achado do review final de branch: `conectarPaginaAction` assina o campo
+ * leadgen ANTES de gravar a linha (correto — fonte gravada sem inscricao nunca
+ * receberia webhook), mas se `conectarMeta` falhar depois — `page_ja_conectada`
+ * sendo o caso realista, uma Page squattada por outra conta — a action
+ * devolvia o erro sem desfazer a assinatura. O dono legitimo da Page,
+ * tentando conectar a propria Page squattada, deixava uma inscricao real de
+ * leadgen viva nela; a partir do momento em que o Plano 4 resolve entrega por
+ * (provedor, external_id), qualquer caminho que assine aquela Page de novo
+ * passa a entregar os leads do dono legitimo na conta do invasor.
+ */
+describe('acoes-fontes — conectarPaginaAction desfaz a assinatura quando a gravacao falha', () => {
+  beforeEach(() => {
+    cookieStore.clear()
+    metaFalso().reiniciar()
+    vi.stubEnv('META_FAKE', '1')
+    vi.stubEnv('NODE_ENV', 'test')
+    fonteStoreMock.conectarMeta.mockReset()
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('assinatura falhando: devolve o erro do Graph e nunca chega a chamar conectarMeta', async () => {
+    cookieStore.set(COOKIE_TOKEN, { value: `${CONTA_ATIVA.id}:token-de-usuario` })
+    metaFalso().falharEm = 'assinarLeadgen'
+
+    const r = await conectarPaginaAction('100000000000001')
+
+    expect(r).toEqual({ ok: false, erro: 'meta_indisponivel' })
+    expect(fonteStoreMock.conectarMeta).not.toHaveBeenCalled()
+    // Nunca assinou de verdade, entao nao ha nada para desfazer.
+    expect(metaFalso().desassinadas).toEqual([])
+  })
+
+  it('conectarMeta falhando depois de assinar: desfaz a assinatura na Page (nao deixa leadgen vivo)', async () => {
+    cookieStore.set(COOKIE_TOKEN, { value: `${CONTA_ATIVA.id}:token-de-usuario` })
+    fonteStoreMock.conectarMeta.mockResolvedValueOnce({ ok: false, erro: 'page_ja_conectada' })
+
+    const r = await conectarPaginaAction('100000000000001')
+
+    expect(r).toEqual({ ok: false, erro: 'page_ja_conectada' })
+    // Asercao sobre o estado do duplo (MetaGraphFalso.desassinadas), nao
+    // espionagem de chamada: prova que a Page realmente saiu inscrita, e nao
+    // so que algum metodo foi invocado.
+    expect(metaFalso().assinadas).toEqual(['100000000000001'])
+    expect(metaFalso().desassinadas).toEqual(['100000000000001'])
+  })
+})
