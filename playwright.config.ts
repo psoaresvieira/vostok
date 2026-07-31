@@ -17,5 +17,9 @@ export default defineConfig({
     url: 'http://localhost:3000/login',
     reuseExistingServer: true,
     timeout: 120_000,
+    // Sem isto o teste bateria em facebook.com, o que a constraint global
+    // proibe. reuseExistingServer: true significa que um `npm run dev` ja
+    // aberto SEM esta variavel continua valendo — derrube-o antes de rodar.
+    env: { META_FAKE: '1' },
   },
 })

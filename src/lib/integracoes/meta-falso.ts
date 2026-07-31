@@ -4,6 +4,7 @@ import type { MetaGraph, PaginaDoMeta } from './meta'
 const PAGINAS_PADRAO: PaginaDoMeta[] = [
   { id: '100000000000001', nome: 'SE7E Marketing', token: 'token-da-pagina-1' },
   { id: '100000000000002', nome: 'SE7E Imóveis', token: 'token-da-pagina-2' },
+  { id: '100000000000003', nome: 'SE7E Consultoria', token: 'token-da-pagina-3' },
 ]
 
 /**
