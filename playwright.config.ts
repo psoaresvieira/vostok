@@ -2,6 +2,10 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // Apaga as linhas de lead_sources das Pages falsas antes de qualquer teste
+  // rodar, para a suite ser re-executável sem `npx supabase db reset` entre
+  // rodadas (achado do review final de branch — ver comentário no arquivo).
+  globalSetup: './tests/e2e/global-setup.ts',
   timeout: 60_000,
   use: {
     baseURL: 'http://localhost:3000',

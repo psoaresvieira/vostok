@@ -43,10 +43,14 @@ test('admin conecta uma Page do Meta e gera a URL do Google', async ({ page }) =
   await expect(page.getByText('Copie agora — não mostramos de novo.')).toBeVisible()
   await expect(page.getByText('/api/webhooks/google/')).toBeVisible()
 
-  // E some para sempre no recarregamento.
+  // E some para sempre no recarregamento. A âncora positiva vem PRIMEIRO: ela
+  // só passa depois que o documento pós-reload renderizou de verdade, então a
+  // negativa que vem depois está checando o mesmo documento, não um estado
+  // anterior por sorte de tempo (achado do review final de branch — mesma
+  // classe de risco do `toHaveCount(0)` explicado em :133-142 acima).
   await page.reload()
-  await expect(page.getByText('Copie agora — não mostramos de novo.')).toHaveCount(0)
   await expect(page.locator('li').filter({ hasText: nome })).toBeVisible()
+  await expect(page.getByText('Copie agora — não mostramos de novo.')).toHaveCount(0)
 })
 
 test('desconectar remove a fonte da lista', async ({ page }) => {
