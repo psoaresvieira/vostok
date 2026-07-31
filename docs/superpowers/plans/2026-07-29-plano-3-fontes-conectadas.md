@@ -3028,7 +3028,7 @@ Run: `npm run dev`
 - [ ] **Step 8: Rodar a suíte inteira**
 
 Run: `npm test && npm run test:integration && npm run typecheck && npm run build`
-Expected: 111 unitários PASS (80 + 31 da Task 6: 28 em src/lib/integracoes/ + 3 da rota de retorno), 80 de integração PASS, typecheck e build limpos.
+Expected: 119 unitários PASS (111 da Task 6 + 8 desta task, em `acoes-fontes.test.ts`), 80 de integração PASS, typecheck e build limpos.
 
 - [ ] **Step 9: Commit**
 
@@ -3130,6 +3130,55 @@ test('desconectar remove a fonte da lista', async ({ page }) => {
 })
 ```
 
+- [ ] **Step 2b: E2E do falso "conexão expirou" — GATE OBRIGATÓRIO**
+
+Este teste não é cobertura extra: é a única defesa automatizada de um bug que
+**já aconteceu** e que foi pego pelo review da Task 7, não pela verificação
+manual de quem escreveu o código. O sintoma era "a conexão com o Meta expirou"
+pintado por cima de uma página que tinha conectado perfeitamente, porque o
+`?meta=escolher` sobrevivia ao `router.refresh()`. O conserto foi trocar por
+`router.replace('/config')`, e hoje nada impede alguém de reverter.
+
+Só o E2E consegue expressar isso: o bug é definido por estado de URL sobrevivendo
+a um reload de navegador inteiro, o que exige DOM, cookie jar, Server Actions
+reais e banco.
+
+**Antes de escrever: este teste precisa de uma TERCEIRA Page.** Vale aqui o mesmo
+aviso do Step 3 abaixo — o índice de `lead_sources` é global e o banco local não
+é limpo entre rodadas de E2E, então dois testes conectando a mesma Page fazem o
+segundo estourar `page_ja_conectada`. "SE7E Marketing" e "SE7E Imóveis" já estão
+tomadas pelos outros dois testes. Acrescente uma terceira a `PAGINAS_PADRAO` em
+`src/lib/integracoes/meta-falso.ts`, seguindo o padrão de id existente, e use
+**ela** nos passos abaixo.
+
+Acrescentar não quebra `meta-falso.test.ts`: o teste de listagem passa o próprio
+array ao construtor em vez de depender do padrão. Confira mesmo assim.
+
+Com o stack local e `META_FAKE=1`, logado como admin em `/config`:
+
+1. Clicar "Conectar Facebook". Afirmar que a URL é `/config?meta=escolher` e que
+   a terceira Page é oferecida.
+2. Clicar na terceira Page.
+3. **Afirmar que a URL não contém mais `meta=`** (é `/config`). Isto trava o
+   `router.replace`: fica vermelho no instante em que alguém voltar para
+   `refresh()`.
+4. **Afirmar que a terceira Page aparece como fonte conectada, com o selo
+   `meta`, sem nenhum reload.** Isto trava a outra metade: fica vermelho se o
+   `revalidatePath('/config')` sair do `conectarPaginaAction`, ou se algum dia
+   configurarem `staleTimes` no `next.config.ts`.
+5. `page.reload()`.
+6. **Afirmar que o texto "A conexão com o Meta expirou" está ausente, e que a
+   terceira Page continua listada.** Esta é a asserção do bug em si.
+
+Os passos 3, 4 e 6 têm que ser asserções **distintas**. Juntar as três faz perder
+a capacidade de dizer qual metade regrediu — e elas quebram por causas
+diferentes.
+
+**O que este teste NÃO cobre, e não adianta tentar:** o outro achado do review da
+Task 7, a prop do servidor copiada para `useState`. Com o conserto no lugar não
+existe transição alcançável por E2E que distinga um valor derivado de um
+congelado. Aquilo é território de review e de lint, não de suíte E2E.
+
 - [ ] **Step 3: Rodar o E2E**
 
 Derrube qualquer `npm run dev` aberto antes (o `reuseExistingServer` reaproveitaria um servidor sem `META_FAKE`).
@@ -3144,7 +3193,7 @@ Se `admin conecta uma Page do Meta` falhar em `/config?meta=escolher` com a list
 - [ ] **Step 4: Rodar tudo**
 
 Run: `npm test && npm run test:integration && npm run test:e2e && npm run typecheck && npm run build`
-Expected: 111 unitários, 80 de integração, 6 E2E, typecheck e build limpos.
+Expected: 119 unitários, 80 de integração, 7 E2E, typecheck e build limpos.
 
 - [ ] **Step 5: Commit**
 
@@ -3186,7 +3235,8 @@ Nota: `.superpowers/sdd/progress.md` é gitignored no repo. Se o `git add` recus
 
 ## Pronto quando
 
-- `npm test` (111), `npm run test:integration` (80), `npm run test:e2e` (6), `npm run typecheck` e `npm run build` todos limpos, rodados no resultado do merge e não só antes dele.
+- `npm test` (119), `npm run test:integration` (80), `npm run test:e2e` (7), `npm run typecheck`, `npm run lint` e `npm run build` todos limpos, rodados no resultado do merge e não só antes dele.
+- O E2E do Step 2b da Task 8 passa: conectar uma Page tira o `meta=` da URL, lista a fonte sem reload, e o reload seguinte **não** mostra "A conexão com o Meta expirou".
 - Um admin abre `/config`, clica em **Conectar Facebook**, escolhe a Page, define o responsável padrão e vê a fonte listada.
 - O mesmo admin gera a URL secreta do Google, ela aparece uma vez e não volta no recarregamento.
 - `select * from public.source_credentials` como `authenticated` responde `permission denied`.
