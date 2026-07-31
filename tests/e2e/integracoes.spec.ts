@@ -89,11 +89,11 @@ test('reload depois de conectar uma Page nao mostra "conexao expirou"', async ({
 
   await botaoDaPagina.click()
 
-  // Asserçao 1: o router.replace tirou o meta= da URL. Fica vermelho no
+  // Asserção 1: o router.replace tirou o meta= da URL. Fica vermelho no
   // instante em que alguem trocar de volta para router.refresh().
   await expect(page).toHaveURL(/\/config$/)
 
-  // Asserçao 2: a fonte ja aparece conectada sem nenhum reload. Fica vermelho
+  // Asserção 2: a fonte ja aparece conectada sem nenhum reload. Fica vermelho
   // se o revalidatePath('/config') sair do conectarPaginaAction, ou se algum
   // dia configurarem staleTimes no next.config.ts.
   const fonte = page.locator('li').filter({ hasText: 'SE7E Consultoria' })
@@ -102,7 +102,7 @@ test('reload depois de conectar uma Page nao mostra "conexao expirou"', async ({
 
   await page.reload()
 
-  // Asserçao 3: a asserçao do bug em si. Depois do reload inteiro, sem o
+  // Asserção 3: a asserção do bug em si. Depois do reload inteiro, sem o
   // conserto, a tela pintaria "A conexao com o Meta expirou" por cima de uma
   // fonte que conectou perfeitamente.
   await expect(page.getByText('A conexão com o Meta expirou')).toHaveCount(0)
