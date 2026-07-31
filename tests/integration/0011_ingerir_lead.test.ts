@@ -195,6 +195,12 @@ describe('0011 — ingerir_lead: decide se a entrega vira card ou aviso', () => 
     await expect(ingerirLead(VAZIO, {}, ERRADO)).rejects.toThrow(/segredo_invalido/)
   })
 
+  // Log inexistente, agora com o segredo CERTO — o caso 1 usa segredo errado e
+  // por isso nunca passa da porteira do segredo; nunca chega no lookup do log.
+  it('log_id inexistente com segredo correto levanta log_nao_encontrado', async () => {
+    await expect(ingerirLead(VAZIO, dadosPadrao())).rejects.toThrow(/log_nao_encontrado/)
+  })
+
   // Caso 2
   it('caminho feliz cria o lead na primeira etapa aberta do pipeline padrao', async () => {
     const fonte = await criarFonteMeta(c, { responsavelPadraoId: c.vendedorAId })
@@ -253,7 +259,12 @@ describe('0011 — ingerir_lead: decide se a entrega vira card ou aviso', () => 
 
     const lead = await buscarLead(resultado.lead_id!)
     expect(lead.stage_id).toBe(etapa(c, 'Novo lead'))
-    expect(lead.status).toBe('aberto')
+    // Nao `expect(lead.status).toBe('aberto')`: a coluna tem default 'aberto' e
+    // nada aqui a muda, entao essa asserção vale sempre, mesmo se a busca
+    // escolhesse a etapa de Ganho por engano. O que prova a escolha certa e o
+    // `tipo` da etapa resolvida, nao a coluna `status`.
+    const stageEscolhida = c.etapas.find((e) => e.id === lead.stage_id)
+    expect(stageEscolhida?.tipo).toBe('aberta')
   })
 
   // Caso 4
@@ -379,7 +390,11 @@ describe('0011 — ingerir_lead: decide se a entrega vira card ou aviso', () => 
     const c2 = await contaSecundaria()
     const fonte2 = await criarFonteMeta(c2, { responsavelPadraoId: c2.vendedorId })
     const entregaC2 = await registrarEntrega(fonte2.externalId)
-    await ingerirLead(entregaC2.log_id!, dadosPadrao({ telefone_e164: '+5511933332222' }))
+    // Se essa ingestao de setup parasse de produzir um lead aberto (ex.: cair
+    // no dedup por engano), a asserção de isolamento la embaixo passaria por
+    // vacuidade — nao haveria nenhuma lead na conta 2 pra vazar de qualquer jeito.
+    const rSetup = await ingerirLead(entregaC2.log_id!, dadosPadrao({ telefone_e164: '+5511933332222' }))
+    expect(rSetup.status).toBe('criado')
 
     const fonte1 = await criarFonteMeta(c, { responsavelPadraoId: c.vendedorAId })
     const entrega1 = await registrarEntrega(fonte1.externalId)
@@ -434,23 +449,60 @@ describe('0011 — ingerir_lead: decide se a entrega vira card ou aviso', () => 
     expect(logDepois.status).toBe('processado')
   })
 
+  // Ingestao bem sucedida tem que LIMPAR o erro que uma falha anterior deixou
+  // gravado — sem isto, remover `erro = null` das duas atualizacoes finais
+  // deixaria a suite verde inteira e um erro obsoleto visivel para sempre no
+  // painel de diagnostico.
+  it('ingestao bem sucedida limpa o erro deixado por uma falha anterior', async () => {
+    const fonte = await criarFonteMeta(c, { responsavelPadraoId: c.vendedorAId })
+    const entrega = await registrarEntrega(fonte.externalId)
+    await comoServico((cli) =>
+      cli.query('select public.registrar_falha($1, $2, $3)', [SEGREDO, entrega.log_id, 'erro de teste']),
+    )
+    const logAntes = await buscarLog(entrega.log_id!)
+    expect(logAntes.erro).not.toBeNull()
+
+    const resultado = await ingerirLead(entrega.log_id!, dadosPadrao())
+    expect(resultado.status).toBe('criado')
+
+    const logDepois = await buscarLog(entrega.log_id!)
+    expect(logDepois.erro).toBeNull()
+  })
+
   // Caso 13
   it('nome ausente ou em branco vira "Lead sem nome"', async () => {
     const fonte = await criarFonteMeta(c, { responsavelPadraoId: c.vendedorAId })
 
+    // Contato distinto em cada chamada — nome-ausente e nome-em-branco precisam
+    // ser leads DIFERENTES para o teste provar algo. Com o mesmo email_norm nos
+    // dois (como dadosPadrao ja fornece por padrao), a segunda ingestao bateria
+    // no dedup, devolveria 'reincidente' sem criar lead nenhum, e a asserção
+    // final so reconfirmaria o nome gravado pela PRIMEIRA chamada — nunca
+    // exercitando o caminho `btrim` de um nome so-espacos.
     const entrega1 = await registrarEntrega(fonte.externalId)
     const r1 = await ingerirLead(
       entrega1.log_id!,
-      dadosPadrao({ nome: undefined, telefone_e164: '+5511911112222' }),
+      dadosPadrao({
+        nome: undefined,
+        telefone_e164: '+5511911112222',
+        email_norm: 'sem-nome-ausente@example.com',
+      }),
     )
+    expect(r1.status).toBe('criado')
     const lead1 = await buscarLead(r1.lead_id!)
     expect(lead1.nome).toBe('Lead sem nome')
 
     const entrega2 = await registrarEntrega(fonte.externalId)
     const r2 = await ingerirLead(
       entrega2.log_id!,
-      dadosPadrao({ nome: '   ', telefone_e164: '+5511911113333' }),
+      dadosPadrao({
+        nome: '   ',
+        telefone_e164: '+5511911113333',
+        email_norm: 'sem-nome-espacos@example.com',
+      }),
     )
+    expect(r2.status).toBe('criado')
+    expect(r2.lead_id).not.toBe(r1.lead_id)
     const lead2 = await buscarLead(r2.lead_id!)
     expect(lead2.nome).toBe('Lead sem nome')
   })

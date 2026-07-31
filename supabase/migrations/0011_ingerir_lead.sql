@@ -72,10 +72,13 @@ begin
     raise exception 'pipeline_nao_encontrado';
   end if;
 
-  -- Primeira etapa ABERTA, e nao `ordem = 1`: leads.status e derivado do tipo
-  -- da etapa dentro de move_lead_stage, entao se a conta reordenar e puser uma
-  -- etapa de ganho na frente, o lead nasceria ganho sem ninguem ter vendido
-  -- nada.
+  -- Primeira etapa ABERTA, e nao `ordem = 1`. Se a conta reordenar e puser uma
+  -- etapa de ganho na frente, `ordem = 1` poria o lead na coluna Ganho — e
+  -- `leads.status` NAO acompanharia, porque ele so muda dentro de
+  -- move_lead_stage e o default da coluna e 'aberto'. O resultado seria um card
+  -- na coluna de Ganho com status 'aberto': dessincronizado, contando como
+  -- ganho em toda leitura por etapa e como aberto em toda leitura por status —
+  -- e, de quebra, elegivel a dedup para sempre.
   select s.id into v_stage
     from public.stages s
    where s.pipeline_id = v_pipeline and s.tipo = 'aberta'
@@ -112,7 +115,13 @@ begin
          (v_tel is not null and l.telefone_e164 = v_tel)
          or (v_email is not null and l.email_norm = v_email)
        )
-     order by l.criado_em desc
+     -- `l.id desc` como desempate, e nao so criado_em: duas leads abertas com o
+     -- mesmo telefone existem (cadastro manual nao bloqueia duplicata), e sem
+     -- criterio de desempate qual delas recebe o evento de reingestao e quem e
+     -- notificado ficam por conta do plano de execucao. E o mesmo defeito que a
+     -- 0006 corrigiu em lead_events com a coluna seq; aqui `id` ja serve, so
+     -- precisa estar escrito.
+     order by l.criado_em desc, l.id desc
      limit 1;
   end if;
 
