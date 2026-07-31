@@ -1,4 +1,5 @@
 import { Client } from 'pg'
+import { exigirHostLocal } from '../integration/helpers/guarda-host'
 
 /**
  * Achado do review final de branch: `npm run test:e2e` falhava na segunda
@@ -16,8 +17,13 @@ import { Client } from 'pg'
  * contra o Postgres local, no mesmo padrão de `tests/integration/helpers/db.ts`.
  */
 
-const CONN =
-  process.env.SUPABASE_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
+// exigirHostLocal lanca se SUPABASE_DB_URL apontar para fora de
+// 127.0.0.1/localhost — o delete abaixo por id fixo e destrutivo do mesmo
+// jeito que limparBanco() em tests/integration/helpers/db.ts. Ver comentario
+// completo em tests/integration/helpers/guarda-host.ts.
+const CONN = exigirHostLocal(
+  process.env.SUPABASE_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
+)
 
 /** As três Pages falsas fixas de `meta-falso.ts` (PAGINAS_PADRAO). */
 const PAGE_IDS_FALSAS = ['100000000000001', '100000000000002', '100000000000003']

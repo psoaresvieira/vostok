@@ -24,6 +24,10 @@ export default defineConfig({
     // Sem isto o teste bateria em facebook.com, o que a constraint global
     // proibe. reuseExistingServer: true significa que um `npm run dev` ja
     // aberto SEM esta variavel continua valendo — derrube-o antes de rodar.
-    env: { META_FAKE: '1' },
+    //
+    // INGESTAO_SEGREDO: sem isto o E2E dependeria de o .env.local da maquina
+    // estar certo, e a falha seria "o lead nao aparece" sem nada dizendo por
+    // que. Tem que ser o mesmo valor que supabase/seed.sql grava.
+    env: { META_FAKE: '1', INGESTAO_SEGREDO: 'segredo-de-ingestao-local' },
   },
 })
