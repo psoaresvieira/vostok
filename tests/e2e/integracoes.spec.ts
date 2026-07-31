@@ -93,18 +93,53 @@ test('reload depois de conectar uma Page nao mostra "conexao expirou"', async ({
   // instante em que alguem trocar de volta para router.refresh().
   await expect(page).toHaveURL(/\/config$/)
 
-  // Asserção 2: a fonte ja aparece conectada sem nenhum reload. Fica vermelho
-  // se o revalidatePath('/config') sair do conectarPaginaAction, ou se algum
-  // dia configurarem staleTimes no next.config.ts.
+  // Asserção 2: a fonte ja aparece conectada sem nenhum reload — uma
+  // propriedade real que o usuario percebe (nao precisa apertar F5 depois de
+  // escolher a Page). NAO trava o revalidatePath('/config'): testei
+  // removendo a chamada (commit temporario, revertido) e o teste continuou
+  // verde, porque com `staleTimes` no valor padrao do Next 15 (dinamico = 0)
+  // o `router.replace('/config')` sempre busca o RSC de novo, revalidando ou
+  // nao. Quem mantiver essa asserção nao deve esperar dela protecao contra
+  // remover o revalidatePath — so contra a tela exigir um reload manual para
+  // mostrar a fonte recem-conectada.
   const fonte = page.locator('li').filter({ hasText: 'SE7E Consultoria' })
   await expect(fonte).toBeVisible()
   await expect(fonte.getByText('meta')).toBeVisible()
 
+  // Registrado ANTES do reload, e nao depois: a resposta pode chegar antes
+  // que o teste comece a escutar por ela. Sem timeout curto, porque no
+  // caminho certo (URL ja sem meta=) esta chamada nunca acontece — o `.catch`
+  // absorve o timeout default do Playwright para nao gerar unhandled
+  // rejection num listener que talvez nunca seja consumido.
+  const respostaDaListagemAposReload = page
+    .waitForResponse(
+      (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/config',
+    )
+    .catch(() => null)
+
   await page.reload()
+
+  // So faz sentido esperar essa resposta se a URL, depois do reload, prova
+  // que o efeito de `Integracoes` TEM como disparar `listarPaginasDoMetaAction`
+  // de novo (etapa === 'escolher'). `page.reload()` recarrega a MESMA URL, o
+  // que faz este check refletir diretamente a asserção 1 sem precisar
+  // reexecuta-la: se ela passou, a URL aqui já não tem `meta=`, o efeito não
+  // dispara nada, e esperar a resposta indiscriminadamente prenderia o teste
+  // ate o timeout mesmo no caminho bom.
+  if (/meta=escolher/.test(page.url())) {
+    await respostaDaListagemAposReload
+  }
 
   // Asserção 3: a asserção do bug em si. Depois do reload inteiro, sem o
   // conserto, a tela pintaria "A conexao com o Meta expirou" por cima de uma
-  // fonte que conectou perfeitamente.
+  // fonte que conectou perfeitamente. Esperar a resposta acima ANTES de
+  // checar e essencial — achado do review: `toHaveCount(0)` resolve assim que
+  // observa a contagem zero uma unica vez, sem continuar olhando para ver se
+  // ela muda depois. Sem a espera, este `expect` podia rodar bem no meio do
+  // POST assincrono que o proprio efeito dispara (listarPaginasDoMetaAction),
+  // achar o texto ainda ausente por sorte de tempo, e passar mesmo com o bug
+  // presente — o que de fato aconteceu ao testar isto isoladamente (4/4
+  // rodadas verdes com a regressao no lugar, antes deste ajuste).
   await expect(page.getByText('A conexão com o Meta expirou')).toHaveCount(0)
   await expect(page.locator('li').filter({ hasText: 'SE7E Consultoria' })).toBeVisible()
 })
