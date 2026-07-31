@@ -1268,6 +1268,13 @@ Só depois disso `JSON.parse(cru)`. Para cada `entry[].changes[]` com `field ===
 
 Uma entrega que falhe ao registrar **não** pode derrubar as outras do mesmo lote nem mudar o 200.
 
+**Duas exceções ao 200, e a razão das duas é a mesma.** O princípio do §8 da spec sobre lead é literal: *nunca descarta*. Um 200 diz ao Meta "recebi e guardei", e ele nunca reenvia — então todo caminho que responde 200 sem ter gravado nada perde o lead **para sempre**, e o único sintoma para o operador é "parou de chegar lead".
+
+- **Servidor não configurado** (`criarIngestaoStore()` falha por `INGESTAO_SEGREDO` vazio) → **500**. É falha nossa, é transitória, e o Meta retenta 5xx por horas: o lead sobrevive ao operador consertando a variável. Um 200 aqui troca um incidente de configuração por perda permanente de lead.
+- **`registrarEntrega` devolve falha** para uma entrega do lote → não derruba o lote e não muda o 200, mas **loga o código do erro**. Sem log, `external_id_invalido` ou `segredo_invalido` somem sem deixar rastro em lugar nenhum — nem no `integration_log`, que é justamente o que não chegou a ser escrito.
+
+Isso não contradiz o 200 de Page desconhecida do §8: lá o payload **foi** gravado (log `ignorado`), e o 200 evita virar oráculo de quais Pages estão conectadas. Aqui não foi gravado nada.
+
 Rode o teste do Step 6. Esperado: PASS.
 
 - [ ] **Step 8: Suíte e commit**
