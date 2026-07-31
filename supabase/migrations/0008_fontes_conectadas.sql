@@ -24,9 +24,11 @@ create table public.lead_sources (
   -- para traduzir a violacao em page_id_invalido, no mesmo padrao de
   -- unique_violation -> page_ja_conectada. String vazia entra no mesmo check
   -- que nulo: '' passaria em "is not null" e ainda assim participaria do
-  -- indice unico global com uma chave sem sentido.
+  -- indice unico global com uma chave sem sentido. btrim (e nao so <> '')
+  -- pega tambem page id so de espaco pela mesma razao — alinhado com
+  -- conectar_fonte_google, que ja usa btrim(p_url_token) = '' logo abaixo.
   constraint lead_sources_meta_tem_external_id
-    check (provedor <> 'meta' or (external_id is not null and external_id <> ''))
+    check (provedor <> 'meta' or (external_id is not null and btrim(external_id) <> ''))
 );
 
 -- Unico GLOBAL, nao por conta. O webhook do Meta e do app, nao da conta, e o

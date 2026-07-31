@@ -349,6 +349,36 @@ describe('0008 — fontes conectadas', () => {
     ).rejects.toThrow(/page_id_invalido/)
   })
 
+  // Ledger #15: o teste acima passa `null`, entao a metade `external_id <> ''`
+  // do check nunca era exercitada, e page id so de espaco continuava aceito.
+  // btrim alinha com conectar_fonte_google (0008:222) e cobre nulo e espaco
+  // com o mesmo check.
+  it('conectar_fonte_meta recusa page id so de espaco (btrim), traduzido para page_id_invalido', async () => {
+    await expect(
+      comoUsuario(c.adminId, (cli) =>
+        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, null)', [
+          c.accountId,
+          '   ',
+          'Page',
+          TOKEN,
+        ]),
+      ),
+    ).rejects.toThrow(/page_id_invalido/)
+  })
+
+  // Ledger #13: a remocao da definir_segredo_ingestao (falha de isolamento
+  // entre contas corrigida na Task 5 — ver comentario em 0008) so era
+  // defendida por comentario. Se alguem a reintroduzir, este teste denuncia.
+  it('definir_segredo_ingestao nao existe (decisao de seguranca: nao reintroduzir)', async () => {
+    const existe = await comoServico(async (cli) => {
+      const r = await cli.query<{ existe: boolean }>(
+        `select (to_regprocedure('public.definir_segredo_ingestao(uuid,text)') is not null) as existe`,
+      )
+      return r.rows[0].existe
+    })
+    expect(existe).toBe(false)
+  })
+
   it('admin carimba atualizado_em por update direto (grant inclui a coluna)', async () => {
     const sourceId = await comoUsuario(c.adminId, async (cli) => {
       const r = await cli.query<{ id: string }>(
