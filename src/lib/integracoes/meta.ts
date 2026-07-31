@@ -4,6 +4,19 @@ import type { Resultado } from '@/lib/domain/resultado'
 export type PaginaDoMeta = { id: string; nome: string; token: string }
 
 /**
+ * Um lead do formulario de leadgen, como o Graph API devolve. `campos` fica
+ * cru (nome/valores, sem achatar num objeto) porque o formulario e definido
+ * pelo usuario final do Meta Ads Manager: perguntas de qualificacao tem nome
+ * arbitrario e o CRM nao pode assumir um schema fixo alem dos campos padrao.
+ */
+export type LeadDoMeta = {
+  campos: { name: string; values: string[] }[]
+  adId: string | null
+  formId: string | null
+  criadoEm: string | null
+}
+
+/**
  * Tudo que o CRM precisa do Graph API para conectar uma fonte. Port, e nao
  * chamadas de fetch espalhadas, para que nenhum teste automatizado toque a
  * rede: a constraint vale para o E2E tambem.
@@ -20,4 +33,14 @@ export interface MetaGraph {
   /** Inscreve o app no campo `leadgen` da Page. Sem isto, nenhum webhook chega. */
   assinarLeadgen(pageId: string, tokenDaPagina: string): Promise<Resultado<void>>
   desassinarLeadgen(pageId: string, tokenDaPagina: string): Promise<Resultado<void>>
+  /** O corpo do lead que chegou no webhook: campos do formulario, ad e form de origem. */
+  buscarLead(leadgenId: string, tokenDaPagina: string): Promise<Resultado<LeadDoMeta>>
+  /** Nome da campanha dona do anuncio, para popular o lead sem o usuario digitar nada. */
+  campanhaDoAnuncio(adId: string, tokenDaPagina: string): Promise<Resultado<string>>
+  /**
+   * Prova que `tokenDaPagina` administra `pageId`. Fecha o buraco de
+   * squatting: sem isto, qualquer um que soubesse o id publico de uma Page
+   * concorrente poderia reivindica-la no CRM.
+   */
+  posseDaPagina(pageId: string, tokenDaPagina: string): Promise<Resultado<void>>
 }

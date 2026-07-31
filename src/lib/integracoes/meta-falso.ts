@@ -1,11 +1,29 @@
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
-import type { MetaGraph, PaginaDoMeta } from './meta'
+import type { LeadDoMeta, MetaGraph, PaginaDoMeta } from './meta'
 
 const PAGINAS_PADRAO: PaginaDoMeta[] = [
   { id: '100000000000001', nome: 'SE7E Marketing', token: 'token-da-pagina-1' },
   { id: '100000000000002', nome: 'SE7E Imóveis', token: 'token-da-pagina-2' },
   { id: '100000000000003', nome: 'SE7E Consultoria', token: 'token-da-pagina-3' },
 ]
+
+/**
+ * Devolvido para qualquer leadgenId ausente de `leads`. Traz full_name,
+ * email, phone_number e uma pergunta de qualificacao custom porque e este
+ * lead que a Task 6 (mapeamento de campos) e a Task 7 (ingerir_lead de ponta
+ * a ponta) vao exercitar.
+ */
+const LEAD_PADRAO: LeadDoMeta = {
+  campos: [
+    { name: 'full_name', values: ['Fulano de Tal'] },
+    { name: 'email', values: ['fulano@example.com'] },
+    { name: 'phone_number', values: ['+5511999999999'] },
+    { name: 'qual_o_seu_orcamento', values: ['Entre R$5.000 e R$10.000'] },
+  ],
+  adId: 'ad-padrao',
+  formId: 'form-padrao',
+  criadoEm: '2026-01-01T00:00:00+0000',
+}
 
 /**
  * Test double do MetaGraph. Guarda o que foi chamado para que o teste possa
@@ -21,6 +39,16 @@ export class MetaGraphFalso implements MetaGraph {
    * duplo, que e o que este projeto aceita, em vez de espionar a chamada.
    */
   readonly listadas: string[] = []
+  /** Ids de leadgen buscados com sucesso, mesma razao de existir que `listadas`. */
+  readonly buscados: string[] = []
+  /** Ids de Page cuja posse foi confirmada (chamada terminou em `ok`). */
+  readonly posseConferida: string[] = []
+  /**
+   * Leads semeados por leadgenId. Quando o id pedido nao esta aqui,
+   * `buscarLead` devolve `LEAD_PADRAO` — os testes nao precisam semear um
+   * lead so para exercitar o caminho feliz.
+   */
+  readonly leads: Map<string, LeadDoMeta> = new Map()
   /**
    * Nome do metodo que deve falhar, para exercitar o caminho de erro.
    * `keyof MetaGraph`, e nao `string`: um typo como 'assinarLeadGen' nunca
@@ -36,6 +64,9 @@ export class MetaGraphFalso implements MetaGraph {
     this.assinadas.length = 0
     this.desassinadas.length = 0
     this.listadas.length = 0
+    this.buscados.length = 0
+    this.posseConferida.length = 0
+    this.leads.clear()
     this.falharEm = null
   }
 
@@ -68,6 +99,29 @@ export class MetaGraphFalso implements MetaGraph {
   async desassinarLeadgen(pageId: string, _tokenDaPagina: string): Promise<Resultado<void>> {
     if (this.barrado('desassinarLeadgen')) return falha('meta_indisponivel')
     this.desassinadas.push(pageId)
+    return ok(undefined)
+  }
+
+  async buscarLead(leadgenId: string, _tokenDaPagina: string): Promise<Resultado<LeadDoMeta>> {
+    if (this.barrado('buscarLead')) return falha('meta_indisponivel')
+    this.buscados.push(leadgenId)
+    return ok(this.leads.get(leadgenId) ?? LEAD_PADRAO)
+  }
+
+  async campanhaDoAnuncio(adId: string, _tokenDaPagina: string): Promise<Resultado<string>> {
+    if (this.barrado('campanhaDoAnuncio')) return falha('meta_indisponivel')
+    // Deterministico no proprio adId, sem estado nem Math.random: o mesmo
+    // adId tem que devolver o mesmo nome em chamadas repetidas do mesmo teste.
+    return ok(`Campanha ${adId}`)
+  }
+
+  async posseDaPagina(pageId: string, tokenDaPagina: string): Promise<Resultado<void>> {
+    if (this.barrado('posseDaPagina')) return falha('meta_indisponivel')
+    // Espelha o /me da versao real: o token so prova posse da Page a qual
+    // ele pertence, nunca de outra so porque o id foi pedido explicitamente.
+    const dona = this.paginas.find((p) => p.token === tokenDaPagina)
+    if (!dona || dona.id !== pageId) return falha('posse_nao_comprovada')
+    this.posseConferida.push(pageId)
     return ok(undefined)
   }
 }

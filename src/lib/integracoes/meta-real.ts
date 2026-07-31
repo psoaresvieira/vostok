@@ -1,5 +1,5 @@
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
-import type { MetaGraph, PaginaDoMeta } from './meta'
+import type { LeadDoMeta, MetaGraph, PaginaDoMeta } from './meta'
 
 const VERSAO = process.env.META_API_VERSION ?? 'v21.0'
 const BASE = `https://graph.facebook.com/${VERSAO}`
@@ -117,6 +117,58 @@ export class MetaGraphReal implements MetaGraph {
 
     const r = await chamar<{ success: boolean }>(url, { method: 'DELETE' })
     if (!r.ok) return falha(r.erro)
+    return ok(undefined)
+  }
+
+  async buscarLead(leadgenId: string, tokenDaPagina: string): Promise<Resultado<LeadDoMeta>> {
+    const url = new URL(`${BASE}/${leadgenId}`)
+    url.searchParams.set('fields', 'field_data,ad_id,form_id,created_time')
+    url.searchParams.set('access_token', tokenDaPagina)
+
+    const r = await chamar<{
+      field_data?: { name: string; values: string[] }[]
+      ad_id?: string
+      form_id?: string
+      created_time?: string
+    }>(url)
+    if (!r.ok) return falha(r.erro)
+    // Mesma guarda que listarPaginas ja tem (meta-real.ts:100): resposta 200
+    // sem "error" mas em formato inesperado e possivel, e sem isto o acesso a
+    // field_data ausente devolveria um lead vazio em vez de sinalizar falha.
+    if (!Array.isArray(r.valor.field_data)) return falha('meta_indisponivel')
+    return ok({
+      campos: r.valor.field_data,
+      adId: r.valor.ad_id ?? null,
+      formId: r.valor.form_id ?? null,
+      criadoEm: r.valor.created_time ?? null,
+    })
+  }
+
+  async campanhaDoAnuncio(adId: string, tokenDaPagina: string): Promise<Resultado<string>> {
+    const url = new URL(`${BASE}/${adId}`)
+    url.searchParams.set('fields', 'campaign{name}')
+    url.searchParams.set('access_token', tokenDaPagina)
+
+    const r = await chamar<{ campaign?: { name?: string } }>(url)
+    if (!r.ok) return falha(r.erro)
+    if (typeof r.valor.campaign?.name !== 'string') return falha('meta_indisponivel')
+    return ok(r.valor.campaign.name)
+  }
+
+  async posseDaPagina(pageId: string, tokenDaPagina: string): Promise<Resultado<void>> {
+    // GET /{page_id}?fields=id NAO prova posse: um token de pagina consegue
+    // ler campos publicos basicos de OUTRAS paginas, entao a chamada teria
+    // sucesso mesmo com o token errado. GET /me com o token da pagina sempre
+    // responde como a propria pagina dona do token — nao ha como o token de A
+    // responder /me como B. Comparar o id devolvido com o pageId pedido e o
+    // que de fato prova a posse.
+    const url = new URL(`${BASE}/me`)
+    url.searchParams.set('fields', 'id')
+    url.searchParams.set('access_token', tokenDaPagina)
+
+    const r = await chamar<{ id?: string }>(url)
+    if (!r.ok) return falha(r.erro)
+    if (r.valor.id !== pageId) return falha('posse_nao_comprovada')
     return ok(undefined)
   }
 }
