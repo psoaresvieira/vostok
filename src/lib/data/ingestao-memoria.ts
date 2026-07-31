@@ -48,6 +48,20 @@ export class InMemoryIngestaoStore implements IngestaoStore {
   falharRegistrarEntregaPara: string | null = null
 
   /**
+   * ExternalId que deve fazer `registrarEntrega` devolver sucesso com
+   * status 'ignorado', no mesmo estilo de `falharRegistrarEntregaPara`
+   * acima. A RPC real (0010) chega em 'ignorado' por mais de um caminho --
+   * fonte_nao_encontrada, chave_invalida, lead_de_teste -- mas o motivo e'
+   * detalhe da RPC, nao algo que o duplo precisa reimplementar: duplicar
+   * aqui a deteccao de is_test/chave divergiria da migration mais cedo ou
+   * mais tarde, o mesmo risco que o brief da Task 8 aponta para nao repetir
+   * a conferencia de google_key na rota. O duplo so precisa simular o
+   * FORMATO da resposta ('ignorado', sem token) para provar que a rota
+   * reage certo a ele.
+   */
+  ignorarRegistrarEntregaPara: string | null = null
+
+  /**
    * So para teste: injeta um log pronto sem passar por `registrarEntrega`.
    * E o jeito direto de simular o estado que a rota ou o cron encontrariam --
    * por exemplo um log ja 'processado' por uma corrida entre o after() da
@@ -94,19 +108,23 @@ export class InMemoryIngestaoStore implements IngestaoStore {
 
     const logId = randomUUID()
     // Sem fonte real para resolver (isso e trabalho do banco na 0010), o
-    // duplo aceita toda entrega nova como pendente.
-    const token = e.provedor === 'meta' ? 'token-de-teste' : null
+    // duplo aceita toda entrega nova como pendente, a menos que o teste
+    // tenha pedido 'ignorado' explicitamente (ver ignorarRegistrarEntregaPara
+    // acima).
+    const ignorado = this.ignorarRegistrarEntregaPara === e.externalId
+    const status: ResultadoEntrega['status'] = ignorado ? 'ignorado' : 'pendente'
+    const token = !ignorado && e.provedor === 'meta' ? 'token-de-teste' : null
     this.logs.set(logId, {
       id: logId,
       provedor: e.provedor,
       externalId: e.externalId,
       payload: e.payload,
       token,
-      status: 'pendente',
+      status,
       leadId: null,
       tentativas: 0,
     })
-    return ok({ logId, status: 'pendente', token })
+    return ok({ logId, status, token })
   }
 
   async ingerirLead(
