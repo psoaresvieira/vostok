@@ -1112,7 +1112,7 @@ Rode o teste do Step 1. Esperado: PASS.
 5. Email em maiúsculas vira minúsculo em `emailNorm`, e `email` guarda o cru.
 6. Email malformado deixa `emailNorm` nulo sem perder `email`.
 7. Campo desconhecido cai em `extras` com o nome original como chave.
-8. `values` vazio ou ausente não quebra e não inventa string vazia — vira nulo.
+8. `values` vazio ou ausente não quebra e não inventa string vazia — vira nulo. **Isso vale para `extras` também:** campo desconhecido *sem resposta* é **omitido** de `extras`, não gravado como `''`. `extras` é `Record<string, string>` e não comporta nulo, então omitir é a única forma de não inventar. Não se perde nada com isso — `extras` guarda respostas, uma pergunta sem resposta não tem resposta a guardar, e o payload cru continua inteiro em `integration_log.payload_bruto`. Gravar `''` faria a timeline dizer que a pessoa respondeu em branco, que é diferente de não ter respondido.
 9. `campanha` e `formulario` vindos do segundo argumento aparecem em `campanhaOrigem`/`formularioOrigem`.
 10. Nenhum campo reconhecido → todos os campos nulos, `extras` vazio, e **nada lança**.
 
