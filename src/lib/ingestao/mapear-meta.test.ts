@@ -85,6 +85,12 @@ describe('mapearLeadDoMeta', () => {
     expect(dados.formularioOrigem).toBe('Formulario A')
   })
 
+  it('campo desconhecido sem valores nao inventa string vazia em extras: a chave fica ausente', () => {
+    const lead = leadCom([{ name: 'campo_sem_resposta', values: [] }])
+    const dados = mapearLeadDoMeta(lead, SEM_ORIGEM)
+    expect(dados.extras).not.toHaveProperty('campo_sem_resposta')
+  })
+
   it('nenhum campo reconhecido: tudo nulo, extras vazio, e nao lanca', () => {
     const lead = leadCom([])
     expect(() => mapearLeadDoMeta(lead, SEM_ORIGEM)).not.toThrow()

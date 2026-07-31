@@ -55,7 +55,14 @@ export function mapearLeadDoMeta(
   const extras: Record<string, string> = {}
   for (const campo of lead.campos) {
     if (CAMPOS_CONHECIDOS.has(campo.name)) continue
-    extras[campo.name] = campo.values?.[0] ?? ''
+    // Sem valor, a chave nem entra em extras — extras guarda respostas, e uma
+    // pergunta sem resposta nao tem resposta para guardar. Escrever '' aqui
+    // afirmaria na timeline do lead que ele respondeu em branco, o que e um
+    // fato diferente de nao ter respondido. O payload bruto (integration_log)
+    // continua guardando que a pergunta foi feita. Nao "simplificar" para
+    // `?? ''`.
+    const valor = campo.values?.[0]
+    if (valor) extras[campo.name] = valor
   }
 
   return {

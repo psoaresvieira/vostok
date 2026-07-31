@@ -60,8 +60,19 @@ export function mapearLeadDoGoogle(payload: Record<string, unknown>): DadosDoLea
     const id = typeof col.column_id === 'string' ? col.column_id : null
     if (id !== null && CAMPOS_CONHECIDOS.has(id)) continue
     const nomeLegivel = typeof col.column_name === 'string' && col.column_name.length > 0 ? col.column_name : null
-    const chave = nomeLegivel ?? id ?? 'campo_desconhecido'
-    extras[chave] = typeof col.string_value === 'string' ? col.string_value : ''
+    const chave = nomeLegivel ?? id
+    // Sem column_id nem column_name nao ha chave honesta para essa coluna —
+    // inventar 'campo_desconhecido' faz duas colunas assim colidirem no mesmo
+    // slot do Record e uma apagar a outra, perdendo dado. Melhor pular: o
+    // payload bruto (integration_log) preserva a coluna inteira mesmo assim.
+    if (chave === null) continue
+    // Sem valor, a chave nem entra em extras — extras guarda respostas, e uma
+    // pergunta sem resposta nao tem resposta para guardar. Escrever '' aqui
+    // afirmaria na timeline do lead que ele respondeu em branco, o que e um
+    // fato diferente de nao ter respondido. Nao "simplificar" para `?? ''`.
+    if (typeof col.string_value === 'string' && col.string_value.length > 0) {
+      extras[chave] = col.string_value
+    }
   }
 
   return {

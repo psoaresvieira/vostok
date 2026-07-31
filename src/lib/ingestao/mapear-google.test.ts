@@ -72,6 +72,27 @@ describe('mapearLeadDoGoogle', () => {
     expect(dados.extras).toEqual({})
   })
 
+  it('column desconhecida sem string_value nao inventa string vazia em extras: a chave fica ausente', () => {
+    const payload = {
+      user_column_data: [{ column_id: 'QUESTION_1', column_name: 'Pergunta sem resposta' }],
+    }
+    const dados = mapearLeadDoGoogle(payload)
+    expect(dados.extras).not.toHaveProperty('Pergunta sem resposta')
+  })
+
+  it('duas colunas sem column_id e sem column_name nao colidem em "campo_desconhecido": ambas sao ignoradas sem lancar', () => {
+    const payload = {
+      user_column_data: [
+        { string_value: 'Primeira resposta' },
+        { string_value: 'Segunda resposta' },
+      ],
+    }
+    expect(() => mapearLeadDoGoogle(payload)).not.toThrow()
+    const dados = mapearLeadDoGoogle(payload)
+    expect(dados.extras).not.toHaveProperty('campo_desconhecido')
+    expect(dados.extras).toEqual({})
+  })
+
   it('telefone e email passam pelas mesmas normalizacoes do Meta', () => {
     const payload = {
       user_column_data: [
