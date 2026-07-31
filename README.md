@@ -4,6 +4,10 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 **O Plano 3 (conexão de fontes via Meta OAuth, `conectar_fonte_meta`) não pode ser exposto em URL pública até o Plano 4 entregar o caminho de reivindicação de Page.** Risco aceito conscientemente, com dono: qualquer pessoa pode fazer signup, criar a própria conta e travar a Page de um concorrente para si (`page_id` é público e o Plano 3 não valida posse contra o Graph API). Detalhe completo, e o runbook de operador para o caso de isso acontecer antes do Plano 4, em `docs/superpowers/specs/2026-07-29-crm-ingestao-webhooks-design.md`, seção "Risco nomeado: squat de Page ID em `conectar_fonte_meta`".
 
+## Reprocessamento de leads (cron)
+
+`GET /api/webhooks/reprocessar`, gateada por `Authorization: Bearer ${CRON_SECRET}`, varre entregas `pendente`/`falhou` e reprocessa cada uma com backoff (a RPC `entregas_pendentes` decide o quê e quando). `vercel.json` declara a cadência de 10 minutos, mas **no plano Hobby da Vercel o cron roda no máximo uma vez por dia, independentemente do que estiver escrito nesse arquivo** — os 10 minutos só valem a partir do plano Pro. A rota continua invocável à mão com o `CRON_SECRET`, e é assim que se esvazia a fila num incidente antes de existir um plano pago.
+
 ## Getting Started
 
 First, run the development server:
