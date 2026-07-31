@@ -435,6 +435,7 @@ Casos:
 5. **Meta com Page desconhecida grava `ignorado` com `erro = 'fonte_nao_encontrada'`, `account_id` nulo, e devolve token nulo.**
 6. **Google com URL token válido e `google_key` certo grava `pendente`,** e o token do retorno é nulo (Google não usa token de página).
 7. **Google com URL token válido e `google_key` errado grava `ignorado` com `erro = 'chave_invalida'` e `account_id` preenchido.** É o que faz "configurei a chave errada no Google Ads" aparecer no painel em vez de sumir.
+7b. **Fonte Google com `google_key_hash` nulo recusa a entrega, inclusive quando ela não apresenta chave nenhuma.** Monte a fonte com `google_key_hash` nulo por `comoServico` e chame sem `p_google_key`: tem que gravar `ignorado`/`chave_invalida`. Sem a cláusula `v_key_hash is null`, `is distinct from` com os dois lados nulos devolve falso e a entrega passa — fail-open exatamente no caminho sem credencial. Cubra também a mesma fonte **com** chave apresentada, que já era recusada: as duas juntas provam que a assimetria acabou.
 8. **`is_test` grava `ignorado` com `erro = 'lead_de_teste'`.** Cubra `true` booleano do jsonb e a string `"true"`.
 9. **Reenvio é no-op.** Duas chamadas com o mesmo `(provedor, external_id)`: a segunda devolve `status = 'duplicado'` e `log_id` nulo, e a tabela continua com uma linha só.
 10. **`external_id` vazio ou só espaço levanta `external_id_invalido`.**
@@ -554,10 +555,19 @@ begin
     v_status := 'ignorado';
     v_erro := 'fonte_nao_encontrada';
   elsif p_provedor = 'google'
-        and v_key_hash is distinct from public.hash_segredo(p_google_key) then
+        and (v_key_hash is null
+             or v_key_hash is distinct from public.hash_segredo(p_google_key)) then
     -- A URL resolveu, a chave do corpo nao bate. Aqui SABEMOS a conta, entao
     -- esta linha aparece no painel de /config — e o que transforma "configurei
     -- a chave errada no Google Ads" de misterio em diagnostico.
+    --
+    -- O `v_key_hash is null` NAO e redundante, e tirar essa clausula abre um
+    -- fail-open: `is distinct from` com os DOIS lados nulos devolve falso, entao
+    -- uma fonte sem google_key_hash configurado passaria direto por este check
+    -- justamente quando a entrega tambem nao apresenta chave. A assimetria era o
+    -- pior da versao anterior — sem chave passava, COM chave era recusada.
+    -- Fonte sem chave configurada nao aceita entrega nenhuma. Verificado contra
+    -- o Postgres: `null is distinct from hash_segredo(null)` e false.
     v_status := 'ignorado';
     v_erro := 'chave_invalida';
   elsif coalesce(p_payload ->> 'is_test', '') in ('true', 't', '1') then
@@ -598,9 +608,12 @@ $$;
 -- Varredura do cron. Devolve tudo que o processamento precisa para nao ter que
 -- voltar ao banco: o payload cru e, no Meta, o token da Page.
 --
--- Backoff por numero de tentativas: 3^n minutos, ou seja 1, 3, 9, 27 e 81.
--- Desiste em 5 — alem disso a falha nao e transitoria, e retentar so gasta cota
--- do Graph e enche o log.
+-- Backoff por numero de tentativas: 3^n minutos. Na pratica a janela observada
+-- comeca em 3 e nao em 1, porque so registrar_falha marca 'falhou' e ela sempre
+-- incrementa antes — entao toda linha que chega aqui em 'falhou' ja tem
+-- tentativas >= 1. A sequencia real e 3, 9, 27 e 81 minutos. Desiste em 5:
+-- alem disso a falha nao e transitoria, e retentar so gasta cota do Graph e
+-- enche o log.
 create or replace function public.entregas_pendentes(p_segredo text, p_limite integer)
 returns table (
   log_id uuid,
@@ -1389,6 +1402,7 @@ Esta é a task que levanta o portão de deploy do `README.md`. Enquanto ela não
 7. **`reivindicar_fonte_meta` sem segredo levanta `segredo_invalido`;** sem sessão, `sem_sessao`; por não-admin da conta alvo, `sem_permissao`.
 8. **`reivindicar_fonte_meta` com `page_id` vazio ou só espaço levanta `page_id_invalido`.**
 9. **`conectar_fonte_google` continua com a assinatura de 5 argumentos e sem segredo.** Registro deliberado: não há vetor de squat no Google — `external_id` é sempre nulo, o índice global não a alcança, e o token é gerado no servidor. Este teste existe para que a assimetria seja decisão registrada, e não esquecimento.
+10. **`conectar_fonte_google` recusa `p_google_key` nulo ou só espaço, com `segredo_vazio`.** Achado do review da Task 3, fechado aqui: sem essa validação dá para criar, por chamada direta ao PostgREST, uma fonte com `google_key_hash` nulo. A Task 3 já fecha a porta do lado do `registrar_entrega` (fonte sem chave não aceita entrega nenhuma), e esta validação impede que o estado inválido chegue a existir. Fail-closed nas duas pontas — nenhuma das duas sozinha era suficiente: só a da Task 3 deixaria o dado inconsistente no banco, e só esta deixaria as linhas criadas antes dela ainda vulneráveis.
 
 `tests/integration/0008_fontes_conectadas.test.ts` precisa passar a chamar a RPC com o argumento novo; **não afrouxe nenhuma asserção existente lá** — se algum caso ficar vermelho por outro motivo que não a assinatura, pare e reporte.
 
@@ -1427,6 +1441,9 @@ Esperado: FAIL.
 -- nulo la, entao o indice unico global nem alcanca essas linhas, e o token da
 -- URL e gerado no servidor. Nao ha Page de terceiro a travar. A assimetria e
 -- decisao registrada, com teste que a afirma.
+--
+-- Ela ganha OUTRA coisa, por achado do review da Task 3: validacao de
+-- p_google_key. Ver o bloco dela no fim deste arquivo.
 
 -- drop, e nao create or replace: a assinatura mudou, e replace com lista de
 -- argumentos diferente CRIA UMA SOBRECARGA em vez de substituir. As duas
@@ -1542,6 +1559,68 @@ begin
 
   insert into public.source_credentials (source_id, meta_page_token)
   values (v_id, p_token);
+
+  return v_id;
+end;
+$$;
+
+-- Fecha a outra ponta do achado do review da Task 3.
+--
+-- A `0010` fez `registrar_entrega` recusar entrega de fonte Google cujo
+-- google_key_hash seja nulo. Isto impede que essa fonte chegue a existir: sem a
+-- validacao, um admin podia chamar esta funcao direto pelo PostgREST com
+-- p_google_key nulo, e a linha nascia com hash nulo. A tela nunca faz isso (o
+-- SupabaseFonteStore gera a chave), entao o custo aqui e zero e o ganho e que o
+-- estado invalido deixa de ser representavel.
+--
+-- Nenhuma das duas metades bastava sozinha: so a da 0010 deixaria dado
+-- inconsistente no banco, e so esta deixaria vulneravel qualquer linha criada
+-- antes dela.
+--
+-- Assinatura inalterada (5 argumentos, sem segredo) — o teste que afirma isso
+-- continua valendo.
+create or replace function public.conectar_fonte_google(
+  p_account_id uuid,
+  p_nome text,
+  p_url_token text,
+  p_google_key text,
+  p_responsavel uuid
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'sem_sessao';
+  end if;
+  if public.papel_na_conta(p_account_id) is distinct from 'admin' then
+    raise exception 'sem_permissao';
+  end if;
+  if not public.e_membro_da_conta(p_account_id, p_responsavel) then
+    raise exception 'responsavel_invalido';
+  end if;
+  if p_url_token is null or btrim(p_url_token) = '' then
+    raise exception 'segredo_vazio';
+  end if;
+  -- NOVO. Mesmo codigo de erro do url_token: para quem esta na tela, os dois
+  -- sao "o segredo saiu em branco", e a UI ja traduz segredo_vazio.
+  if p_google_key is null or btrim(p_google_key) = '' then
+    raise exception 'segredo_vazio';
+  end if;
+
+  insert into public.lead_sources
+    (account_id, provedor, external_id, nome, responsavel_padrao_id)
+  values (p_account_id, 'google', null, p_nome, p_responsavel)
+  returning id into v_id;
+
+  -- So o hash entra. O token em claro existe uma vez, no retorno da acao que o
+  -- gerou, e nunca mais e recuperavel — mesmo contrato do token de convite.
+  insert into public.source_credentials (source_id, url_token_hash, google_key_hash)
+  values (v_id, public.hash_segredo(p_url_token), public.hash_segredo(p_google_key));
 
   return v_id;
 end;
