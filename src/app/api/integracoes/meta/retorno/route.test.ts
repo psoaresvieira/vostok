@@ -139,6 +139,43 @@ describe('GET /api/integracoes/meta/retorno', () => {
     const cookie = cookieStore.get(COOKIE_TOKEN)
     expect(cookie?.value).toBe('conta-xyz:token-longo-para-algum-code')
     expect(cookie?.opcoes?.httpOnly).toBe(true)
+    // 'strict' quebraria o retorno vindo de facebook.com (mesma razao
+    // documentada em iniciar/route.ts:25 para o COOKIE_ESTADO) — carga
+    // estrutural, nao so higiene, e antes deste teste so httpOnly era
+    // afirmado apesar do docblock deste arquivo prometer os cinco atributos.
+    expect(cookie?.opcoes?.sameSite).toBe('lax')
+  })
+
+  it('state divergente redireciona para /config?meta=estado_invalido e apaga o COOKIE_ESTADO', async () => {
+    adminMock.mockResolvedValue({
+      ok: true,
+      valor: { conta: { id: 'conta-xyz', nome: 'Conta X' }, admin: {} },
+    })
+    cookieStore.set(COOKIE_ESTADO, { value: 'estado-que-o-cookie-guardou' })
+
+    await expect(
+      GET(requisicao('state=estado-diferente-vindo-da-url&code=abc')),
+    ).rejects.toMatchObject({ destino: '/config?meta=estado_invalido' })
+
+    // Apaga anyway (:27 roda antes da comparacao) — o CSRF check em si.
+    expect(cookieStore.has(COOKIE_ESTADO)).toBe(false)
+    // E nao chegou a amarrar nenhum COOKIE_TOKEN.
+    expect(cookieStore.has(COOKIE_TOKEN)).toBe(false)
+  })
+
+  it('retorno bem sucedido apaga o COOKIE_ESTADO (state e uso unico)', async () => {
+    adminMock.mockResolvedValue({
+      ok: true,
+      valor: { conta: { id: 'conta-xyz', nome: 'Conta X' }, admin: {} },
+    })
+    const estado = gerarEstado()
+    cookieStore.set(COOKIE_ESTADO, { value: estado })
+
+    await expect(GET(requisicao(`state=${estado}&code=algum-code`))).rejects.toMatchObject({
+      destino: '/config?meta=escolher',
+    })
+
+    expect(cookieStore.has(COOKIE_ESTADO)).toBe(false)
   })
 
   it('nao amarra nada quando a autorizacao falha, mesmo com state e code validos', async () => {
