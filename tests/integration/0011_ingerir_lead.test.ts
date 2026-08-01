@@ -99,8 +99,8 @@ function dadosPadrao(overrides: Record<string, unknown> = {}) {
     email: 'fulano@example.com',
     email_norm: 'fulano@example.com',
     empresa: 'ACME',
-    campanha_origem: 'campanha-x',
-    formulario_origem: 'form-y',
+    campanha_id: 'campanha-x',
+    formulario_id: 'form-y',
     extras: { pergunta: 'resposta' },
     ...overrides,
   }
@@ -212,8 +212,8 @@ describe('0011 — ingerir_lead: decide se a entrega vira card ou aviso', () => 
 
     const lead = await buscarLead(resultado.lead_id!)
     expect(lead.origem).toBe('meta')
-    expect(lead.campanha_origem).toBe('campanha-x')
-    expect(lead.formulario_origem).toBe('form-y')
+    expect(lead.campanha_id).toBe('campanha-x')
+    expect(lead.formulario_id).toBe('form-y')
     expect(lead.responsavel_id).toBe(c.vendedorAId)
     expect(lead.pipeline_id).toBe(c.pipelineId)
     expect(lead.stage_id).toBe(etapa(c, 'Novo lead'))
