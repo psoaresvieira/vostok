@@ -123,6 +123,30 @@ describe('0014 — RPCs de metricas: metricas_coorte e metricas_etiquetas', () =
     expect(linha!.ordem_max).toBe(1)
   })
 
+  it('lead que nasceu direto numa etapa nao-aberta reporta ordem_max 0', async () => {
+    // move_lead_stage e o unico caminho suportado de troca de etapa, e tanto a
+    // criacao manual (funil/acoes.ts) quanto ingerir_lead (0011) sempre colocam
+    // o lead na primeira etapa de tipo 'aberta' do pipeline -- nenhum caminho
+    // da aplicacao cria um lead direto em Ganho/Perdido. O insert abaixo (via
+    // criarLead, o mesmo helper ja usado no resto do arquivo) escreve a linha
+    // de leads direto na tabela, sem passar por move_lead_stage, entao nao ha
+    // stage_history nenhum e o stage_id atual e de uma etapa nao-aberta. E o
+    // unico jeito de alcancar o caso que o coalesce(..., 0) da 0014 existe
+    // para cobrir: NAO e um estado que a aplicacao real produz.
+    const perdido = etapa(c, 'Perdido')
+    const leadId = await criarLead(c, 'Lead direto em Perdido', c.vendedorAId, perdido)
+
+    const r = await comoUsuario(c.adminId, (cli) =>
+      cli.query<LinhaCoorte>(
+        'select * from public.metricas_coorte($1, $2, $3, $4)',
+        [c.pipelineId, DE, ATE, null],
+      ),
+    )
+    const linha = r.rows.find((x) => x.lead_id === leadId)
+    expect(linha).toBeDefined()
+    expect(linha!.ordem_max).toBe(0)
+  })
+
   it('a coorte e semiaberta em criado_em: [de, ate)', async () => {
     // Dois periodos adjacentes nunca podem contar o mesmo lead duas vezes.
     const de = new Date('2026-03-01T00:00:00Z')
@@ -168,6 +192,33 @@ describe('0014 — RPCs de metricas: metricas_coorte e metricas_etiquetas', () =
 
     expect(comoVendedor.rows).toHaveLength(1)
     expect(comoAdmin.rows).toHaveLength(2)
+  })
+
+  it('p_responsavel_id filtra a coorte mesmo quando quem chama e admin', async () => {
+    // Chamando sempre como admin: a RLS ja deixa passar a conta inteira, entao
+    // se o argumento nao filtrasse nada os dois numeros sairiam iguais. A
+    // narrowing tem que vir do parametro, nao da RLS.
+    const novo = etapa(c, 'Novo lead')
+    await criarLead(c, 'Lead do A 1', c.vendedorAId, novo)
+    await criarLead(c, 'Lead do A 2', c.vendedorAId, novo)
+    await criarLead(c, 'Lead do B', c.vendedorBId, novo)
+
+    const comFiltro = await comoUsuario(c.adminId, (cli) =>
+      cli.query<LinhaCoorte>(
+        'select * from public.metricas_coorte($1, $2, $3, $4)',
+        [c.pipelineId, DE, ATE, c.vendedorAId],
+      ),
+    )
+    const semFiltro = await comoUsuario(c.adminId, (cli) =>
+      cli.query<LinhaCoorte>(
+        'select * from public.metricas_coorte($1, $2, $3, $4)',
+        [c.pipelineId, DE, ATE, null],
+      ),
+    )
+
+    expect(comFiltro.rows).toHaveLength(2)
+    expect(comFiltro.rows.every((x) => x.responsavel_id === c.vendedorAId)).toBe(true)
+    expect(semFiltro.rows).toHaveLength(3)
   })
 
   it('metricas_etiquetas devolve a etapa congelada e a ordem dela', async () => {
@@ -251,6 +302,45 @@ describe('0014 — RPCs de metricas: metricas_coorte e metricas_etiquetas', () =
     const ids = r.rows.map((x) => x.lead_id)
     expect(ids).toContain(leadDentro)
     expect(ids).not.toContain(leadFora)
+    expect(ids).not.toContain(leadDoB)
+  })
+
+  it('p_responsavel_id filtra metricas_etiquetas mesmo quando quem chama e admin', async () => {
+    // Mesma logica do teste analogo em metricas_coorte: chamando como admin, a
+    // etiqueta do lead de outro vendedor so pode sumir por causa do argumento.
+    const novo = etapa(c, 'Novo lead')
+    const leadDoA = await criarLead(c, 'Lead do A', c.vendedorAId, novo)
+    const leadDoB = await criarLead(c, 'Lead do B', c.vendedorBId, novo)
+
+    const tagId = await comoServico(async (cli) =>
+      (
+        await cli.query<{ id: string }>(
+          `insert into public.tags (account_id, nome, criado_por) values ($1, 'Preço alto', $2) returning id`,
+          [c.accountId, c.vendedorAId],
+        )
+      ).rows[0].id,
+    )
+    for (const [leadId, dono] of [
+      [leadDoA, c.vendedorAId],
+      [leadDoB, c.vendedorBId],
+    ] as const) {
+      await comoUsuario(dono, (cli) =>
+        cli.query(
+          `insert into public.lead_tags (lead_id, tag_id, stage_id_no_momento, criado_por)
+           values ($1, $2, $3, $4)`,
+          [leadId, tagId, novo, dono],
+        ),
+      )
+    }
+
+    const r = await comoUsuario(c.adminId, (cli) =>
+      cli.query<LinhaEtiqueta>(
+        'select * from public.metricas_etiquetas($1, $2, $3, $4)',
+        [c.pipelineId, DE, ATE, c.vendedorAId],
+      ),
+    )
+    const ids = r.rows.map((x) => x.lead_id)
+    expect(ids).toContain(leadDoA)
     expect(ids).not.toContain(leadDoB)
   })
 
