@@ -141,19 +141,30 @@ begin
 
   -- O que a timeline vai contar. `extras` sao os campos do formulario que
   -- nenhum mapeador conhece — as perguntas de qualificacao que o cliente
-  -- escreveu. Sao o motivo de o payload cru nunca ser descartado.
-  -- campanha_nome (nao campanha_id): este payload e a timeline legivel por
-  -- humano do lead, e campanha_id e opaco. formulario_id (nao um nome de
-  -- formulario): nenhum mapeador busca nome de formulario hoje. As colunas
+  -- escreveu. Sao o motivo de o payload cru nunca ser descartado. As colunas
   -- campanha_origem/formulario_origem que estas chaves liam antes saem nesta
   -- mesma migration (ver o insert abaixo) -- ler as chaves antigas aqui
   -- gravaria null para sempre em lead_events, que e append-only e nunca e
   -- reconstruido depois.
+  --
+  -- 'campanha' carrega o nome quando existe e cai para o id quando nao: no
+  -- Google campanha_nome e SEMPRE nulo (mapear-google.ts poe todo *Nome como
+  -- null de proposito — resolver nome de campanha no Google exige a Ads API
+  -- com developer token), entao usar so 'campanha_nome' perdia o unico dado
+  -- que o Google manda. campanha_id/conjunto_id/anuncio_id/click_id entram
+  -- crus, alem do nome, porque o ramo de reincidencia (mais abaixo) NUNCA
+  -- escreve as colunas de rastreamento na lead — para uma segunda submissao
+  -- de uma lead ja aberta, este evento e o UNICO lugar onde a origem daquela
+  -- entrega fica registrada. Achado 2 do review final.
   v_evento := jsonb_build_object(
     'provedor', v_log.provedor,
     'external_id', v_log.external_id,
-    'campanha', p_dados ->> 'campanha_nome',
+    'campanha', coalesce(p_dados ->> 'campanha_nome', p_dados ->> 'campanha_id'),
+    'campanha_id', p_dados ->> 'campanha_id',
+    'conjunto_id', p_dados ->> 'conjunto_id',
+    'anuncio_id', p_dados ->> 'anuncio_id',
     'formulario', p_dados ->> 'formulario_id',
+    'click_id', p_dados ->> 'click_id',
     'extras', coalesce(p_dados -> 'extras', '{}'::jsonb)
   );
 

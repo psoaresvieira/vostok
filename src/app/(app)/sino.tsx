@@ -101,7 +101,7 @@ export function Sino({ contagem, notificacoes }: Props) {
           <span
             role="status"
             aria-label="notificações não lidas"
-            className="absolute -right-1 -top-1 rounded-full bg-destructive px-1.5 text-xs leading-4 text-primary-foreground"
+            className="absolute -right-1 -top-1 rounded-full bg-destructive px-1.5 text-xs leading-4 text-destructive-foreground"
           >
             {contagem}
           </span>

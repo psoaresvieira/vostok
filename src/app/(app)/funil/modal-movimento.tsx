@@ -38,7 +38,11 @@ export function ModalMovimento({
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded bg-card p-5">
+      {/* .surface (utilitario ja portado, sem consumidor ate aqui) da o
+          hairline e a sombra que bg-card sozinho nao tem: sobre o scrim de
+          bg-black/40, bg-card (#0e1526) compoe para ~1.12:1 contra o fundo —
+          o painel praticamente nao tem borda visivel. */}
+      <div className="surface w-full max-w-md rounded p-5">
         <h2 className="text-lg font-semibold">
           {pedido.nomeLead} → {pedido.destino.nome}
         </h2>

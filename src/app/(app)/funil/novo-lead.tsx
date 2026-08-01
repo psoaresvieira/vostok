@@ -62,7 +62,9 @@ export function NovoLead({
 
   return (
     <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded bg-card p-5">
+      {/* .surface (mesmo utilitario do modal-movimento.tsx, ver comentario la)
+          da o hairline e a sombra que faltavam ao painel sobre o scrim. */}
+      <div className="surface w-full max-w-md rounded p-5">
         <h2 className="mb-3 text-lg font-semibold">Novo lead</h2>
         <form action={salvar} className="flex flex-col gap-2">
           <input name="nome" placeholder="nome" required className="rounded border p-2" />

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { comoServico, limparBanco } from './helpers/db'
-import { montarCenario, type Cenario } from './helpers/cenario'
+import { montarCenario, etapa, type Cenario } from './helpers/cenario'
 import { SEGREDO, criarFonteMeta, registrarEntrega } from './helpers/ingestao'
 
 describe('0013 — colunas de rastreamento: campanha_origem/formulario_origem saem, oito colunas novas entram', () => {
@@ -141,6 +141,90 @@ describe('0013 — colunas de rastreamento: campanha_origem/formulario_origem sa
     expect(eventos.rows).toHaveLength(1)
     expect(eventos.rows[0].payload.campanha).toBe('Campanha de Inverno')
     expect(eventos.rows[0].payload.formulario).toBe('form-42')
+  })
+
+  it('reingestao grava campanha_id/anuncio_id/click_id no evento, mesmo sem tocar a lead existente', async () => {
+    // Achado 2 do review final. Cenario: uma lead manual (todas as colunas de
+    // rastreamento nulas, como um cadastro feito na mao no CRM) fica aberta.
+    // Duas semanas depois a MESMA pessoa preenche um formulario do Google —
+    // que nunca manda campanha_nome (mapear-google.ts poe null de proposito)
+    // — com campanha_id/anuncio_id/click_id novos. ingerir_lead cai no ramo
+    // de dedup: nao atualiza NENHUMA coluna da lead (so grava o evento). Se
+    // v_evento nao carregasse os ids crus, a campanha que de fato converteu
+    // ficaria sem registro em lugar nenhum: a lead continua com as colunas
+    // nulas do cadastro manual, e lead_events e append-only — nunca
+    // reconstruido depois.
+    const lead1 = await comoServico((cli) =>
+      cli.query<{ id: string }>(
+        `insert into public.leads (
+           account_id, nome, telefone_e164, pipeline_id, stage_id, responsavel_id
+         ) values ($1, 'Lead Manual', '+5511966665555', $2, $3, $4)
+         returning id`,
+        [c.accountId, c.pipelineId, etapa(c, 'Novo lead'), c.vendedorAId],
+      ),
+    )
+    const leadId = lead1.rows[0].id
+
+    const fonte = await criarFonteMeta(c, { responsavelPadraoId: c.vendedorAId })
+    const entrega = await registrarEntrega(fonte.externalId)
+
+    const ingestao = await comoServico((cli) =>
+      cli.query<{ resultado: { status: string; lead_id: string } }>(
+        `select public.ingerir_lead($1, $2, $3) as resultado`,
+        [
+          SEGREDO,
+          entrega.log_id,
+          JSON.stringify({
+            telefone_e164: '+5511966665555',
+            campanha_nome: null,
+            campanha_id: '123456789',
+            conjunto_id: 'adset-google-1',
+            anuncio_id: 'ad-google-1',
+            formulario_id: 'form-google-1',
+            click_id: 'abc',
+            extras: {},
+          }),
+        ],
+      ),
+    )
+    // Confirma que caiu mesmo no ramo de dedup, e nao criou uma segunda lead
+    // — sem isto o teste nao exercitaria o caminho que perde a atribuicao.
+    expect(ingestao.rows[0].resultado.status).toBe('reincidente')
+    expect(ingestao.rows[0].resultado.lead_id).toBe(leadId)
+
+    const eventos = await comoServico((cli) =>
+      cli.query<{
+        payload: {
+          campanha: string | null
+          campanha_id: string | null
+          conjunto_id: string | null
+          anuncio_id: string | null
+          formulario: string | null
+          click_id: string | null
+        }
+      }>(
+        `select payload from public.lead_events where lead_id = $1 and tipo = 'reingestao'`,
+        [leadId],
+      ),
+    )
+    expect(eventos.rows).toHaveLength(1)
+    expect(eventos.rows[0].payload.campanha_id).toBe('123456789')
+    expect(eventos.rows[0].payload.anuncio_id).toBe('ad-google-1')
+    expect(eventos.rows[0].payload.click_id).toBe('abc')
+    // campanha cai para o id porque o nome e nulo (caso Google) — nao deve
+    // sobrar null so porque campanha_nome nao veio.
+    expect(eventos.rows[0].payload.campanha).toBe('123456789')
+
+    // A lead em si NAO foi tocada pelo ramo de dedup: continua com as colunas
+    // de rastreamento nulas do cadastro manual. E exatamente por isso que o
+    // evento e o unico lugar onde esta atribuicao sobrevive.
+    const lead = await comoServico((cli) =>
+      cli.query<{ campanha_id: string | null }>(
+        `select campanha_id from public.leads where id = $1`,
+        [leadId],
+      ),
+    )
+    expect(lead.rows[0].campanha_id).toBeNull()
   })
 
   it('ingerir_lead continua com uma assinatura so, sem sobrecarga', async () => {

@@ -22,6 +22,7 @@
     --color-muted: var(--muted);
     --color-secondary-foreground: var(--secondary-foreground);
     --color-secondary: var(--secondary);
+    --color-destructive-foreground: var(--destructive-foreground);
     --color-primary-foreground: var(--primary-foreground);
     --color-primary: var(--primary);
     --color-popover-foreground: var(--popover-foreground);
@@ -57,7 +58,11 @@
     --popover: #0e1526;
     --popover-foreground: #eaf0fb;
     --primary: #3d7bff;
-    --primary-foreground: #ffffff;
+    /* Nao branco: branco sobre --primary (#3d7bff) da 3.84:1, abaixo do minimo
+       AA de 4.5:1 para texto normal. #071019 sobre #3d7bff da 4.991:1 —
+       calculo em review-final-fix-report.md. --primary fica no hex exato do
+       gestor-trafego de proposito; so o foreground escurece. */
+    --primary-foreground: #071019;
     --secondary: #17223c;
     --secondary-foreground: #eaf0fb;
     --muted: #131d33;
@@ -65,6 +70,9 @@
     --accent: #182642;
     --accent-foreground: #eaf0fb;
     --destructive: #f2637e;
+    /* Mesmo raciocinio do --primary-foreground acima: branco sobre
+       --destructive (#f2637e) da 3.06:1. #2a0810 da 6.015:1. */
+    --destructive-foreground: #2a0810;
     --success: #35d0a5;
     /* Mesma cor de --chart-4. Existe como token proprio porque "aviso" e um
        papel semantico, e caixa de aviso nao deve referenciar um slot de
@@ -89,7 +97,9 @@
     --popover: #0e1526;
     --popover-foreground: #eaf0fb;
     --primary: #3d7bff;
-    --primary-foreground: #ffffff;
+    /* Ver comentario identico no bloco :root acima — mesmos tokens, mesmo
+       calculo de contraste. */
+    --primary-foreground: #071019;
     --secondary: #17223c;
     --secondary-foreground: #eaf0fb;
     --muted: #131d33;
@@ -97,6 +107,7 @@
     --accent: #182642;
     --accent-foreground: #eaf0fb;
     --destructive: #f2637e;
+    --destructive-foreground: #2a0810;
     --success: #35d0a5;
     --warning: #f2b263;
     --border: #1c2942;
@@ -123,6 +134,19 @@
   html {
     @apply font-sans;
     -webkit-font-smoothing: antialiased;
+    /* Sem isto o navegador assume esquema claro para tudo que ELE pinta, nao
+       nos: o popup de <option> de um <select>, a scrollbar e o preenchimento
+       de autofill. O preflight do Tailwind da `color: inherit` aos controles
+       de formulario, entao um <select> herda o branco-frio do tema — e o
+       popup de opcoes, pintado pelo navegador no esquema claro, sai branco
+       tambem. Branco sobre branco: o filtro "Todas as origens" parece vazio. */
+    color-scheme: dark;
+  }
+  h1, h2, h3 {
+    /* Aplicado aqui, na base layer, para nenhuma tela precisar lembrar da
+       classe font-heading — Space Grotesk e carregada e preloaded, mas sem
+       isto nao era usada em lugar nenhum. */
+    @apply font-heading;
   }
   /* Numeros de metrica alinhados em colunas. */
   .tabular {

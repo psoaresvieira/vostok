@@ -75,13 +75,18 @@ describe('portao de estilo', () => {
 })
 
 describe('layout.tsx: variaveis de fonte no escopo certo', () => {
-  it('inter.variable aparece na mesma linha que <html>', () => {
+  it('inter.variable e spaceGrotesk.variable aparecem na mesma linha que <html>', () => {
     // As variaveis de fonte devem estar no <html> porque globals.css aplica
     // `@apply font-sans` no nivel do html. A classe font-sans resolve para
     // var(--font-sans), e essa variavel so e definida no elemento <html> por
     // next/font. Se estiverem no <body> (filho do <html>), a variavel fica
     // fora do escopo onde e usada, e a pagina cai silenciosamente para serif
     // padrao do navegador.
+    //
+    // spaceGrotesk.variable tem o mesmo defeito em potencial e o mesmo
+    // sintoma silencioso: se migrar para o <body>, --font-display sai de
+    // escopo, font-heading (item 4, @layer base) cai para a serif padrao do
+    // navegador em h1/h2/h3, e nenhuma suite alem desta pegaria a regressao.
     const layoutPath = path.resolve(SRC, 'app', 'layout.tsx')
     const conteudo = readFileSync(layoutPath, 'utf8')
     const linhas = conteudo.split('\n')
@@ -99,6 +104,9 @@ describe('layout.tsx: variaveis de fonte no escopo certo', () => {
     const htmlLine = linhas[htmlLineIndex]
     expect(htmlLine, `inter.variable nao esta na linha <html. Sem ela, font-sans esta fora de escopo e a pagina renderiza em serif (veja screenshots): ${htmlLine}`).toContain(
       'inter.variable'
+    )
+    expect(htmlLine, `spaceGrotesk.variable nao esta na linha <html. Sem ela, --font-display fica fora de escopo e todo h1/h2/h3 (font-heading, aplicado na base layer) cai para a serif padrao do navegador: ${htmlLine}`).toContain(
+      'spaceGrotesk.variable'
     )
   })
 })

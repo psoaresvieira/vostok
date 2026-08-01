@@ -61,7 +61,10 @@ function Coluna({ etapa, children, total }: { etapa: Etapa; children: React.Reac
       <div
         ref={setNodeRef}
         className={`flex min-h-24 flex-col gap-2 rounded p-2 ${
-          isOver ? 'bg-secondary' : 'bg-muted'
+          // bg-secondary (#17223c) vs bg-muted (#131d33) e uma diferenca de
+          // uns 4-9 niveis de sRGB — quase invisivel. O ring da o sinal real
+          // de que a coluna e o alvo do drop, sem depender so do fundo.
+          isOver ? 'bg-secondary ring-1 ring-primary' : 'bg-muted'
         }`}
       >
         {children}

@@ -169,7 +169,7 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas }: Props)
             <button
               type="button"
               disabled={pendente}
-              className="rounded bg-destructive px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
+              className="rounded bg-destructive px-3 py-2 text-sm text-destructive-foreground disabled:opacity-50"
               onClick={reivindicarPagina}
             >
               Reivindicar esta página
