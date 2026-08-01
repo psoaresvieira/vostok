@@ -28,6 +28,17 @@ const CONN = exigirHostLocal(
 /** As três Pages falsas fixas de `meta-falso.ts` (PAGINAS_PADRAO). */
 const PAGE_IDS_FALSAS = ['100000000000001', '100000000000002', '100000000000003']
 
+/**
+ * Prefixo fixo que `ingestao.spec.ts` usa no nome de toda fonte Google que
+ * cria (nome completo e `${PREFIXO_FONTE_GOOGLE_E2E}${carimbo()}`). Ao
+ * contrario das Pages falsas do Meta, essas fontes nao colidem entre rodadas
+ * — external_id fica nulo e o carimbo() garante nome unico — entao nao
+ * IMPEDEM a suite de passar duas vezes seguidas. Apagamos mesmo assim: sem
+ * isto cada `npm run test:e2e` deixa uma fonte Google orfa a mais no banco
+ * local, para sempre.
+ */
+export const PREFIXO_FONTE_GOOGLE_E2E = 'Ingestão E2E '
+
 export default async function globalSetup(): Promise<void> {
   const client = new Client({ connectionString: CONN })
   await client.connect()
@@ -37,6 +48,10 @@ export default async function globalSetup(): Promise<void> {
     await client.query(
       `delete from public.lead_sources where provedor = 'meta' and external_id = any($1)`,
       [PAGE_IDS_FALSAS],
+    )
+    await client.query(
+      `delete from public.lead_sources where provedor = 'google' and nome like $1`,
+      [`${PREFIXO_FONTE_GOOGLE_E2E}%`],
     )
   } finally {
     await client.end()
