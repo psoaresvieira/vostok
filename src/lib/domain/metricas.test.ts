@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Etapa } from '@/lib/domain/tipos'
-import { funilDaCoorte, type LinhaCoorte } from './metricas'
+import {
+  canaisDaCoorte, etiquetasPorEtapa, funilDaCoorte, SEM_ANUNCIO, SEM_CAMPANHA,
+  type AplicacaoEtiqueta, type LinhaCoorte,
+} from './metricas'
 
 const ETAPAS: Etapa[] = [
   { id: 'e1', pipelineId: 'p', nome: 'Novo lead', ordem: 1, tipo: 'aberta', slaHoras: null },
@@ -25,6 +28,13 @@ function linha(over: Partial<LinhaCoorte> = {}): LinhaCoorte {
     anuncioNome: null,
     ordemMax: 1,
     ...over,
+  }
+}
+
+function aplic(over: Partial<AplicacaoEtiqueta> = {}): AplicacaoEtiqueta {
+  return {
+    leadId: 'l1', tagId: 't1', tagNome: 'Preço alto',
+    stageIdNoMomento: 'e3', ordemNoMomento: 3, ...over,
   }
 }
 
@@ -108,5 +118,191 @@ describe('funilDaCoorte', () => {
     expect(f.totalDaCoorte).toBe(0)
     expect(f.degraus).toHaveLength(3)
     expect(f.degraus.every((d) => d.alcancaram === 0)).toBe(true)
+  })
+})
+
+describe('etiquetasPorEtapa', () => {
+  it('o denominador de etapa aberta e quem alcancou aquela etapa', () => {
+    // E exatamente o numero que o funil mostra naquele degrau — as duas
+    // visoes tem que concordar, senao a tela se contradiz.
+    const linhas = [
+      linha({ leadId: 'a', ordemMax: 3 }),
+      linha({ leadId: 'b', ordemMax: 3 }),
+      linha({ leadId: 'c', ordemMax: 1 }),
+    ]
+    const r = etiquetasPorEtapa(linhas, [aplic({ leadId: 'a' })], ETAPAS[2]!)
+    expect(r.denominador).toBe(2)
+    expect(r.linhas[0]).toMatchObject({ nome: 'Preço alto', leads: 1, percentual: 50 })
+  })
+
+  it('em etapa de ganho o denominador e o status, nao a ordem', () => {
+    // Ganho tem ordem 6, fora da escala de ordemMax: usar ordem aqui daria
+    // denominador zero e todo percentual sumiria.
+    const linhas = [
+      linha({ leadId: 'a', status: 'ganho', ordemMax: 3 }),
+      linha({ leadId: 'b', status: 'aberto', ordemMax: 3 }),
+    ]
+    const r = etiquetasPorEtapa(
+      linhas,
+      [aplic({ leadId: 'a', stageIdNoMomento: 'g', ordemNoMomento: 6 })],
+      ETAPAS[3]!,
+    )
+    expect(r.denominador).toBe(1)
+    expect(r.linhas[0]?.percentual).toBe(100)
+  })
+
+  it('em etapa de perda o denominador e o status perdido', () => {
+    const linhas = [
+      linha({ leadId: 'a', status: 'perdido', ordemMax: 2 }),
+      linha({ leadId: 'b', status: 'perdido', ordemMax: 1 }),
+      linha({ leadId: 'c', status: 'ganho', ordemMax: 3 }),
+    ]
+    const r = etiquetasPorEtapa(
+      linhas,
+      [aplic({ leadId: 'a', stageIdNoMomento: 'x', ordemNoMomento: 7 })],
+      ETAPAS[4]!,
+    )
+    expect(r.denominador).toBe(2)
+    expect(r.linhas[0]?.percentual).toBe(50)
+  })
+
+  it('so conta aplicacao congelada NAQUELA etapa', () => {
+    const linhas = [linha({ leadId: 'a', ordemMax: 3 })]
+    const aplicacoes = [
+      aplic({ leadId: 'a', tagId: 't1', tagNome: 'Na proposta', stageIdNoMomento: 'e3' }),
+      aplic({ leadId: 'a', tagId: 't2', tagNome: 'No contato', stageIdNoMomento: 'e2' }),
+    ]
+    const r = etiquetasPorEtapa(linhas, aplicacoes, ETAPAS[2]!)
+    expect(r.linhas.map((l) => l.nome)).toEqual(['Na proposta'])
+  })
+
+  it('conta lead distinto, nao aplicacao', () => {
+    const linhas = [linha({ leadId: 'a', ordemMax: 3 }), linha({ leadId: 'b', ordemMax: 3 })]
+    const aplicacoes = [
+      aplic({ leadId: 'a', tagId: 't1' }),
+      aplic({ leadId: 'b', tagId: 't1' }),
+      aplic({ leadId: 'b', tagId: 't2', tagNome: 'Outra' }),
+    ]
+    const r = etiquetasPorEtapa(linhas, aplicacoes, ETAPAS[2]!)
+    expect(r.linhas.find((l) => l.tagId === 't1')?.leads).toBe(2)
+  })
+
+  it('empate de contagem desempata por nome, sempre na mesma ordem', () => {
+    // Empate de ordenacao ja produziu bug neste repo (backlog #10). Sem
+    // desempate, duas cargas da mesma tela trocam as linhas de lugar.
+    const linhas = [linha({ leadId: 'a', ordemMax: 3 })]
+    const aplicacoes = [
+      aplic({ leadId: 'a', tagId: 't2', tagNome: 'Zebra' }),
+      aplic({ leadId: 'a', tagId: 't1', tagNome: 'Abacate' }),
+    ]
+    const r = etiquetasPorEtapa(linhas, aplicacoes, ETAPAS[2]!)
+    expect(r.linhas.map((l) => l.nome)).toEqual(['Abacate', 'Zebra'])
+  })
+
+  it('denominador zero nao vira NaN', () => {
+    const r = etiquetasPorEtapa([], [], ETAPAS[2]!)
+    expect(r.denominador).toBe(0)
+    expect(r.linhas).toEqual([])
+  })
+
+  it('aplicacao de lead fora da coorte e ignorada', () => {
+    // Defesa de borda: as duas RPCs usam o mesmo filtro, mas se um dia
+    // divergirem o percentual passaria de 100 sem nada reclamar.
+    const linhas = [linha({ leadId: 'a', ordemMax: 3 })]
+    const r = etiquetasPorEtapa(linhas, [aplic({ leadId: 'forasteiro' })], ETAPAS[2]!)
+    expect(r.linhas).toEqual([])
+  })
+})
+
+describe('canaisDaCoorte', () => {
+  it('agrupa por origem, depois campanha, depois anuncio', () => {
+    const linhas = [
+      linha({ leadId: 'a', origem: 'meta', campanhaId: 'c1', campanhaNome: 'Black', anuncioId: 'a1', anuncioNome: 'Video' }),
+      linha({ leadId: 'b', origem: 'google', campanhaId: 'c9' }),
+    ]
+    const canais = canaisDaCoorte(linhas)
+    // 'meta' e 'google' empatam em 1 lead cada; o desempate deterministico
+    // por rotulo (localeCompare pt-BR, ascendente — o mesmo criterio provado
+    // no teste "ordena por leads decrescente, desempatando por rotulo" logo
+    // abaixo) poe 'google' antes de 'meta'. O objetivo deste teste e a
+    // hierarquia origem→campanha→anuncio, nao a ordem entre os dois.
+    expect(canais.map((c) => c.chave)).toEqual(['google', 'meta'])
+    const meta = canais.find((c) => c.chave === 'meta')!
+    expect(meta.filhos[0]?.rotulo).toBe('Black')
+    expect(meta.filhos[0]?.filhos[0]?.rotulo).toBe('Video')
+  })
+
+  it('renomear campanha nao parte o historico: agrupa por id, exibe o nome mais recente', () => {
+    // O motivo de existirem pares id/nome. Sem isso, "Black Nov" e
+    // "Black Nov v2" virariam duas linhas para a mesma campanha.
+    const linhas = [
+      linha({ leadId: 'a', campanhaId: 'c1', campanhaNome: 'Black Nov', criadoEm: new Date('2026-07-01T00:00:00Z') }),
+      linha({ leadId: 'b', campanhaId: 'c1', campanhaNome: 'Black Nov v2', criadoEm: new Date('2026-07-20T00:00:00Z') }),
+    ]
+    const campanhas = canaisDaCoorte(linhas)[0]!.filhos
+    expect(campanhas).toHaveLength(1)
+    expect(campanhas[0]).toMatchObject({ rotulo: 'Black Nov v2', leads: 2, ehId: false })
+  })
+
+  it('id sem nome nenhum exibe o id, marcado como id', () => {
+    // Caso permanente do Google: o payload traz so numeros, e resolver nome
+    // exigiria a Google Ads API. A tela mostra o id rotulado como id, nunca
+    // um numero numa coluna chamada "nome".
+    const linhas = [linha({ origem: 'google', campanhaId: '123456789', campanhaNome: null })]
+    const c = canaisDaCoorte(linhas)[0]!.filhos[0]!
+    expect(c).toMatchObject({ rotulo: '123456789', ehId: true })
+  })
+
+  it('nome nulo numa linha nao apaga o nome que outra linha do mesmo id trouxe', () => {
+    const linhas = [
+      linha({ leadId: 'a', campanhaId: 'c1', campanhaNome: 'Black', criadoEm: new Date('2026-07-01T00:00:00Z') }),
+      linha({ leadId: 'b', campanhaId: 'c1', campanhaNome: null, criadoEm: new Date('2026-07-20T00:00:00Z') }),
+    ]
+    const c = canaisDaCoorte(linhas)[0]!.filhos[0]!
+    expect(c).toMatchObject({ rotulo: 'Black', ehId: false, leads: 2 })
+  })
+
+  it('id nulo vira grupo explicito e continua contando no canal', () => {
+    // Estado real: lead manual, e lead do Meta cuja arvore do anuncio falhou.
+    // Somir com ele faria a soma dos filhos nao bater com o pai.
+    const linhas = [
+      linha({ leadId: 'a', origem: 'meta', campanhaId: 'c1' }),
+      linha({ leadId: 'b', origem: 'meta', campanhaId: null }),
+    ]
+    const meta = canaisDaCoorte(linhas)[0]!
+    expect(meta.leads).toBe(2)
+    expect(meta.filhos.map((f) => f.chave)).toContain(SEM_CAMPANHA)
+    expect(meta.filhos.reduce((s, f) => s + f.leads, 0)).toBe(meta.leads)
+  })
+
+  it('campanha conhecida com anuncio nulo vira (sem anúncio)', () => {
+    const linhas = [linha({ campanhaId: 'c1', anuncioId: null })]
+    const campanha = canaisDaCoorte(linhas)[0]!.filhos[0]!
+    expect(campanha.filhos.map((f) => f.chave)).toEqual([SEM_ANUNCIO])
+  })
+
+  it('taxa de ganho e ganhos sobre leads, com os abertos no denominador', () => {
+    const linhas = [
+      linha({ leadId: 'a', status: 'ganho' }),
+      linha({ leadId: 'b', status: 'perdido' }),
+      linha({ leadId: 'c', status: 'aberto' }),
+      linha({ leadId: 'd', status: 'aberto' }),
+    ]
+    const c = canaisDaCoorte(linhas)[0]!
+    expect(c).toMatchObject({ leads: 4, ganhos: 1, perdidos: 1, abertos: 2, taxaGanho: 25 })
+  })
+
+  it('ordena por leads decrescente, desempatando por rotulo', () => {
+    const linhas = [
+      linha({ leadId: 'a', origem: 'google' }),
+      linha({ leadId: 'b', origem: 'meta' }),
+      linha({ leadId: 'c', origem: 'manual' }),
+      linha({ leadId: 'd', origem: 'manual' }),
+    ]
+    expect(canaisDaCoorte(linhas).map((c) => c.chave)).toEqual(['manual', 'google', 'meta'])
+  })
+
+  it('coorte vazia devolve lista vazia', () => {
+    expect(canaisDaCoorte([])).toEqual([])
   })
 })
