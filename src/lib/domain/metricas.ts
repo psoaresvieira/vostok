@@ -48,6 +48,9 @@ export function funilDaCoorte(linhas: LinhaCoorte[], etapas: Etapa[]): Funil {
   // Ganho e Perdido tem ordem MAIOR que toda etapa aberta no pipeline padrao
   // (6 e 7). Sem este filtro, todo lead perdido apareceria como tendo
   // alcancado o fundo do funil.
+  // Sort por ordem sem desempate: nao precisa porque stages_ordem_por_pipeline
+  // (unico indice na migracao 0002) garante que nenhum pipeline tem duas etapas
+  // com a mesma ordem.
   const abertas = etapas.filter((e) => e.tipo === 'aberta').sort((a, b) => a.ordem - b.ordem)
 
   const degraus: DegrauFunil[] = []

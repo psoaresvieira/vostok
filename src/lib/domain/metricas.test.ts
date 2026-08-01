@@ -44,12 +44,11 @@ describe('funilDaCoorte', () => {
     expect(f.degraus.map((d) => d.alcancaram)).toEqual([1, 1, 1])
   })
 
-  it('lead que voltou etapa mantem a profundidade que ja tinha alcancado', () => {
-    // ordemMax e o MAXIMO ja ocupado, nao a posicao atual: voltar de Proposta
-    // para Contato feito nao apaga que a proposta chegou a existir.
-    const f = funilDaCoorte([linha({ ordemMax: 3 })], ETAPAS)
-    expect(f.degraus[2]?.alcancaram).toBe(1)
-  })
+  // "Lead que voltou de etapa" NAO tem teste aqui, e nao e esquecimento:
+  // LinhaCoorte carrega so ordemMax, o maximo ja alcancado, entao pular para
+  // frente e voltar depois sao a MESMA entrada nesta camada. Quem discrimina
+  // os dois e o teste de integracao da RPC, onde a uniao sobre stage_origem e
+  // stage_destino e o que faz o trabalho.
 
   it('lead que parou no degrau 2 nao aparece no 3', () => {
     const f = funilDaCoorte([linha({ ordemMax: 2 })], ETAPAS)
