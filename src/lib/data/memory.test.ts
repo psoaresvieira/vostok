@@ -225,6 +225,87 @@ describe('InMemoryCrmStore', () => {
     expect(eventos.valor[0].payload.para).toBe('user-2')
   })
 
+  it('metricasDaCoorte devolve uma linha por lead da janela, com a profundidade', async () => {
+    const p = await store.pipelinePadrao()
+    if (!p.ok) throw new Error(p.erro)
+    const criado = await store.criarLead({
+      ...novoLead('Ana'),
+      pipelineId: p.valor.pipeline.id,
+      stageId: p.valor.etapas[0].id,
+    })
+    if (!criado.ok) throw new Error(criado.erro)
+    // Uma etapa aberta a frente: 'Novo lead' (ordem 1) -> 'Contato feito' (ordem 2).
+    await store.moverEtapa(criado.valor, p.valor.etapas[1].id)
+
+    const r = await store.metricasDaCoorte({
+      pipelineId: p.valor.pipeline.id,
+      de: new Date('2000-01-01T00:00:00Z'),
+      ate: new Date('2100-01-01T00:00:00Z'),
+    })
+    expect(r.ok).toBe(true)
+    if (!r.ok) throw new Error('deveria ter dado certo')
+    expect(r.valor).toHaveLength(1)
+    expect(r.valor[0]?.ordemMax).toBe(2)
+  })
+
+  it('metricasDaCoorte recorta pela janela semiaberta', async () => {
+    const p = await store.pipelinePadrao()
+    if (!p.ok) throw new Error(p.erro)
+    const criar = async (nome: string) => {
+      const r = await store.criarLead({
+        ...novoLead(nome),
+        pipelineId: p.valor.pipeline.id,
+        stageId: p.valor.etapas[0].id,
+      })
+      if (!r.ok) throw new Error(r.erro)
+      const lead = await store.buscarLead(r.valor)
+      if (!lead.ok || !lead.valor) throw new Error('lead sumiu')
+      return lead.valor
+    }
+    const dentro = await criar('Dentro')
+    // Pequeno atraso: garante criadoEm distinto, ja que new Date() so tem 1ms
+    // de resolucao e as duas criacoes acontecem sem await real entre elas.
+    await new Promise((resolve) => setTimeout(resolve, 2))
+    const fora = await criar('Fora')
+
+    // Janela [dentro.criadoEm, fora.criadoEm): o proprio limite `ate` prova a
+    // exclusividade, sem depender de datas fixas no calendario.
+    const r = await store.metricasDaCoorte({
+      pipelineId: p.valor.pipeline.id,
+      de: dentro.criadoEm,
+      ate: fora.criadoEm,
+    })
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor.map((l) => l.leadId)).toEqual([dentro.id])
+  })
+
+  it('etiquetasDaCoorte devolve a etapa congelada de cada aplicacao', async () => {
+    const p = await store.pipelinePadrao()
+    if (!p.ok) throw new Error(p.erro)
+    const qualificacao = p.valor.etapas[2]
+    const criado = await store.criarLead({
+      ...novoLead('Ana'),
+      pipelineId: p.valor.pipeline.id,
+      stageId: qualificacao.id,
+    })
+    if (!criado.ok) throw new Error(criado.erro)
+
+    await store.aplicarEtiquetas(criado.valor, ['Preço alto'])
+    // Move depois de etiquetar: a etapa congelada tem que continuar sendo a
+    // de quando a etiqueta foi aplicada, nao a atual.
+    await store.moverEtapa(criado.valor, p.valor.etapas[3].id)
+
+    const r = await store.etiquetasDaCoorte({
+      pipelineId: p.valor.pipeline.id,
+      de: new Date('2000-01-01T00:00:00Z'),
+      ate: new Date('2100-01-01T00:00:00Z'),
+    })
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor).toHaveLength(1)
+    expect(r.valor[0]?.stageIdNoMomento).toBe(qualificacao.id)
+    expect(r.valor[0]?.ordemNoMomento).toBe(qualificacao.ordem)
+  })
+
   it('registra nota na timeline', async () => {
     const p = await store.pipelinePadrao()
     if (!p.ok) throw new Error(p.erro)

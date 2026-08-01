@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { comoServico, comoUsuario, limparBanco } from './helpers/db'
 import { montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario'
+import { SupabaseCrmStore } from '@/lib/data/supabase'
+import { clienteDoUsuario } from './helpers/cliente'
+import { criarFonteMeta, registrarEntrega, SEGREDO } from './helpers/ingestao'
 
 // Janela ampla o bastante para nao interferir nos testes que nao sao sobre a
 // borda [de, ate) em si -- so o teste de semiabertura usa uma janela propria.
@@ -356,6 +359,51 @@ describe('0014 — RPCs de metricas: metricas_coorte e metricas_etiquetas', () =
     )
     expect(r.rows).toHaveLength(2)
     expect(r.rows.every((x) => x.prosecdef === false)).toBe(true)
+  })
+
+  it('SupabaseCrmStore.metricasDaCoorte mapeia todos os doze campos', async () => {
+    // Ingere via ingerir_lead (0011/0013), unico caminho que grava os oito
+    // campos de rastreamento, e chama pelo store — prova que o snake_case do
+    // RPC vira camelCase sem perder nem trocar nenhum dos doze campos.
+    const fonte = await criarFonteMeta(c, { responsavelPadraoId: c.vendedorAId })
+    const entrega = await registrarEntrega(fonte.externalId)
+
+    const ingestao = await comoServico((cli) =>
+      cli.query<{ resultado: { lead_id: string } }>(
+        `select public.ingerir_lead($1, $2, $3) as resultado`,
+        [
+          SEGREDO,
+          entrega.log_id,
+          JSON.stringify({
+            nome: 'Rastreado',
+            email: 'rastreado@example.com',
+            campanha_id: 'camp-1',
+            campanha_nome: 'Campanha de Verao',
+            conjunto_id: 'adset-1',
+            conjunto_nome: 'Conjunto Interesse',
+            anuncio_id: 'ad-1',
+            anuncio_nome: 'Video 15s',
+            formulario_id: 'form-1',
+            click_id: 'click-1',
+            extras: {},
+          }),
+        ],
+      ),
+    )
+    const leadId = ingestao.rows[0].resultado.lead_id
+
+    const cliente = await clienteDoUsuario(c.adminId)
+    const store = new SupabaseCrmStore(cliente, c.accountId, c.adminId)
+    const r = await store.metricasDaCoorte({ pipelineId: c.pipelineId, de: DE, ate: ATE })
+    if (!r.ok) throw new Error(r.erro)
+    const linha = r.valor.find((l) => l.leadId === leadId)
+    expect(linha).toBeDefined()
+    expect(Object.keys(linha!).sort()).toEqual([
+      'anuncioId', 'anuncioNome', 'campanhaId', 'campanhaNome', 'conjuntoId',
+      'conjuntoNome', 'criadoEm', 'leadId', 'ordemMax', 'origem',
+      'responsavelId', 'status',
+    ])
+    expect(linha!.criadoEm).toBeInstanceOf(Date)
   })
 
   it('authenticated tem execute nas duas', async () => {
