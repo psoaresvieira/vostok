@@ -47,11 +47,50 @@ describe('mapearLeadDoGoogle', () => {
     expect(dados.extras).toEqual({ QUESTION_1: 'Sim' })
   })
 
-  it('campaign_id vira campanhaOrigem e form_id vira formularioOrigem, ambos como texto', () => {
+  it('form_id vira formularioOrigem como texto; campanhaOrigem fica sempre nulo', () => {
+    // campanhaOrigem e' o campo ambiguo (id no Google, nome no Meta) que este
+    // plano esta substituindo pelos pares id/nome abaixo.
     const payload = { campaign_id: 123456789, form_id: 987654321, user_column_data: [] }
     const dados = mapearLeadDoGoogle(payload)
-    expect(dados.campanhaOrigem).toBe('123456789')
     expect(dados.formularioOrigem).toBe('987654321')
+    expect(dados.campanhaOrigem).toBeNull()
+  })
+
+  it('os ids do Google viram rastreamento, e todo nome fica nulo', () => {
+    const payload = {
+      campaign_id: 123456789,
+      adgroup_id: 222,
+      creative_id: 333,
+      form_id: 987654321,
+      gcl_id: 'gcl-abc',
+      user_column_data: [],
+    }
+
+    const dados = mapearLeadDoGoogle(payload)
+
+    // Numero vira texto: as colunas sao text, e o mesmo id chegando ora como
+    // numero ora como string criaria dois grupos na metrica.
+    expect(dados.campanhaId).toBe('123456789')
+    expect(dados.conjuntoId).toBe('222')
+    expect(dados.anuncioId).toBe('333')
+    expect(dados.formularioId).toBe('987654321')
+    expect(dados.clickId).toBe('gcl-abc')
+    // O Google nao manda nome nenhum, e resolver exigiria a Google Ads API
+    // com developer token. Nulo e o contrato — a tela exibe o id rotulado
+    // como id em vez de fingir que e nome.
+    expect(dados.campanhaNome).toBeNull()
+    expect(dados.conjuntoNome).toBeNull()
+    expect(dados.anuncioNome).toBeNull()
+  })
+
+  it('payload sem nenhum id de rastreamento cai tudo em nulo', () => {
+    const dados = mapearLeadDoGoogle({ user_column_data: [] })
+
+    expect(dados.campanhaId).toBeNull()
+    expect(dados.conjuntoId).toBeNull()
+    expect(dados.anuncioId).toBeNull()
+    expect(dados.formularioId).toBeNull()
+    expect(dados.clickId).toBeNull()
   })
 
   it('user_column_data ausente nao quebra: devolve tudo nulo', () => {

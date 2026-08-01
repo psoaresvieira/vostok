@@ -30,6 +30,15 @@ function textoOuNulo(v: unknown): string | null {
   return v.length > 0 ? v : null
 }
 
+/** O Google manda id como numero. Vira texto porque as colunas sao text — e
+ * porque o mesmo id chegando ora numero ora string criaria dois grupos
+ * distintos na metrica. */
+function idOuNulo(v: unknown): string | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return String(v)
+  if (typeof v === 'string' && v.length > 0) return v
+  return null
+}
+
 /** full_name manda; sem ele, junta first_name + last_name com um espaco. */
 function montarNome(nomeCompleto: string | null, primeiroNome: string | null, sobrenome: string | null): string | null {
   if (nomeCompleto) return nomeCompleto
@@ -86,10 +95,16 @@ export function mapearLeadDoGoogle(payload: Record<string, unknown>): DadosDoLea
     email: emailCru,
     emailNorm: normalizarEmail(emailCru),
     empresa: textoOuNulo(porId.get(CAMPO_EMPRESA)?.string_value),
-    // O Google manda numero (campaign_id, form_id); ingerir_lead guarda os
-    // dois como texto (campanha_origem/formulario_origem sao colunas text).
-    campanhaOrigem: payload.campaign_id != null ? String(payload.campaign_id) : null,
-    formularioOrigem: payload.form_id != null ? String(payload.form_id) : null,
+    campanhaOrigem: null,
+    formularioOrigem: idOuNulo(payload.form_id),
+    campanhaId: idOuNulo(payload.campaign_id),
+    campanhaNome: null,
+    conjuntoId: idOuNulo(payload.adgroup_id),
+    conjuntoNome: null,
+    anuncioId: idOuNulo(payload.creative_id),
+    anuncioNome: null,
+    formularioId: idOuNulo(payload.form_id),
+    clickId: idOuNulo(payload.gcl_id),
     extras,
   }
 }
