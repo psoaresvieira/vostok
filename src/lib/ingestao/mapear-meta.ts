@@ -82,8 +82,6 @@ export function mapearLeadDoMeta(
     email: emailCru,
     emailNorm: normalizarEmail(emailCru),
     empresa: primeiroValor(porNome.get(CAMPO_EMPRESA)),
-    campanhaOrigem: null,
-    formularioOrigem: extra.formularioId,
     campanhaId: extra.arvore?.campanhaId ?? null,
     campanhaNome: extra.arvore?.campanhaNome ?? null,
     conjuntoId: extra.arvore?.conjuntoId ?? null,

@@ -51,12 +51,10 @@ export interface MetaGraph {
   desassinarLeadgen(pageId: string, tokenDaPagina: string): Promise<Resultado<void>>
   /** O corpo do lead que chegou no webhook: campos do formulario, ad e form de origem. */
   buscarLead(leadgenId: string, tokenDaPagina: string): Promise<Resultado<LeadDoMeta>>
-  /** Nome da campanha dona do anuncio. Substituido por arvoreDoAnuncio; sai no fim deste plano. */
-  campanhaDoAnuncio(adId: string, tokenDaPagina: string): Promise<Resultado<string>>
   /**
-   * Anuncio, conjunto e campanha numa ida so ao Graph. Substitui
-   * campanhaDoAnuncio: mesma chamada, mesmo custo, tres niveis em vez de um
-   * nome — e com os ids, que sao o que a metrica agrupa.
+   * Anuncio, conjunto e campanha numa ida so ao Graph. Devolve os tres
+   * niveis com id e nome — os ids sao o que a metrica agrupa, o nome e o
+   * que a tela exibe.
    */
   arvoreDoAnuncio(adId: string, tokenDaPagina: string): Promise<Resultado<ArvoreDeAnuncio>>
   /**

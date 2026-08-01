@@ -133,16 +133,6 @@ describe('MetaGraphFalso', () => {
     expect(r.erro).toBe('posse_nao_comprovada')
   })
 
-  it('campanhaDoAnuncio devolve um nome estavel e deterministico', async () => {
-    const g = new MetaGraphFalso()
-    const r1 = await g.campanhaDoAnuncio('ad-1', 't')
-    const r2 = await g.campanhaDoAnuncio('ad-1', 't')
-    if (!r1.ok) throw new Error(r1.erro)
-    if (!r2.ok) throw new Error(r2.erro)
-    expect(r1.valor).toBe(r2.valor)
-    expect(r1.valor.length).toBeGreaterThan(0)
-  })
-
   it('arvoreDoAnuncio e deterministica no proprio adId', async () => {
     const g = new MetaGraphFalso()
 

@@ -47,15 +47,6 @@ describe('mapearLeadDoGoogle', () => {
     expect(dados.extras).toEqual({ QUESTION_1: 'Sim' })
   })
 
-  it('form_id vira formularioOrigem como texto; campanhaOrigem fica sempre nulo', () => {
-    // campanhaOrigem e' o campo ambiguo (id no Google, nome no Meta) que este
-    // plano esta substituindo pelos pares id/nome abaixo.
-    const payload = { campaign_id: 123456789, form_id: 987654321, user_column_data: [] }
-    const dados = mapearLeadDoGoogle(payload)
-    expect(dados.formularioOrigem).toBe('987654321')
-    expect(dados.campanhaOrigem).toBeNull()
-  })
-
   it('os ids do Google viram rastreamento, e todo nome fica nulo', () => {
     const payload = {
       campaign_id: 123456789,
@@ -99,8 +90,6 @@ describe('mapearLeadDoGoogle', () => {
     expect(dados.telefone).toBeNull()
     expect(dados.email).toBeNull()
     expect(dados.empresa).toBeNull()
-    expect(dados.campanhaOrigem).toBeNull()
-    expect(dados.formularioOrigem).toBeNull()
     expect(dados.extras).toEqual({})
   })
 

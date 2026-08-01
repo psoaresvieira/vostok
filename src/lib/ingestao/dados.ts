@@ -11,8 +11,6 @@ export type DadosDoLead = {
   email: string | null
   emailNorm: string | null
   empresa: string | null
-  campanhaOrigem: string | null
-  formularioOrigem: string | null
   /** Rastreamento de origem, em pares id/nome. A metrica agrupa pelo ID
    * (renomear campanha no gerenciador nao pode partir o historico) e exibe o
    * NOME. Nome nulo e legitimo: o Google nunca manda nome. */
@@ -50,8 +48,6 @@ export function paraPayload(d: DadosDoLead): Record<string, unknown> {
     email: d.email,
     email_norm: d.emailNorm,
     empresa: d.empresa,
-    campanha_origem: d.campanhaOrigem,
-    formulario_origem: d.formularioOrigem,
     campanha_id: d.campanhaId,
     campanha_nome: d.campanhaNome,
     conjunto_id: d.conjuntoId,

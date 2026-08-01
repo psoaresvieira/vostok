@@ -95,8 +95,6 @@ export function mapearLeadDoGoogle(payload: Record<string, unknown>): DadosDoLea
     email: emailCru,
     emailNorm: normalizarEmail(emailCru),
     empresa: textoOuNulo(porId.get(CAMPO_EMPRESA)?.string_value),
-    campanhaOrigem: null,
-    formularioOrigem: idOuNulo(payload.form_id),
     campanhaId: idOuNulo(payload.campaign_id),
     campanhaNome: null,
     conjuntoId: idOuNulo(payload.adgroup_id),

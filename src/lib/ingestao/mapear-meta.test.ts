@@ -78,15 +78,6 @@ describe('mapearLeadDoMeta', () => {
     expect(dados.email).toBeNull()
   })
 
-  it('formularioOrigem reflete o formularioId do segundo argumento; campanhaOrigem fica sempre nulo', () => {
-    // campanhaOrigem e' o campo ambiguo que este plano esta substituindo — o
-    // Meta nunca mais o preenche, so os pares id/nome abaixo.
-    const lead = leadCom([])
-    const dados = mapearLeadDoMeta(lead, { arvore: null, anuncioId: null, formularioId: 'form-A' })
-    expect(dados.formularioOrigem).toBe('form-A')
-    expect(dados.campanhaOrigem).toBeNull()
-  })
-
   it('a arvore do anuncio vira os seis campos de rastreamento', () => {
     const lead = leadCom([])
     const dados = mapearLeadDoMeta(lead, {

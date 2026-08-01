@@ -108,13 +108,6 @@ export class MetaGraphFalso implements MetaGraph {
     return ok(this.leads.get(leadgenId) ?? LEAD_PADRAO)
   }
 
-  async campanhaDoAnuncio(adId: string, _tokenDaPagina: string): Promise<Resultado<string>> {
-    if (this.barrado('campanhaDoAnuncio')) return falha('meta_indisponivel')
-    // Deterministico no proprio adId, sem estado nem Math.random: o mesmo
-    // adId tem que devolver o mesmo nome em chamadas repetidas do mesmo teste.
-    return ok(`Campanha ${adId}`)
-  }
-
   async arvoreDoAnuncio(adId: string, _tokenDaPagina: string): Promise<Resultado<ArvoreDeAnuncio>> {
     if (this.barrado('arvoreDoAnuncio')) return falha('meta_indisponivel')
     // Deterministico no proprio adId, sem estado nem Math.random: o mesmo

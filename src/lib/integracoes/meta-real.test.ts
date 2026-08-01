@@ -180,29 +180,6 @@ describe('MetaGraphReal — buscarLead, arvoreDoAnuncio e posseDaPagina', () => 
     expect(r.erro).toBe('meta_indisponivel')
   })
 
-  it('campanhaDoAnuncio le campaign.name do corpo', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ campaign: { name: 'Campanha de Verao' } }),
-    })
-    const g = new MetaGraphReal('app-id', 'app-secret')
-
-    const r = await g.campanhaDoAnuncio('ad-1', 'token-da-pagina')
-    if (!r.ok) throw new Error(r.erro)
-    expect(r.valor).toBe('Campanha de Verao')
-  })
-
-  it('campanhaDoAnuncio devolve meta_indisponivel quando o fetch rejeita', async () => {
-    global.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'))
-    const g = new MetaGraphReal('app-id', 'app-secret')
-
-    const r = await g.campanhaDoAnuncio('ad-1', 'token-da-pagina')
-    expect(r.ok).toBe(false)
-    if (r.ok) throw new Error('deveria ter falhado')
-    expect(r.erro).toBe('meta_indisponivel')
-  })
-
   it('arvoreDoAnuncio pede os tres niveis numa chamada so', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,

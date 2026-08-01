@@ -144,17 +144,6 @@ export class MetaGraphReal implements MetaGraph {
     })
   }
 
-  async campanhaDoAnuncio(adId: string, tokenDaPagina: string): Promise<Resultado<string>> {
-    const url = new URL(`${BASE}/${adId}`)
-    url.searchParams.set('fields', 'campaign{name}')
-    url.searchParams.set('access_token', tokenDaPagina)
-
-    const r = await chamar<{ campaign?: { name?: string } }>(url)
-    if (!r.ok) return falha(r.erro)
-    if (typeof r.valor.campaign?.name !== 'string') return falha('meta_indisponivel')
-    return ok(r.valor.campaign.name)
-  }
-
   async arvoreDoAnuncio(adId: string, tokenDaPagina: string): Promise<Resultado<ArvoreDeAnuncio>> {
     const url = new URL(`${BASE}/${adId}`)
     url.searchParams.set('fields', 'name,adset{id,name},campaign{id,name}')
