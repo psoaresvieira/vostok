@@ -128,12 +128,44 @@ describe('SupabaseFonteStore.entregasRecentes', () => {
     expect(r.valor.map((e) => e.externalId)).toEqual(['normal'])
   })
 
-  it('payload_bruto nao e alcancavel: um select que o inclua falha com 42501', async () => {
+  it('payload_bruto nao e alcancavel: entregasRecentes sobrevive ao grant, e um select * cru nao', async () => {
     await inserirEntrega({ accountId: c.accountId, provedor: 'meta', externalId: 'com-payload' })
-    // Nao e RLS devolvendo zero linhas: payload_bruto esta fora do grant da
-    // 0009. Este teste e o que impede que a lista de colunas do store vire
-    // `select *` no futuro — se virasse, esta consulta pararia de falhar e o
-    // metodo real quebraria com 42501 na primeira chamada em producao.
+
+    const cliente = await clienteDoUsuario(c.adminId)
+    const store = new SupabaseFonteStore(cliente, c.accountId)
+
+    // A guarda de verdade contra a lista de colunas do store virar `select
+    // *`: se isso acontecesse, a lista deixaria de caber no grant por coluna
+    // da 0009 e esta chamada devolveria `{ ok: false, erro: '...42501...' }`
+    // em vez de suceder. `r.ok === true` e' o assert que discrimina -- foi
+    // verificado manualmente trocando o select do store por `'*'` e vendo
+    // este `expect` falhar (RED), depois revertendo (GREEN); evidencia no
+    // relatorio da Task 12.
+    const r = await store.entregasRecentes(20)
+    expect(r.ok).toBe(true)
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor).toHaveLength(1)
+    // Nenhum payload cru chega no objeto devolvido -- nao so "o tipo Entrega
+    // nao declara o campo", mas o objeto de runtime realmente nao o carrega,
+    // o que pegaria um `as any`/spread futuro que reintroduzisse a coluna.
+    expect(r.valor[0]).not.toHaveProperty('payloadBruto')
+    expect(Object.keys(r.valor[0]).sort()).toEqual(
+      [
+        'id',
+        'provedor',
+        'externalId',
+        'status',
+        'erro',
+        'tentativas',
+        'leadId',
+        'criadoEm',
+        'processadoEm',
+      ].sort(),
+    )
+
+    // Mantido ao lado do assert acima, nao no lugar dele: prova que a coluna
+    // esta mesmo fora do grant (motivo do 42501), nao so que o metodo do
+    // store, do jeito que esta escrito hoje, evita toca-la.
     await expect(
       comoUsuario(c.adminId, (cli) =>
         cli.query('select * from public.integration_log'),
