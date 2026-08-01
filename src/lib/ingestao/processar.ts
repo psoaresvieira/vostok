@@ -46,9 +46,9 @@ async function ingerirOuFalhar(
  * sozinha: testavel com InMemoryIngestaoStore + MetaGraphFalso, sem banco e
  * sem rede.
  *
- * Ordem, e ela e o entregavel: Graph (so no Meta) -> mapeia -> campanha
- * best-effort -> ingerirLead. Qualquer falha antes de ingerirLead termina em
- * registrarFalha e retorna -- nunca ingere com dado pela metade.
+ * Ordem, e ela e o entregavel: Graph (so no Meta) -> mapeia -> árvore do
+ * anúncio best-effort -> ingerirLead. Qualquer falha antes de ingerirLead
+ * termina em registrarFalha e retorna -- nunca ingere com dado pela metade.
  */
 export async function processarEntrega(
   e: EntregaParaProcessar,
@@ -85,17 +85,29 @@ export async function processarEntrega(
   }
   const lead = resultadoBusca.valor
 
-  // Mapeia com o ad_id cru como campanha de partida: e o fallback que a
-  // etapa "campanha e best-effort" abaixo promete quando a segunda chamada
-  // falhar, ou nem rodar (sem ad_id).
-  const dados = mapearLeadDoMeta(lead, { campanha: lead.adId, formulario: lead.formId })
+  // Sem arvore ainda: o anuncioId vem de buscarLead, que ja deu certo. Se a
+  // chamada abaixo falhar, e este o estado final — anuncio identificado e o
+  // resto nulo. A versao anterior gravava o ad_id cru na coluna de nome de
+  // campanha, e o dado resultante era indistinguivel de um nome real.
+  const dados = mapearLeadDoMeta(lead, {
+    arvore: null,
+    anuncioId: lead.adId,
+    formularioId: lead.formId,
+  })
 
   if (lead.adId) {
-    const resultadoCampanha = await deps.graph.campanhaDoAnuncio(lead.adId, e.token)
-    // So promove o nome real por cima do ad_id cru se a chamada deu certo.
-    // Falha aqui nunca vira registrarFalha: nenhum lead se perde por causa
-    // do nome da campanha.
-    if (resultadoCampanha.ok) dados.campanhaOrigem = resultadoCampanha.valor
+    const resultadoArvore = await deps.graph.arvoreDoAnuncio(lead.adId, e.token)
+    // Falha aqui nunca vira registrarFalha: nenhum lead se perde por causa do
+    // nome da campanha.
+    if (resultadoArvore.ok) {
+      const a = resultadoArvore.valor
+      dados.campanhaId = a.campanhaId
+      dados.campanhaNome = a.campanhaNome
+      dados.conjuntoId = a.conjuntoId
+      dados.conjuntoNome = a.conjuntoNome
+      dados.anuncioId = a.anuncioId
+      dados.anuncioNome = a.anuncioNome
+    }
   }
 
   return ingerirOuFalhar(deps.ingestao, e.logId, dados)

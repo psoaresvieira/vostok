@@ -53,7 +53,7 @@ export function NovoLead({
       <button
         type="button"
         onClick={() => setAberto(true)}
-        className="rounded bg-black px-3 py-1 text-sm text-white"
+        className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground"
       >
         Novo lead
       </button>
@@ -62,7 +62,9 @@ export function NovoLead({
 
   return (
     <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded bg-white p-5">
+      {/* .surface (mesmo utilitario do modal-movimento.tsx, ver comentario la)
+          da o hairline e a sombra que faltavam ao painel sobre o scrim. */}
+      <div className="surface w-full max-w-md rounded p-5">
         <h2 className="mb-3 text-lg font-semibold">Novo lead</h2>
         <form action={salvar} className="flex flex-col gap-2">
           <input name="nome" placeholder="nome" required className="rounded border p-2" />
@@ -99,7 +101,7 @@ export function NovoLead({
           )}
 
           {duplicados.length > 0 && (
-            <div className="rounded border border-amber-300 bg-amber-50 p-2 text-sm">
+            <div className="rounded border border-warning/40 bg-warning/10 p-2 text-sm">
               <p className="font-medium">Já existe lead com esse contato:</p>
               <ul className="mt-1 list-disc pl-4">
                 {duplicados.map((d) => (
@@ -107,23 +109,23 @@ export function NovoLead({
                     <a href={`/leads/${d.id}`} className="underline">
                       {d.nome}
                     </a>{' '}
-                    <span className="text-neutral-600">({d.status})</span>
+                    <span className="text-muted-foreground">({d.status})</span>
                   </li>
                 ))}
               </ul>
-              <p className="mt-1 text-neutral-600">
+              <p className="mt-1 text-muted-foreground">
                 Você pode continuar mesmo assim — recompra vira lead novo.
               </p>
             </div>
           )}
 
-          {erro && <p className="text-sm text-red-600">{erro}</p>}
+          {erro && <p className="text-sm text-destructive">{erro}</p>}
 
           <div className="mt-2 flex justify-end gap-2">
             <button type="button" onClick={() => setAberto(false)} className="px-3 py-1 text-sm">
               Cancelar
             </button>
-            <button type="submit" className="rounded bg-black px-3 py-1 text-sm text-white">
+            <button type="submit" className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground">
               Salvar
             </button>
           </div>

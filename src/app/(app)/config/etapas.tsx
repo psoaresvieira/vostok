@@ -36,7 +36,7 @@ export function Etapas({ etapas }: { etapas: Etapa[] }) {
               }}
               className="flex-1 rounded border px-2 py-1"
             />
-            <span className="text-xs text-neutral-500">{e.tipo}</span>
+            <span className="text-xs text-muted-foreground">{e.tipo}</span>
             <button type="button" onClick={() => mover(i, -1)} aria-label="subir">
               ↑
             </button>
@@ -73,12 +73,12 @@ export function Etapas({ etapas }: { etapas: Etapa[] }) {
               setNome('')
             }
           }}
-          className="rounded bg-black px-3 py-1 text-sm text-white"
+          className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground"
         >
           Adicionar
         </button>
       </div>
-      {erro && <p className="mt-1 text-sm text-red-600">{erro}</p>}
+      {erro && <p className="mt-1 text-sm text-destructive">{erro}</p>}
     </section>
   )
 }

@@ -22,7 +22,7 @@ const LIMITE_POR_INVOCACAO = 20
 
 // Deliberadamente abaixo do teto de execucao da plataforma, nao no teto: com
 // ate 20 entregas por chamada e o Graph podendo levar ate TIMEOUT_MS
-// (meta-real.ts, 10s) por tentativa — buscarLead e campanhaDoAnuncio, ate
+// (meta-real.ts, 10s) por tentativa — buscarLead e arvoreDoAnuncio, ate
 // duas chamadas por entrega de Meta —, um lote no pior caso passaria de
 // varios minutos sem este limite. Cortar aqui e previsivel: a linha em
 // processamento no corte fica sem `registrar_falha` (o mesmo estado que o

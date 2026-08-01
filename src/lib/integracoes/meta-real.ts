@@ -1,5 +1,5 @@
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
-import type { LeadDoMeta, MetaGraph, PaginaDoMeta } from './meta'
+import type { ArvoreDeAnuncio, LeadDoMeta, MetaGraph, PaginaDoMeta } from './meta'
 
 const VERSAO = process.env.META_API_VERSION ?? 'v21.0'
 const BASE = `https://graph.facebook.com/${VERSAO}`
@@ -144,15 +144,29 @@ export class MetaGraphReal implements MetaGraph {
     })
   }
 
-  async campanhaDoAnuncio(adId: string, tokenDaPagina: string): Promise<Resultado<string>> {
+  async arvoreDoAnuncio(adId: string, tokenDaPagina: string): Promise<Resultado<ArvoreDeAnuncio>> {
     const url = new URL(`${BASE}/${adId}`)
-    url.searchParams.set('fields', 'campaign{name}')
+    url.searchParams.set('fields', 'name,adset{id,name},campaign{id,name}')
     url.searchParams.set('access_token', tokenDaPagina)
 
-    const r = await chamar<{ campaign?: { name?: string } }>(url)
+    const r = await chamar<{
+      name?: string
+      adset?: { id?: string; name?: string }
+      campaign?: { id?: string; name?: string }
+    }>(url)
     if (!r.ok) return falha(r.erro)
-    if (typeof r.valor.campaign?.name !== 'string') return falha('meta_indisponivel')
-    return ok(r.valor.campaign.name)
+    // Diferente de buscarLead, aqui nao ha guarda de forma que rejeite a
+    // resposta: nivel ausente e resultado valido (ver o tipo). O adId vem do
+    // argumento, e nao do corpo, porque e o unico dado que ja sabemos ser
+    // verdadeiro mesmo numa resposta parcial.
+    return ok({
+      anuncioId: adId,
+      anuncioNome: r.valor.name ?? null,
+      conjuntoId: r.valor.adset?.id ?? null,
+      conjuntoNome: r.valor.adset?.name ?? null,
+      campanhaId: r.valor.campaign?.id ?? null,
+      campanhaNome: r.valor.campaign?.name ?? null,
+    })
   }
 
   async posseDaPagina(pageId: string, tokenDaPagina: string): Promise<Resultado<void>> {

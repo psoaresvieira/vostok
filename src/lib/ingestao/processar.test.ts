@@ -5,7 +5,7 @@ import type { EntregaParaProcessar } from '@/lib/data/ingestao'
 import { processarEntrega } from './processar'
 
 describe('processarEntrega', () => {
-  it('Meta, caminho feliz: busca no Graph, mapeia e ingere sem registrar falha', async () => {
+  it('chama arvoreDoAnuncio e grava os tres niveis', async () => {
     const ingestao = new InMemoryIngestaoStore()
     const graph = new MetaGraphFalso()
     const registro = await ingestao.registrarEntrega({
@@ -30,10 +30,12 @@ describe('processarEntrega', () => {
     expect(ingestao.ingeridos[0]?.dados.nome).toBe('Fulano de Tal')
     expect(ingestao.falhas).toHaveLength(0)
     // LEAD_PADRAO (meta-falso.ts) traz adId: 'ad-padrao', e
-    // MetaGraphFalso.campanhaDoAnuncio devolve `Campanha ${adId}` -- prova
-    // de que o nome real da campanha, e nao so o ad_id cru, e o que chega
-    // ate o lead quando a segunda chamada da certo.
-    expect(ingestao.ingeridos[0]?.dados.campanhaOrigem).toBe('Campanha ad-padrao')
+    // MetaGraphFalso.arvoreDoAnuncio resolve os tres niveis a partir dele --
+    // prova de que a arvore inteira, e nao so um nome de campanha, chega ate
+    // o lead quando a chamada da certo.
+    expect(ingestao.ingeridos[0]?.dados.campanhaNome).toBe('Campanha ad-padrao')
+    expect(ingestao.ingeridos[0]?.dados.conjuntoId).toBe('adset-ad-padrao')
+    expect(ingestao.ingeridos[0]?.dados.anuncioId).toBe('ad-padrao')
   })
 
   it('Meta sem leadgen_id no payload registra falha especifica e nao chama o Graph', async () => {
@@ -117,10 +119,10 @@ describe('processarEntrega', () => {
     expect(ingestao.ingeridos).toHaveLength(0)
   })
 
-  it('campanha e best-effort: falha em campanhaDoAnuncio ingere do mesmo jeito, com campanhaOrigem no ad_id cru', async () => {
+  it('arvore e best-effort: falha nela ingere com so o anuncioId', async () => {
     const ingestao = new InMemoryIngestaoStore()
     const graph = new MetaGraphFalso()
-    graph.falharEm = 'campanhaDoAnuncio'
+    graph.falharEm = 'arvoreDoAnuncio'
     ingestao.semearLog('log-campanha-falha', 'pendente', null, {
       provedor: 'meta',
       externalId: 'leadgen-4',
@@ -139,12 +141,15 @@ describe('processarEntrega', () => {
     expect(resultado.ok).toBe(true)
     expect(ingestao.falhas).toHaveLength(0)
     expect(ingestao.ingeridos).toHaveLength(1)
-    // LEAD_PADRAO (meta-falso.ts) traz adId: 'ad-padrao' — e o cru que tem
-    // que sobreviver quando a segunda chamada falha.
-    expect(ingestao.ingeridos[0]?.dados.campanhaOrigem).toBe('ad-padrao')
+    // LEAD_PADRAO (meta-falso.ts) traz adId: 'ad-padrao' -- o anuncio fica
+    // identificado mesmo com a arvore falhando, e o resto honestamente nulo
+    // (a versao antiga gravava o ad_id cru na coluna de nome de campanha).
+    expect(ingestao.ingeridos[0]?.dados.anuncioId).toBe('ad-padrao')
+    expect(ingestao.ingeridos[0]?.dados.campanhaId).toBeNull()
+    expect(ingestao.ingeridos[0]?.dados.campanhaNome).toBeNull()
   })
 
-  it('sem ad_id no lead do Graph, nem tenta buscar campanha e ingere normalmente', async () => {
+  it('sem ad_id no lead do Graph, nem tenta buscar a arvore e ingere normalmente', async () => {
     const ingestao = new InMemoryIngestaoStore()
     const graph = new MetaGraphFalso()
     graph.leads.set('leadgen-5', {
@@ -170,9 +175,10 @@ describe('processarEntrega', () => {
 
     expect(resultado.ok).toBe(true)
     expect(ingestao.ingeridos).toHaveLength(1)
-    // Nulo, e nao 'Campanha null' nem qualquer outro valor inventado: prova
-    // de que a chamada de campanha nem rodou sem ad_id para pedir.
-    expect(ingestao.ingeridos[0]?.dados.campanhaOrigem).toBeNull()
+    // Nulo, e nao 'Campanha null' nem o adId: prova de que a chamada nem
+    // rodou, por nao haver ad_id para pedir.
+    expect(ingestao.ingeridos[0]?.dados.anuncioId).toBeNull()
+    expect(ingestao.ingeridos[0]?.dados.campanhaNome).toBeNull()
   })
 
   it('Google nao toca o Graph: processa o payload direto', async () => {

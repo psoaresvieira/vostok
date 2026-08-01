@@ -43,27 +43,27 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
         <h1 className="text-2xl font-semibold">{lead.valor.nome}</h1>
         <dl className="text-sm">
           <div className="flex justify-between border-b py-1">
-            <dt className="text-neutral-500">Etapa</dt>
+            <dt className="text-muted-foreground">Etapa</dt>
             <dd>{nomeEtapa.get(lead.valor.stageId) ?? '—'}</dd>
           </div>
           <div className="flex justify-between border-b py-1">
-            <dt className="text-neutral-500">Telefone</dt>
+            <dt className="text-muted-foreground">Telefone</dt>
             <dd>{formatarTelefone(lead.valor.telefoneE164)}</dd>
           </div>
           <div className="flex justify-between border-b py-1">
-            <dt className="text-neutral-500">Email</dt>
+            <dt className="text-muted-foreground">Email</dt>
             <dd>{lead.valor.email ?? '—'}</dd>
           </div>
           <div className="flex justify-between border-b py-1">
-            <dt className="text-neutral-500">Empresa</dt>
+            <dt className="text-muted-foreground">Empresa</dt>
             <dd>{lead.valor.empresa ?? '—'}</dd>
           </div>
           <div className="flex justify-between border-b py-1">
-            <dt className="text-neutral-500">Valor</dt>
+            <dt className="text-muted-foreground">Valor</dt>
             <dd>{formatarMoeda(lead.valor.valorCents)}</dd>
           </div>
           <div className="flex justify-between border-b py-1">
-            <dt className="text-neutral-500">Responsável</dt>
+            <dt className="text-muted-foreground">Responsável</dt>
             <dd>
               {lead.valor.responsavelId ? nomePessoa.get(lead.valor.responsavelId) ?? '—' : '—'}
             </dd>

@@ -115,7 +115,7 @@ describe('MetaGraphReal — falhas de rede nao escapam do contrato do port', () 
   })
 })
 
-describe('MetaGraphReal — buscarLead, campanhaDoAnuncio e posseDaPagina', () => {
+describe('MetaGraphReal — buscarLead, arvoreDoAnuncio e posseDaPagina', () => {
   const fetchOriginal = global.fetch
 
   afterEach(() => {
@@ -180,24 +180,73 @@ describe('MetaGraphReal — buscarLead, campanhaDoAnuncio e posseDaPagina', () =
     expect(r.erro).toBe('meta_indisponivel')
   })
 
-  it('campanhaDoAnuncio le campaign.name do corpo', async () => {
+  it('arvoreDoAnuncio pede os tres niveis numa chamada so', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ campaign: { name: 'Campanha de Verao' } }),
+      json: async () => ({
+        id: 'ad-1',
+        name: 'Anuncio Video 15s',
+        adset: { id: 'adset-9', name: 'Conjunto Interesse' },
+        campaign: { id: 'camp-7', name: 'Campanha de Verao' },
+      }),
     })
     const g = new MetaGraphReal('app-id', 'app-secret')
 
-    const r = await g.campanhaDoAnuncio('ad-1', 'token-da-pagina')
-    if (!r.ok) throw new Error(r.erro)
-    expect(r.valor).toBe('Campanha de Verao')
+    const r = await g.arvoreDoAnuncio('ad-1', 'token-da-pagina')
+
+    expect(r.ok).toBe(true)
+    if (!r.ok) throw new Error('deveria ter dado certo')
+    expect(r.valor).toEqual({
+      anuncioId: 'ad-1',
+      anuncioNome: 'Anuncio Video 15s',
+      conjuntoId: 'adset-9',
+      conjuntoNome: 'Conjunto Interesse',
+      campanhaId: 'camp-7',
+      campanhaNome: 'Campanha de Verao',
+    })
+    // Uma ida ao Graph, nao tres: a arvore inteira cabe num `fields`. Tres
+    // chamadas por lead multiplicariam a latencia do webhook por tres e
+    // dariam tres chances de falha parcial.
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    const url = String((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[0])
+    // Afirma sobre o valor decodificado, para o teste nao quebrar se a
+    // codificacao de `{` e `,` mudar entre versoes de URL.
+    expect(decodeURIComponent(url)).toContain('fields=name,adset{id,name},campaign{id,name}')
   })
 
-  it('campanhaDoAnuncio devolve meta_indisponivel quando o fetch rejeita', async () => {
-    global.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'))
+  it('arvoreDoAnuncio devolve os niveis ausentes como nulo, sem inventar valor', async () => {
+    // Anuncio orfao de campanha nao existe no Meta hoje, mas resposta 200 com
+    // campo faltando existe (permissao parcial, objeto apagado). O contrato e
+    // nulo — nunca string vazia, que na coluna viraria "campanha sem nome" e
+    // agruparia leads de campanhas diferentes no mesmo balde.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'ad-2', name: 'So o anuncio' }),
+    })
     const g = new MetaGraphReal('app-id', 'app-secret')
 
-    const r = await g.campanhaDoAnuncio('ad-1', 'token-da-pagina')
+    const r = await g.arvoreDoAnuncio('ad-2', 'token-da-pagina')
+
+    expect(r.ok).toBe(true)
+    if (!r.ok) throw new Error('deveria ter dado certo')
+    expect(r.valor).toEqual({
+      anuncioId: 'ad-2',
+      anuncioNome: 'So o anuncio',
+      conjuntoId: null,
+      conjuntoNome: null,
+      campanhaId: null,
+      campanhaNome: null,
+    })
+  })
+
+  it('arvoreDoAnuncio devolve meta_indisponivel quando o fetch rejeita', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error('rede caiu'))
+    const g = new MetaGraphReal('app-id', 'app-secret')
+
+    const r = await g.arvoreDoAnuncio('ad-1', 'token-da-pagina')
+
     expect(r.ok).toBe(false)
     if (r.ok) throw new Error('deveria ter falhado')
     expect(r.erro).toBe('meta_indisponivel')

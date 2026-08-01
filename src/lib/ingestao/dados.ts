@@ -11,8 +11,20 @@ export type DadosDoLead = {
   email: string | null
   emailNorm: string | null
   empresa: string | null
-  campanhaOrigem: string | null
-  formularioOrigem: string | null
+  /** Rastreamento de origem, em pares id/nome. A metrica agrupa pelo ID
+   * (renomear campanha no gerenciador nao pode partir o historico) e exibe o
+   * NOME. Nome nulo e legitimo: o Google nunca manda nome. */
+  campanhaId: string | null
+  campanhaNome: string | null
+  conjuntoId: string | null
+  conjuntoNome: string | null
+  anuncioId: string | null
+  anuncioNome: string | null
+  formularioId: string | null
+  /** gcl_id do Google. Nao e lido por nada hoje: entra porque chega de graca
+   * no payload e e a unica chave que um dia fecha o laco de conversao
+   * offline de volta no Google Ads — capturar depois e impossivel. */
+  clickId: string | null
   /** Campos que o mapeador nao reconheceu, com o nome original como chave.
    * E o mecanismo que garante que nada e descartado: pergunta de qualificacao
    * que o cliente escreveu no Meta Ads Manager ou no Google Ads nao tem schema
@@ -36,8 +48,14 @@ export function paraPayload(d: DadosDoLead): Record<string, unknown> {
     email: d.email,
     email_norm: d.emailNorm,
     empresa: d.empresa,
-    campanha_origem: d.campanhaOrigem,
-    formulario_origem: d.formularioOrigem,
+    campanha_id: d.campanhaId,
+    campanha_nome: d.campanhaNome,
+    conjunto_id: d.conjuntoId,
+    conjunto_nome: d.conjuntoNome,
+    anuncio_id: d.anuncioId,
+    anuncio_nome: d.anuncioNome,
+    formulario_id: d.formularioId,
+    click_id: d.clickId,
     extras: d.extras,
   }
 }

@@ -16,7 +16,7 @@ export function Motivos({ motivos }: { motivos: MotivoPerda[] }) {
       <ul className="flex flex-col gap-1">
         {motivos.map((m) => (
           <li key={m.id} className="flex items-center justify-between rounded border p-2 text-sm">
-            <span className={m.ativo ? undefined : 'text-neutral-400 line-through'}>{m.nome}</span>
+            <span className={m.ativo ? undefined : 'text-muted-foreground line-through'}>{m.nome}</span>
             <button
               type="button"
               onClick={async () => {
@@ -48,12 +48,12 @@ export function Motivos({ motivos }: { motivos: MotivoPerda[] }) {
               setNome('')
             }
           }}
-          className="rounded bg-black px-3 py-1 text-sm text-white"
+          className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground"
         >
           Adicionar
         </button>
       </div>
-      {erro && <p className="mt-1 text-sm text-red-600">{erro}</p>}
+      {erro && <p className="mt-1 text-sm text-destructive">{erro}</p>}
     </section>
   )
 }

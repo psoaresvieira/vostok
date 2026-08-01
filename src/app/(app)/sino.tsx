@@ -101,7 +101,7 @@ export function Sino({ contagem, notificacoes }: Props) {
           <span
             role="status"
             aria-label="notificações não lidas"
-            className="absolute -right-1 -top-1 rounded-full bg-red-600 px-1.5 text-xs leading-4 text-white"
+            className="absolute -right-1 -top-1 rounded-full bg-destructive px-1.5 text-xs leading-4 text-destructive-foreground"
           >
             {contagem}
           </span>
@@ -112,7 +112,7 @@ export function Sino({ contagem, notificacoes }: Props) {
         <div
           role="region"
           aria-label="Notificações"
-          className="absolute right-0 z-10 mt-2 w-80 rounded border bg-white shadow-lg"
+          className="absolute right-0 z-10 mt-2 w-80 rounded border bg-card shadow-lg"
         >
           <div className="flex items-center justify-between border-b px-3 py-2">
             <span className="text-sm font-medium">Notificações</span>
@@ -124,7 +124,7 @@ export function Sino({ contagem, notificacoes }: Props) {
           </div>
           <ul className="max-h-96 overflow-y-auto">
             {notificacoes.length === 0 && (
-              <li className="px-3 py-4 text-sm text-neutral-500">Nenhuma notificação ainda.</li>
+              <li className="px-3 py-4 text-sm text-muted-foreground">Nenhuma notificação ainda.</li>
             )}
             {notificacoes.map((n) => (
               <li key={n.id} className="border-b last:border-b-0">
@@ -137,7 +137,7 @@ export function Sino({ contagem, notificacoes }: Props) {
                     // lead que motivou a notificacao.
                     if (!n.lidaEm) void marcarNotificacaoLidaAction(n.id).catch(() => {})
                   }}
-                  className={`block px-3 py-2 text-sm hover:bg-neutral-50 ${n.lidaEm ? 'text-neutral-600' : 'font-medium'}`}
+                  className={`block px-3 py-2 text-sm hover:bg-muted ${n.lidaEm ? 'text-muted-foreground' : 'font-medium'}`}
                 >
                   {RÓTULO_TIPO[n.tipo]}: {n.leadNome}
                 </Link>

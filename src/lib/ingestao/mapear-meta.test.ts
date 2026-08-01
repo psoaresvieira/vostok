@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mapearLeadDoMeta } from './mapear-meta'
 import type { LeadDoMeta } from '@/lib/integracoes/meta'
 
-const SEM_ORIGEM = { campanha: null, formulario: null }
+const SEM_ORIGEM = { arvore: null, anuncioId: null, formularioId: null }
 
 /** Constroi um LeadDoMeta so com os campos passados, poupando repeticao de
  * adId/formId/criadoEm (irrelevantes para o mapeamento de campos). */
@@ -78,11 +78,49 @@ describe('mapearLeadDoMeta', () => {
     expect(dados.email).toBeNull()
   })
 
-  it('campanha e formulario do segundo argumento aparecem em campanhaOrigem/formularioOrigem', () => {
+  it('a arvore do anuncio vira os seis campos de rastreamento', () => {
     const lead = leadCom([])
-    const dados = mapearLeadDoMeta(lead, { campanha: 'Campanha de Verao', formulario: 'Formulario A' })
-    expect(dados.campanhaOrigem).toBe('Campanha de Verao')
-    expect(dados.formularioOrigem).toBe('Formulario A')
+    const dados = mapearLeadDoMeta(lead, {
+      arvore: {
+        anuncioId: 'ad-1',
+        anuncioNome: 'Video 15s',
+        conjuntoId: 'adset-9',
+        conjuntoNome: 'Conjunto Interesse',
+        campanhaId: 'camp-7',
+        campanhaNome: 'Campanha de Verao',
+      },
+      formularioId: 'form-3',
+    })
+
+    expect(dados.campanhaId).toBe('camp-7')
+    expect(dados.campanhaNome).toBe('Campanha de Verao')
+    expect(dados.conjuntoId).toBe('adset-9')
+    expect(dados.conjuntoNome).toBe('Conjunto Interesse')
+    expect(dados.anuncioId).toBe('ad-1')
+    expect(dados.anuncioNome).toBe('Video 15s')
+    expect(dados.formularioId).toBe('form-3')
+    // Lead do Meta nunca tem click id: o gcl_id e conceito do Google Ads.
+    expect(dados.clickId).toBeNull()
+  })
+
+  it('sem arvore, so o anuncio sobrevive e nada e inventado', () => {
+    // E o estado depois de arvoreDoAnuncio falhar: o anuncioId veio de
+    // buscarLead, que deu certo. Os outros cinco tem que ficar nulos, e nao
+    // receber o adId cru — foi exatamente essa confusao (ad_id ocupando a
+    // coluna de nome de campanha) que este plano existe para desfazer.
+    const lead = leadCom([])
+    const dados = mapearLeadDoMeta(lead, {
+      arvore: null,
+      anuncioId: 'ad-1',
+      formularioId: 'form-3',
+    })
+
+    expect(dados.anuncioId).toBe('ad-1')
+    expect(dados.anuncioNome).toBeNull()
+    expect(dados.conjuntoId).toBeNull()
+    expect(dados.conjuntoNome).toBeNull()
+    expect(dados.campanhaId).toBeNull()
+    expect(dados.campanhaNome).toBeNull()
   })
 
   it('campo desconhecido sem valores nao inventa string vazia em extras: a chave fica ausente', () => {

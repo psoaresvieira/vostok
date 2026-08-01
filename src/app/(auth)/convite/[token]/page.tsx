@@ -36,7 +36,7 @@ export default async function ConvitePage({ params }: { params: Promise<{ token:
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
       <h1 className="text-2xl font-semibold">Convite não aceito</h1>
-      <p className="text-sm text-red-600">{mensagemDeErro(r.erro)}</p>
+      <p className="text-sm text-destructive">{mensagemDeErro(r.erro)}</p>
     </main>
   )
 }

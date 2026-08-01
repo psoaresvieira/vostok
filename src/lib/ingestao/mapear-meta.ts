@@ -1,5 +1,5 @@
 import { normalizarEmail, normalizarTelefone } from '@/lib/domain/normalizacao'
-import type { LeadDoMeta } from '@/lib/integracoes/meta'
+import type { ArvoreDeAnuncio, LeadDoMeta } from '@/lib/integracoes/meta'
 import type { DadosDoLead } from './dados'
 
 // Nomes de campo padrao do formulario de leadgen do Meta. Qualquer `name`
@@ -42,7 +42,13 @@ function montarNome(nomeCompleto: string | null, primeiroNome: string | null, so
 
 export function mapearLeadDoMeta(
   lead: LeadDoMeta,
-  extra: { campanha: string | null; formulario: string | null }
+  extra: {
+    /** Nula quando arvoreDoAnuncio falhou ou nem rodou. */
+    arvore: ArvoreDeAnuncio | null
+    /** Usado so quando `arvore` e nula: vem de buscarLead, que deu certo. */
+    anuncioId?: string | null
+    formularioId: string | null
+  }
 ): DadosDoLead {
   const porNome = new Map(lead.campos.map((c) => [c.name, c]))
 
@@ -76,8 +82,15 @@ export function mapearLeadDoMeta(
     email: emailCru,
     emailNorm: normalizarEmail(emailCru),
     empresa: primeiroValor(porNome.get(CAMPO_EMPRESA)),
-    campanhaOrigem: extra.campanha,
-    formularioOrigem: extra.formulario,
+    campanhaId: extra.arvore?.campanhaId ?? null,
+    campanhaNome: extra.arvore?.campanhaNome ?? null,
+    conjuntoId: extra.arvore?.conjuntoId ?? null,
+    conjuntoNome: extra.arvore?.conjuntoNome ?? null,
+    anuncioId: extra.arvore?.anuncioId ?? extra.anuncioId ?? null,
+    anuncioNome: extra.arvore?.anuncioNome ?? null,
+    formularioId: extra.formularioId,
+    // Conceito do Google Ads; o Meta nao tem equivalente no payload de leadgen.
+    clickId: null,
     extras,
   }
 }
