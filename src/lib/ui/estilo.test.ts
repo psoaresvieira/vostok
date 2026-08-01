@@ -73,3 +73,32 @@ describe('portao de estilo', () => {
     expect(achados.sort()).toEqual(['bg-black', 'bg-white', 'outline-white', 'text-gray-600'])
   })
 })
+
+describe('layout.tsx: variaveis de fonte no escopo certo', () => {
+  it('inter.variable aparece na mesma linha que <html>', () => {
+    // As variaveis de fonte devem estar no <html> porque globals.css aplica
+    // `@apply font-sans` no nivel do html. A classe font-sans resolve para
+    // var(--font-sans), e essa variavel so e definida no elemento <html> por
+    // next/font. Se estiverem no <body> (filho do <html>), a variavel fica
+    // fora do escopo onde e usada, e a pagina cai silenciosamente para serif
+    // padrao do navegador.
+    const layoutPath = path.resolve(SRC, 'app', 'layout.tsx')
+    const conteudo = readFileSync(layoutPath, 'utf8')
+    const linhas = conteudo.split('\n')
+
+    let htmlLineIndex = -1
+    for (let i = 0; i < linhas.length; i++) {
+      if (linhas[i].includes('<html')) {
+        htmlLineIndex = i
+        break
+      }
+    }
+
+    expect(htmlLineIndex, 'nao encontrou linha com <html').toBeGreaterThanOrEqual(0)
+
+    const htmlLine = linhas[htmlLineIndex]
+    expect(htmlLine, `inter.variable nao esta na linha <html. Sem ela, font-sans esta fora de escopo e a pagina renderiza em serif (veja screenshots): ${htmlLine}`).toContain(
+      'inter.variable'
+    )
+  })
+})
