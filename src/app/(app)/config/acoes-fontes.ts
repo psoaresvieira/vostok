@@ -78,9 +78,14 @@ export async function listarPaginasDoMetaAction(): Promise<Resultado<PaginaOfere
  *
  * `gravar` recebe a Page ja resolvida contra o Graph (id e token verdadeiros,
  * nunca o que o cliente mandou) e devolve o Resultado da RPC especifica.
+ *
+ * `ehReivindicacao` diferencia as duas so para decidir a compensacao (ver
+ * abaixo, no ramo de falha de `gravar`) — em tudo mais as duas acoes sao
+ * identicas.
  */
 async function conectarOuReivindicar(
   pageId: string,
+  ehReivindicacao: boolean,
   gravar: (fontes: FonteStore, pagina: PaginaDoMeta) => Promise<Resultado<string>>,
 ): Promise<Resultado<void>> {
   const contexto = await criarFonteStoreDoServidor()
@@ -89,6 +94,17 @@ async function conectarOuReivindicar(
   const jar = await cookies()
   const token = tokenDaConta(jar, contexto.valor.conta.id)
   if (!token) return falha('conexao_expirada')
+
+  // Achado 1 do review (rodada 1) da Task 10, parte 3: falhar ANTES de tocar
+  // o Graph quando o segredo de ingestao nao esta configurado. Sem isto, um
+  // deploy que subiu sem INGESTAO_SEGREDO faz `segredo_confere` (0010) falhar
+  // fechado em TODA chamada de `gravar` la na frente — e como `assinarLeadgen`
+  // ja teria rodado antes dessa falha, cada clique em Conectar assinaria e
+  // depois desassinaria a Page de um terceiro, na cara de quem so via
+  // "a ingestao nao esta configurada" na tela. Mesmo codigo que
+  // `criarIngestaoStore` (lib/data/ingestao.ts) ja usa para o mesmo problema
+  // visto do lado do webhook.
+  if ((process.env.INGESTAO_SEGREDO ?? '').length === 0) return falha('ingestao_nao_configurada')
 
   // Buscar de novo em vez de confiar no que veio do cliente: o token da Page
   // nunca passou pelo navegador, e o nome tambem vem da fonte da verdade.
@@ -115,15 +131,29 @@ async function conectarOuReivindicar(
 
   const r = await gravar(contexto.valor.fontes, pagina)
   if (!r.ok) {
-    // Compensa a assinatura acima. Sem isto, o dono legitimo de uma Page
-    // squattada por outra conta (o caso realista de `page_ja_conectada` aqui)
-    // clica em Conectar, a assinatura em leadgen sobe, a gravacao falha, e a
-    // acao devolve o erro deixando a Page real inscrita — a mesma escalada de
-    // negacao de servico para roubo de lead que a spec nomeia (ver "Risco
-    // nomeado: squat de Page ID"), so que iniciada por quem tem toda razao de
-    // clicar em Conectar. Best-effort: se a desinscricao tambem falhar, o erro
-    // original de `gravar` e o que importa para quem esta na tela.
-    await metaGraph().desassinarLeadgen(pagina.id, pagina.token)
+    // Achado 1 do review (rodada 1) da Task 10, partes 1 e 2: a compensacao
+    // so desfaz a assinatura quando ESTA CHAMADA e quem a criou.
+    // `assinarLeadgen` e idempotente do lado do Meta — se a Page ja estava
+    // inscrita antes de chegarmos aqui, a chamada acima nao criou nada, e
+    // desassinar incondicionalmente derrubaria uma inscricao que pertence a
+    // outra conta (o dono legitimo, ou o incumbente que a reivindicacao vai
+    // substituir), sem nada ficar vermelho em lugar nenhum — a mesma escalada
+    // de negacao de servico para roubo de lead que a compensacao existe para
+    // evitar, so que mirada na vitima. Dois casos em que a assinatura nunca e
+    // "desta chamada":
+    //   1. `ehReivindicacao`: a premissa inteira de reivindicar e que a Page
+    //      ja tem dono, entao ela ja estava inscrita antes deste clique.
+    //   2. `r.erro === 'page_ja_conectada'`: esse codigo SO existe porque a
+    //      Page ja pertencia a outra conta antes desta chamada — e prova
+    //      disso, nao suposicao.
+    // NAO troque por incondicional achando que e simplificacao: e o buraco
+    // que este achado fechou.
+    const assinaturaEraDestaChamada = !ehReivindicacao && r.erro !== 'page_ja_conectada'
+    if (assinaturaEraDestaChamada) {
+      // Best-effort: se a desinscricao tambem falhar, o erro original de
+      // `gravar` e o que importa para quem esta na tela.
+      await metaGraph().desassinarLeadgen(pagina.id, pagina.token)
+    }
     return falha(r.erro)
   }
 
@@ -133,7 +163,7 @@ async function conectarOuReivindicar(
 }
 
 export async function conectarPaginaAction(pageId: string): Promise<Resultado<void>> {
-  return conectarOuReivindicar(pageId, (fontes, pagina) =>
+  return conectarOuReivindicar(pageId, false, (fontes, pagina) =>
     fontes.conectarMeta(pagina.id, pagina.nome, pagina.token, null),
   )
 }
@@ -145,7 +175,7 @@ export async function conectarPaginaAction(pageId: string): Promise<Resultado<vo
  * antes desta acao, a vitima nao tinha recurso nenhum.
  */
 export async function reivindicarPaginaAction(pageId: string): Promise<Resultado<void>> {
-  return conectarOuReivindicar(pageId, (fontes, pagina) =>
+  return conectarOuReivindicar(pageId, true, (fontes, pagina) =>
     fontes.reivindicarMeta(pagina.id, pagina.nome, pagina.token, null),
   )
 }
