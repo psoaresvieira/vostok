@@ -10,14 +10,17 @@ const SRC = path.resolve(__dirname, '..', '..')
 // um text-gray-600 chumbado fica ilegivel sobre o fundo navy, e o sintoma so
 // aparece para quem abrir aquela tela. Este portao existe porque o repo nao
 // tem teste de componente para pegar isso de outro jeito.
-const PREFIXOS = 'bg|text|border|ring|fill|stroke|from|via|to|divide|outline|accent|caret|shadow'
+const PREFIXOS_SEM_BG = 'text|border|ring|fill|stroke|from|via|to|divide|outline|accent|caret|shadow'
+const PREFIXOS = `bg|${PREFIXOS_SEM_BG}`
 const ESCALAS =
   'slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose'
 
 const PADROES: RegExp[] = [
   new RegExp(`\\b(?:${PREFIXOS})-(?:${ESCALAS})-\\d{2,3}\\b`, 'g'),
-  /\b(?:bg|text|border|ring|fill|stroke)-white\b/g,
-  /\b(?:text|border|ring|fill|stroke)-black\b/g,
+  new RegExp(`\\b(?:${PREFIXOS})-white\\b`, 'g'),
+  // Todo prefixo MENOS bg: `bg-black` tem padrao proprio logo abaixo, porque
+  // `bg-black/40` e scrim de modal e nao pode ser flagrado.
+  new RegExp(`\\b(?:${PREFIXOS_SEM_BG})-black\\b`, 'g'),
   // `bg-black/40` e scrim de modal, nao cor de paleta: um veu continua preto
   // no tema escuro, e trocar por bg-foreground/40 o pintaria de branco. O
   // lookahead libera SO a forma com opacidade — `bg-black` puro continua
@@ -65,8 +68,8 @@ describe('portao de estilo', () => {
     // o teste acima verde para sempre, e ele pareceria estar protegendo o
     // repo enquanto nao olha para nada. Discriminacao provada aqui, no lugar
     // de assumida.
-    const amostra = 'className="bg-white text-gray-600 bg-black/40 bg-black"'
+    const amostra = 'className="bg-white text-gray-600 bg-black/40 bg-black outline-white"'
     const achados = PADROES.flatMap((p) => [...amostra.matchAll(p)].map((m) => m[0]))
-    expect(achados.sort()).toEqual(['bg-black', 'bg-white', 'text-gray-600'])
+    expect(achados.sort()).toEqual(['bg-black', 'bg-white', 'outline-white', 'text-gray-600'])
   })
 })
