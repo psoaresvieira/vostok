@@ -86,16 +86,17 @@ describe('0014 — RPCs de metricas: metricas_coorte e metricas_etiquetas', () =
   })
 
   it('lead que voltou etapa mantem a ordem maxima ja alcancada', async () => {
-    // Prova que a uniao le stage_origem tambem: depois de voltar, nem o
-    // stage_id atual nem o ultimo stage_destino valem 4.
-    const novo = etapa(c, 'Novo lead')
+    // Prova a metade `stage_origem` da uniao: o lead NASCE direto em
+    // 'Proposta' (ordem 4) -- logo nenhum movimento jamais grava Proposta
+    // como stage_destino -- e so entao volta para 'Contato feito' (ordem 2).
+    // O historico fica com uma unica linha, (origem: Proposta, destino:
+    // Contato feito). Depois de voltar, nem o stage_id atual nem nenhum
+    // stage_destino do historico valem 4; so a stage_origem do movimento de
+    // volta carrega essa profundidade.
     const proposta = etapa(c, 'Proposta')
     const contato = etapa(c, 'Contato feito')
-    const leadId = await criarLead(c, 'Lead', c.vendedorAId, novo)
+    const leadId = await criarLead(c, 'Lead', c.vendedorAId, proposta)
 
-    await comoUsuario(c.vendedorAId, (cli) =>
-      cli.query('select public.move_lead_stage($1, $2)', [leadId, proposta]),
-    )
     await comoUsuario(c.vendedorAId, (cli) =>
       cli.query('select public.move_lead_stage($1, $2)', [leadId, contato]),
     )
