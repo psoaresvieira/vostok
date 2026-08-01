@@ -2,7 +2,54 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Antes de expor em produção
 
-**O Plano 3 (conexão de fontes via Meta OAuth, `conectar_fonte_meta`) não pode ser exposto em URL pública até o Plano 4 entregar o caminho de reivindicação de Page.** Risco aceito conscientemente, com dono: qualquer pessoa pode fazer signup, criar a própria conta e travar a Page de um concorrente para si (`page_id` é público e o Plano 3 não valida posse contra o Graph API). Detalhe completo, e o runbook de operador para o caso de isso acontecer antes do Plano 4, em `docs/superpowers/specs/2026-07-29-crm-ingestao-webhooks-design.md`, seção "Risco nomeado: squat de Page ID em `conectar_fonte_meta`".
+**Histórico — risco aceito e fechado.** O Plano 3 (conexão de fontes via Meta OAuth, `conectar_fonte_meta`) foi ao ar com um risco aceito conscientemente, com dono: `p_page_id` era texto arbitrário, Facebook Page IDs são informação pública, e uma função Postgres nasce com `execute` para `public` — então qualquer pessoa que fizesse signup podia travar a Page de um concorrente para sempre, direto pelo PostgREST, sem passar por tela nenhuma. A vítima recebia `page_ja_conectada` para sempre e não tinha recurso: não enxergava nem apagava a linha do invasor. Detalhe completo em `docs/superpowers/specs/2026-07-29-crm-ingestao-webhooks-design.md`, seção "Risco nomeado: squat de Page ID em `conectar_fonte_meta`".
+
+**O que fechou o risco (Plano 4, Task 10).** O conserto tem duas metades, e nenhuma sozinha bastava:
+
+1. **`conectar_fonte_meta` e `reivindicar_fonte_meta` (migration `0012_posse_da_page.sql`) passam a exigir o segredo de ingestão** (`p_segredo`, primeiro argumento) além das checagens de sessão/admin que já existiam. Isso não prova posse — o banco não tem como chamar o Graph API — mas tira a RPC do alcance de quem só tem uma sessão válida via PostgREST; só o servidor (que conhece `INGESTAO_SEGREDO`) chama.
+2. **A Server Action prova posse contra o Graph antes de gravar.** `conectarPaginaAction` e `reivindicarPaginaAction` (`src/app/(app)/config/acoes-fontes.ts`) chamam `MetaGraph.posseDaPagina`, que compara `GET /me` (com o token da Page) contra o `page_id` pedido, **antes** de assinar o leadgen e antes de chamar a RPC. Uma gravação recusada por posse não provada nunca assina leadgen nem toca a RPC.
+
+Trocar só uma das metades reabre o buraco: sem (1), qualquer um com sessão chama a RPC direto; sem (2), o segredo autoriza um squat idêntico, só que pela tela.
+
+`conectar_fonte_google` **não** ganhou segredo — decisão registrada, não esquecimento: `external_id` é sempre nulo lá, o índice único global nem alcança essas linhas, e o token da URL é gerado no servidor. Não há Page de terceiro para travar.
+
+**O caminho de reivindicação.** Quem prova, contra o Graph, que administra uma Page já conectada a outra conta do CRM pode reivindicá-la: a tela oferece o botão "Reivindicar esta página" quando uma tentativa de conectar volta `page_ja_conectada`, com aviso explícito do que acontece (a Page sai da outra conta e passa a entregar leads para esta). Qualquer admin da conta que prove posse pode reivindicar — é a única saída para uma Page squattada antes desta migration existir.
+
+**O que continua sendo pré-requisito de produção**, nada disto sai de graça:
+
+- `INGESTAO_SEGREDO` **definido por SQL direto no painel do Supabase em produção, nunca versionado, e de alta entropia.** O valor em `supabase/seed.sql` é público (está neste repo) e serve só para desenvolvimento/CI local — subir para produção com esse valor equivale a não ter segredo nenhum. Alta entropia não é opcional: este segredo gateia todo o caminho de escrita sem sessão (`segredo_confere`, migration `0010`), `hash_segredo` é SHA-256 sem salt, e as RPCs gateadas por ele necessariamente respondem diferente para um palpite certo e um errado (`segredo_invalido` vs. sucesso) — a resistência a força bruta é inteiramente a entropia do segredo. Gere com `openssl rand -hex 32`.
+- `META_VERIFY_TOKEN` e `CRON_SECRET` configurados (webhook do Meta e a rota de reprocessamento, respectivamente).
+- `META_FAKE` **ausente** no ambiente de produção. Se essa variável subir por engano, o CRM passa a aceitar qualquer credencial do Meta sem validar nada contra o Graph real — ver `usarFalso()` em `src/lib/integracoes/fabrica.ts`.
+
+**O runbook de operador continua válido como saída de emergência** (não some com o fechamento do risco): se uma Page tiver sido squattada antes desta task existir, o dono legítimo agora tem o caminho de reivindicação pela própria tela, sem precisar de intervenção manual no banco. O runbook documentado na spec (seção citada acima) permanece como referência para diagnosticar o caso, mesmo que a ação corretiva principal hoje seja self-service.
+
+**Risco aceito e nomeado — disk-fill não autenticado via `/api/webhooks/google/[token]` (achado 5 do review final).** Diferente do webhook do Meta (que exige `X-Hub-Signature-256` válido antes de qualquer escrita), o webhook do Google não tem prova de origem antes de gravar em `integration_log`: qualquer request com um corpo JSON sintaticamente válido contendo `lead_id` string grava uma linha, com `payload_bruto` controlado pelo chamador. Isso é intencional — a linha é o único rastro do operador para uma entrega de fonte desconhecida — mas a combinação com "sem limite de tamanho" seria uma forma de encher o disco de um banco compartilhado por todo tenant. O mitigado hoje: a rota rejeita com `413` qualquer corpo acima de 256 KiB, antes de fazer parse ou gravar. O que continua em aberto, aceito conscientemente: não há rate limit por IP/token nem pruning de linhas antigas de fonte desconhecida (`account_id is null`) — um chamador pode gravar muitas linhas pequenas repetidamente variando `lead_id` (o índice único não bloqueia isso). Sem dono declarado para endereçar antes do merge; para produção considerar rate limiting na borda (Vercel/WAF) e um job de retenção para linhas antigas sem `account_id`.
+
+## Reprocessamento de leads (cron)
+
+`GET /api/webhooks/reprocessar`, gateada por `Authorization: Bearer ${CRON_SECRET}`, varre entregas `pendente`/`falhou` e reprocessa cada uma com backoff (a RPC `entregas_pendentes` decide o quê e quando). `vercel.json` declara a cadência de 10 minutos, mas **no plano Hobby da Vercel o cron roda no máximo uma vez por dia, independentemente do que estiver escrito nesse arquivo** — os 10 minutos só valem a partir do plano Pro. A rota continua invocável à mão com o `CRON_SECRET`, e é assim que se esvazia a fila num incidente antes de existir um plano pago.
+
+## Reprocessamento manual de entregas (achado 4 do review final)
+
+`ignorado` e `falhou`-com-5-tentativas são **estados terminais**: nada no sistema hoje move uma entrega de volta para `pendente` nem zera `tentativas`. Isso é esperado para a maioria de `ignorado` (`lead_de_teste`, `fonte_nao_encontrada` de tráfego alheio) — mas dois casos reais ficam presos sem saída automática:
+
+- **`chave_invalida`**: o cliente colou a chave errada no Ativo de formulário do Google Ads. Todo lead que chegou nesse período foi gravado como `ignorado`, o `payload_bruto` inteiro está no banco (migration `0010` é explícita: o payload é reprocessável), mas nada o reprocessa sozinho depois que o admin corrige a chave.
+- **`meta_indisponivel`** além da quinta tentativa: uma instabilidade do Graph API mais longa que ~2h (a janela de backoff é 3+9+27+81 minutos) esgota as tentativas e a linha fica `falhou` para sempre, mesmo que o Graph volte a responder normalmente minutos depois.
+
+A ação de reprocessar pela tela é backlog — hoje a saída é manual, direto no banco:
+
+```sql
+update public.integration_log
+   set status = 'pendente',
+       tentativas = 0,
+       ultima_tentativa_em = null
+ where account_id = '<uuid da conta>'         -- sempre escopar por conta antes de rodar
+   and erro = 'chave_invalida'                -- ou 'meta_indisponivel', ou o código relevante
+   and criado_em >= '<timestamp do incidente>' -- e por janela de tempo, para não reabrir entregas antigas e já investigadas
+returning id;
+```
+
+Depois do update a próxima varredura do cron (ou uma chamada manual à rota de reprocessamento) pega essas linhas normalmente — `entregas_pendentes` não distingue uma linha reaberta à mão de uma que nunca falhou. **Sempre escope por `account_id`, `erro` e janela de tempo** antes de rodar: a tabela é compartilhada por todos os tenants, e um `update` sem `where` reabriria entregas de outras contas e de incidentes já resolvidos.
 
 ## Getting Started
 

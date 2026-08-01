@@ -153,7 +153,7 @@ Nada do resto do plano roda sem o segredo registrado no banco: `segredo_hash` fi
 - Modify: `tests/e2e/global-setup.ts` (topo do arquivo, onde `CONN` é montado)
 - Modify: `.env.local.example`
 - Modify: `playwright.config.ts` (bloco `webServer.env`)
-- Test: `tests/integration/0009_seed_segredo.test.ts`
+- Test: `tests/integration/seed-e-guarda-host.test.ts`
 
 **Interfaces:**
 - Produces: `SEGREDO_DEV = 'segredo-de-ingestao-local'` — o valor literal que o `seed.sql` registra e que `.env.local.example` traz em `INGESTAO_SEGREDO`. Todas as tasks seguintes presumem que `db reset` deixa esse segredo válido.
@@ -161,14 +161,14 @@ Nada do resto do plano roda sem o segredo registrado no banco: `segredo_hash` fi
 
 - [ ] **Step 1: Escrever o teste da guarda de host, e vê-lo falhar**
 
-`tests/integration/0009_seed_segredo.test.ts` começa com dois casos para `exigirHostLocal`, sem tocar o banco:
+`tests/integration/seed-e-guarda-host.test.ts` começa com dois casos para `exigirHostLocal`, sem tocar o banco:
 
 1. `exigirHostLocal('postgresql://postgres:postgres@127.0.0.1:54322/postgres')` devolve a string inalterada.
 2. `exigirHostLocal('postgresql://user:pw@db.projeto.supabase.co:5432/postgres')` lança, e a mensagem nomeia o host recusado.
 
 Adicione também `localhost` como aceito e uma string que não é URL nenhuma como recusada — parse que falha tem que **recusar**, nunca deixar passar por não conseguir opinar.
 
-Rode `npx vitest run --config vitest.integration.config.ts tests/integration/0009_seed_segredo.test.ts`.
+Rode `npx vitest run --config vitest.integration.config.ts tests/integration/seed-e-guarda-host.test.ts`.
 Esperado: FAIL, por o módulo não existir.
 
 - [ ] **Step 2: Implementar `exigirHostLocal` e ligá-la nos dois consumidores**
@@ -189,7 +189,7 @@ No mesmo arquivo, um caso de integração:
 
 - `select public.hash_segredo('segredo-de-ingestao-local') = segredo_hash from public.ingestion_config where id` devolve `true`.
 
-Rode `npm run test:integration -- tests/integration/0009_seed_segredo.test.ts`.
+Rode `npm run test:integration -- tests/integration/seed-e-guarda-host.test.ts`.
 Esperado: FAIL — `segredo_hash` é nulo, e o `db reset` mais recente não semeou nada.
 
 - [ ] **Step 4: Escrever o `seed.sql`**
@@ -239,7 +239,7 @@ Esperado: verde. O teste do Step 3 agora passa porque o seed rodou no reset.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add supabase/seed.sql tests/integration/helpers/guarda-host.ts tests/integration/helpers/db.ts tests/e2e/global-setup.ts tests/integration/0009_seed_segredo.test.ts .env.local.example playwright.config.ts
+git add supabase/seed.sql tests/integration/helpers/guarda-host.ts tests/integration/helpers/db.ts tests/e2e/global-setup.ts tests/integration/seed-e-guarda-host.test.ts .env.local.example playwright.config.ts
 git commit -m "feat: semeia o segredo de ingestao em dev e recusa SUPABASE_DB_URL nao local"
 ```
 
@@ -435,6 +435,7 @@ Casos:
 5. **Meta com Page desconhecida grava `ignorado` com `erro = 'fonte_nao_encontrada'`, `account_id` nulo, e devolve token nulo.**
 6. **Google com URL token válido e `google_key` certo grava `pendente`,** e o token do retorno é nulo (Google não usa token de página).
 7. **Google com URL token válido e `google_key` errado grava `ignorado` com `erro = 'chave_invalida'` e `account_id` preenchido.** É o que faz "configurei a chave errada no Google Ads" aparecer no painel em vez de sumir.
+7b. **Fonte Google com `google_key_hash` nulo recusa a entrega, inclusive quando ela não apresenta chave nenhuma.** Monte a fonte com `google_key_hash` nulo por `comoServico` e chame sem `p_google_key`: tem que gravar `ignorado`/`chave_invalida`. Sem a cláusula `v_key_hash is null`, `is distinct from` com os dois lados nulos devolve falso e a entrega passa — fail-open exatamente no caminho sem credencial. Cubra também a mesma fonte **com** chave apresentada, que já era recusada: as duas juntas provam que a assimetria acabou.
 8. **`is_test` grava `ignorado` com `erro = 'lead_de_teste'`.** Cubra `true` booleano do jsonb e a string `"true"`.
 9. **Reenvio é no-op.** Duas chamadas com o mesmo `(provedor, external_id)`: a segunda devolve `status = 'duplicado'` e `log_id` nulo, e a tabela continua com uma linha só.
 10. **`external_id` vazio ou só espaço levanta `external_id_invalido`.**
@@ -554,10 +555,19 @@ begin
     v_status := 'ignorado';
     v_erro := 'fonte_nao_encontrada';
   elsif p_provedor = 'google'
-        and v_key_hash is distinct from public.hash_segredo(p_google_key) then
+        and (v_key_hash is null
+             or v_key_hash is distinct from public.hash_segredo(p_google_key)) then
     -- A URL resolveu, a chave do corpo nao bate. Aqui SABEMOS a conta, entao
     -- esta linha aparece no painel de /config — e o que transforma "configurei
     -- a chave errada no Google Ads" de misterio em diagnostico.
+    --
+    -- O `v_key_hash is null` NAO e redundante, e tirar essa clausula abre um
+    -- fail-open: `is distinct from` com os DOIS lados nulos devolve falso, entao
+    -- uma fonte sem google_key_hash configurado passaria direto por este check
+    -- justamente quando a entrega tambem nao apresenta chave. A assimetria era o
+    -- pior da versao anterior — sem chave passava, COM chave era recusada.
+    -- Fonte sem chave configurada nao aceita entrega nenhuma. Verificado contra
+    -- o Postgres: `null is distinct from hash_segredo(null)` e false.
     v_status := 'ignorado';
     v_erro := 'chave_invalida';
   elsif coalesce(p_payload ->> 'is_test', '') in ('true', 't', '1') then
@@ -598,9 +608,12 @@ $$;
 -- Varredura do cron. Devolve tudo que o processamento precisa para nao ter que
 -- voltar ao banco: o payload cru e, no Meta, o token da Page.
 --
--- Backoff por numero de tentativas: 3^n minutos, ou seja 1, 3, 9, 27 e 81.
--- Desiste em 5 — alem disso a falha nao e transitoria, e retentar so gasta cota
--- do Graph e enche o log.
+-- Backoff por numero de tentativas: 3^n minutos. Na pratica a janela observada
+-- comeca em 3 e nao em 1, porque so registrar_falha marca 'falhou' e ela sempre
+-- incrementa antes — entao toda linha que chega aqui em 'falhou' ja tem
+-- tentativas >= 1. A sequencia real e 3, 9, 27 e 81 minutos. Desiste em 5:
+-- alem disso a falha nao e transitoria, e retentar so gasta cota do Graph e
+-- enche o log.
 create or replace function public.entregas_pendentes(p_segredo text, p_limite integer)
 returns table (
   log_id uuid,
@@ -720,10 +733,13 @@ A transação que decide se nasce card ou aviso. É o coração do sub-projeto.
 10. **Idempotência:** chamar duas vezes com o mesmo `log_id` devolve `ja_processado` na segunda e não cria nada.
 11. **Entrega `ignorado` não vira lead:** `ingerir_lead` sobre um log `ignorado` devolve `ja_processado`.
 12. **Entrega `falhou` é reprocessável:** um log em `falhou` é aceito e vira `processado`.
-13. **`nome` ausente ou em branco vira `'Lead sem nome'`,** porque `leads.nome` é `not null` e perder o lead por falta de nome é o pior desfecho possível.
+13. **`nome` ausente ou em branco vira `'Lead sem nome'`,** porque `leads.nome` é `not null` e perder o lead por falta de nome é o pior desfecho possível. **Atenção à armadilha que já derrubou este caso uma vez:** se as duas ingestões deste teste compartilharem `email_norm` ou `telefone_e164`, a segunda cai no ramo de dedup, nenhum lead novo nasce, e a asserção acaba lendo o lead da primeira — o `btrim` fica sem cobertura nenhuma. Dê contatos distintos a cada ingestão e **asserte o `status` de cada retorno** (`criado` nas duas, `lead_id` diferente); é o `status` não-asserido que deixa esse tipo de teste passar pelo motivo errado.
 14. **Responsável padrão que não é mais membro da conta é nulificado, não gravado.** Remova a membership do responsável padrão e ingira: o lead nasce com `responsavel_id` nulo. Sem esta guarda o lead nasceria invisível para todo vendedor da conta, sem erro nenhum — é o backlog #4 voltando por dentro do definer.
 15. **Log sem `source_id` levanta `fonte_nao_encontrada`.**
 16. **Sem telefone e sem email não deduplica com ninguém** — cria card novo mesmo havendo lead aberto sem contato.
+17. **A etapa escolhida é a primeira ABERTA, não a de menor `ordem`.** O pipeline semeado por `criar_conta` põe uma etapa `aberta` em `ordem = 1`, então nos casos acima "primeira aberta" e "primeira por ordem" coincidem sempre e **nenhum deles discrimina**. Reordene para que uma etapa de tipo `ganho` fique com `ordem` menor que qualquer aberta, e asserte o `stage_id` resolvido. Não asserte `lead.status` aqui: ele tem default `'aberto'` e nenhum trigger o altera no insert, então a asserção passaria com qualquer etapa e não diria nada.
+18. **`log_nao_encontrado`** quando o `p_log_id` não existe — com o segredo **correto**, senão a função para no portão do segredo e o caminho nunca é exercitado.
+19. **A entrega bem-sucedida limpa o `erro` do log.** Sobre um log que `registrar_falha` deixou com erro, uma ingestão bem-sucedida tem que zerar a coluna. Sem esta asserção, remover `erro = null` dos dois `update` deixaria a suíte verde e um erro velho visível para sempre no painel de diagnóstico.
 
 Rode `npm run test:integration -- tests/integration/0011_ingerir_lead.test.ts`.
 Esperado: FAIL, a função não existe.
@@ -805,10 +821,13 @@ begin
     raise exception 'pipeline_nao_encontrado';
   end if;
 
-  -- Primeira etapa ABERTA, e nao `ordem = 1`: leads.status e derivado do tipo
-  -- da etapa dentro de move_lead_stage, entao se a conta reordenar e puser uma
-  -- etapa de ganho na frente, o lead nasceria ganho sem ninguem ter vendido
-  -- nada.
+  -- Primeira etapa ABERTA, e nao `ordem = 1`. Se a conta reordenar e puser uma
+  -- etapa de ganho na frente, `ordem = 1` poria o lead na coluna Ganho — e
+  -- `leads.status` NAO acompanharia, porque ele so muda dentro de
+  -- move_lead_stage e o default da coluna e 'aberto'. O resultado seria um card
+  -- na coluna de Ganho com status 'aberto': dessincronizado, contando como
+  -- ganho em toda leitura por etapa e como aberto em toda leitura por status —
+  -- e, de quebra, elegivel a dedup para sempre.
   select s.id into v_stage
     from public.stages s
    where s.pipeline_id = v_pipeline and s.tipo = 'aberta'
@@ -845,7 +864,13 @@ begin
          (v_tel is not null and l.telefone_e164 = v_tel)
          or (v_email is not null and l.email_norm = v_email)
        )
-     order by l.criado_em desc
+     -- `l.id desc` como desempate, e nao so criado_em: duas leads abertas com o
+     -- mesmo telefone existem (cadastro manual nao bloqueia duplicata), e sem
+     -- criterio de desempate qual delas recebe o evento de reingestao e quem e
+     -- notificado ficam por conta do plano de execucao. E o mesmo defeito que a
+     -- 0006 corrigiu em lead_events com a coluna seq; aqui `id` ja serve, so
+     -- precisa estar escrito.
+     order by l.criado_em desc, l.id desc
      limit 1;
   end if;
 
@@ -1087,7 +1112,7 @@ Rode o teste do Step 1. Esperado: PASS.
 5. Email em maiúsculas vira minúsculo em `emailNorm`, e `email` guarda o cru.
 6. Email malformado deixa `emailNorm` nulo sem perder `email`.
 7. Campo desconhecido cai em `extras` com o nome original como chave.
-8. `values` vazio ou ausente não quebra e não inventa string vazia — vira nulo.
+8. `values` vazio ou ausente não quebra e não inventa string vazia — vira nulo. **Isso vale para `extras` também:** campo desconhecido *sem resposta* é **omitido** de `extras`, não gravado como `''`. `extras` é `Record<string, string>` e não comporta nulo, então omitir é a única forma de não inventar. Não se perde nada com isso — `extras` guarda respostas, uma pergunta sem resposta não tem resposta a guardar, e o payload cru continua inteiro em `integration_log.payload_bruto`. Gravar `''` faria a timeline dizer que a pessoa respondeu em branco, que é diferente de não ter respondido.
 9. `campanha` e `formulario` vindos do segundo argumento aparecem em `campanhaOrigem`/`formularioOrigem`.
 10. Nenhum campo reconhecido → todos os campos nulos, `extras` vazio, e **nada lança**.
 
@@ -1243,6 +1268,13 @@ Só depois disso `JSON.parse(cru)`. Para cada `entry[].changes[]` com `field ===
 
 Uma entrega que falhe ao registrar **não** pode derrubar as outras do mesmo lote nem mudar o 200.
 
+**Duas exceções ao 200, e a razão das duas é a mesma.** O princípio do §8 da spec sobre lead é literal: *nunca descarta*. Um 200 diz ao Meta "recebi e guardei", e ele nunca reenvia — então todo caminho que responde 200 sem ter gravado nada perde o lead **para sempre**, e o único sintoma para o operador é "parou de chegar lead".
+
+- **Servidor não configurado** (`criarIngestaoStore()` falha por `INGESTAO_SEGREDO` vazio) → **500**. É falha nossa, é transitória, e o Meta retenta 5xx por horas: o lead sobrevive ao operador consertando a variável. Um 200 aqui troca um incidente de configuração por perda permanente de lead.
+- **`registrarEntrega` devolve falha** para uma entrega do lote → não derruba o lote e não muda o 200, mas **loga o código do erro**. Sem log, `external_id_invalido` ou `segredo_invalido` somem sem deixar rastro em lugar nenhum — nem no `integration_log`, que é justamente o que não chegou a ser escrito.
+
+Isso não contradiz o 200 de Page desconhecida do §8: lá o payload **foi** gravado (log `ignorado`), e o 200 evita virar oráculo de quais Pages estão conectadas. Aqui não foi gravado nada.
+
 Rode o teste do Step 6. Esperado: PASS.
 
 - [ ] **Step 8: Suíte e commit**
@@ -1389,6 +1421,7 @@ Esta é a task que levanta o portão de deploy do `README.md`. Enquanto ela não
 7. **`reivindicar_fonte_meta` sem segredo levanta `segredo_invalido`;** sem sessão, `sem_sessao`; por não-admin da conta alvo, `sem_permissao`.
 8. **`reivindicar_fonte_meta` com `page_id` vazio ou só espaço levanta `page_id_invalido`.**
 9. **`conectar_fonte_google` continua com a assinatura de 5 argumentos e sem segredo.** Registro deliberado: não há vetor de squat no Google — `external_id` é sempre nulo, o índice global não a alcança, e o token é gerado no servidor. Este teste existe para que a assimetria seja decisão registrada, e não esquecimento.
+10. **`conectar_fonte_google` recusa `p_google_key` nulo ou só espaço, com `segredo_vazio`.** Achado do review da Task 3, fechado aqui: sem essa validação dá para criar, por chamada direta ao PostgREST, uma fonte com `google_key_hash` nulo. A Task 3 já fecha a porta do lado do `registrar_entrega` (fonte sem chave não aceita entrega nenhuma), e esta validação impede que o estado inválido chegue a existir. Fail-closed nas duas pontas — nenhuma das duas sozinha era suficiente: só a da Task 3 deixaria o dado inconsistente no banco, e só esta deixaria as linhas criadas antes dela ainda vulneráveis.
 
 `tests/integration/0008_fontes_conectadas.test.ts` precisa passar a chamar a RPC com o argumento novo; **não afrouxe nenhuma asserção existente lá** — se algum caso ficar vermelho por outro motivo que não a assinatura, pare e reporte.
 
@@ -1427,6 +1460,9 @@ Esperado: FAIL.
 -- nulo la, entao o indice unico global nem alcanca essas linhas, e o token da
 -- URL e gerado no servidor. Nao ha Page de terceiro a travar. A assimetria e
 -- decisao registrada, com teste que a afirma.
+--
+-- Ela ganha OUTRA coisa, por achado do review da Task 3: validacao de
+-- p_google_key. Ver o bloco dela no fim deste arquivo.
 
 -- drop, e nao create or replace: a assinatura mudou, e replace com lista de
 -- argumentos diferente CRIA UMA SOBRECARGA em vez de substituir. As duas
@@ -1546,6 +1582,68 @@ begin
   return v_id;
 end;
 $$;
+
+-- Fecha a outra ponta do achado do review da Task 3.
+--
+-- A `0010` fez `registrar_entrega` recusar entrega de fonte Google cujo
+-- google_key_hash seja nulo. Isto impede que essa fonte chegue a existir: sem a
+-- validacao, um admin podia chamar esta funcao direto pelo PostgREST com
+-- p_google_key nulo, e a linha nascia com hash nulo. A tela nunca faz isso (o
+-- SupabaseFonteStore gera a chave), entao o custo aqui e zero e o ganho e que o
+-- estado invalido deixa de ser representavel.
+--
+-- Nenhuma das duas metades bastava sozinha: so a da 0010 deixaria dado
+-- inconsistente no banco, e so esta deixaria vulneravel qualquer linha criada
+-- antes dela.
+--
+-- Assinatura inalterada (5 argumentos, sem segredo) — o teste que afirma isso
+-- continua valendo.
+create or replace function public.conectar_fonte_google(
+  p_account_id uuid,
+  p_nome text,
+  p_url_token text,
+  p_google_key text,
+  p_responsavel uuid
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'sem_sessao';
+  end if;
+  if public.papel_na_conta(p_account_id) is distinct from 'admin' then
+    raise exception 'sem_permissao';
+  end if;
+  if not public.e_membro_da_conta(p_account_id, p_responsavel) then
+    raise exception 'responsavel_invalido';
+  end if;
+  if p_url_token is null or btrim(p_url_token) = '' then
+    raise exception 'segredo_vazio';
+  end if;
+  -- NOVO. Mesmo codigo de erro do url_token: para quem esta na tela, os dois
+  -- sao "o segredo saiu em branco", e a UI ja traduz segredo_vazio.
+  if p_google_key is null or btrim(p_google_key) = '' then
+    raise exception 'segredo_vazio';
+  end if;
+
+  insert into public.lead_sources
+    (account_id, provedor, external_id, nome, responsavel_padrao_id)
+  values (p_account_id, 'google', null, p_nome, p_responsavel)
+  returning id into v_id;
+
+  -- So o hash entra. O token em claro existe uma vez, no retorno da acao que o
+  -- gerou, e nunca mais e recuperavel — mesmo contrato do token de convite.
+  insert into public.source_credentials (source_id, url_token_hash, google_key_hash)
+  values (v_id, public.hash_segredo(p_url_token), public.hash_segredo(p_google_key));
+
+  return v_id;
+end;
+$$;
 ```
 
 - [ ] **Step 3: Rodar reset e os testes de integração**
@@ -1574,6 +1672,15 @@ Esperado: FAIL.
 Em `fontes.ts`: `conectarMeta` passa `p_segredo` lendo `process.env.INGESTAO_SEGREDO`; `reivindicarMeta` nasce com a mesma forma. Acrescente `segredo_invalido` e `posse_nao_comprovada` à lista `CODIGOS` (`fontes.ts:38-46`), senão o código chega cru à tela.
 
 Em `acoes-fontes.ts`: `posseDaPagina` entra **antes** do `assinarLeadgen`, não depois. `reivindicarPaginaAction` repete a mesma sequência e chama `reivindicarMeta`.
+
+**A compensação de `desassinarLeadgen` só pode desfazer o que esta chamada fez.** `assinarLeadgen` é idempotente do lado do Meta: quando a Page já pertence a outra conta do CRM, ela **já está inscrita**, e a chamada não cria nada. Se a gravação falhar depois disso, uma compensação incondicional remove a inscrição que o *outro* tenant depende — e aquele cliente para de receber lead, sem erro nenhum em lugar nenhum. É o mesmo desfecho catastrófico e silencioso que a compensação existe para evitar, só que aplicado à vítima em vez de ao invasor.
+
+Duas regras fecham os dois caminhos por onde isso é alcançável:
+
+- **Nunca compense no caminho de reivindicação.** Ali a premissa é que a Page já pertence a alguém, logo a inscrição nunca é nossa.
+- **Nunca compense quando o erro for `page_ja_conectada`.** Esse código é a prova de que a Page já era de outra conta, e portanto de que a inscrição não foi criada agora.
+
+E uma terceira que evita o caso mais provável na estreia: **valide `INGESTAO_SEGREDO` antes de tocar no Graph.** Sem isso, um deploy que suba sem a variável faz todo clique em Conectar inscrever e desinscrever a Page de um terceiro, com o operador vendo apenas "a ingestão não está configurada".
 
 Em `erros.ts`: mensagens para `posse_nao_comprovada` ("Não conseguimos confirmar no Facebook que essa página é sua."), `segredo_invalido` ("A ingestão não está configurada neste ambiente. Fale com o suporte.") e `ingestao_nao_configurada` (mesma mensagem).
 
@@ -1609,6 +1716,7 @@ git commit -m "feat: fecha o squat de Page com posse provada e caminho de reivin
 - Create: `src/app/(app)/acoes-notificacoes.ts`
 - Create: `src/app/(app)/sino.tsx`
 - Create: `tests/integration/notificacoes-store.test.ts`
+- Create: `tests/e2e/sino.spec.ts`
 - Modify: `src/app/(app)/layout.tsx`
 
 **Interfaces:**
@@ -1658,21 +1766,39 @@ Sem `filter` de propósito: **a RLS é o filtro**. `notifications_dono_select` j
 
 A limpeza no `return` do `useEffect` não é opcional: sem `removeChannel`, cada navegação soft deixa um canal aberto e o `router.refresh()` passa a disparar N vezes por notificação.
 
-- [ ] **Step 4: Verificar o roteamento na prática**
+- [ ] **Step 4: Escrever o E2E do sino, e vê-lo falhar**
 
-Verificação manual, com dois navegadores (ou um normal e um anônimo): admin numa janela, vendedor na outra, ambos em `/funil`. Dispare uma ingestão pelo endpoint do Google com o vendedor como responsável padrão da fonte. Confirme, nesta ordem:
+Nesta altura as Tasks 1 a 10 estão prontas, inclusive o webhook do Google — então o sino dá para provar automatizado, e esta task não fecha com o entregável principal só em verificação manual.
 
-1. O sino do **vendedor** acende sem reload.
-2. O card aparece no quadro dele sem reload.
-3. O sino do **admin** **não** acende — e confirme isso *depois* de ter visto o do vendedor acender, nunca antes. Asserção negativa observada antes da mudança chegar não afirma nada; é a lição do portão de E2E do Plano 3.
+`tests/e2e/sino.spec.ts`:
 
-Se o sino não acender, o suspeito número um é o token de autenticação do Realtime: o canal precisa da sessão para a RLS ser avaliada com `auth.uid()` preenchido. Sem sessão o assinante é `anon`, a policy nega tudo, e o sintoma é exatamente "não chega nada, sem erro". Se for o caso, chame `cliente.realtime.setAuth(...)` com o token da sessão antes de `subscribe()`, e **escreva no código por que a linha existe**.
+1. `criarConta(page)` — o admin recém-criado é o único membro, então ele mesmo é o responsável.
+2. Em `/config`, gere a URL do Google e capture URL e chave. Defina o responsável padrão da fonte como o próprio admin, **esperando a resposta POST da Server Action** — o `selectOption` só espera o evento de DOM, e o passo seguinte passa na frente da escrita (é a corrida que o Plano 3 encontrou; o padrão correto já existe em `tests/e2e/funil.spec.ts`).
+3. Vá para `/funil` e **fique lá**, sem navegar nem recarregar.
+4. Com `request.post` do Playwright, poste um lead na URL capturada, com a chave capturada e `lead_id` único (`carimbo()` de `tests/e2e/apoio.ts`).
+5. **Asserção positiva:** o indicador de não-lidas do sino aparece **sem reload**, com timeout generoso. É o Realtime disparando `router.refresh()`.
+6. Abrir o painel do sino mostra a entrada, e ela linka para a ficha daquele lead.
 
-- [ ] **Step 5: Suíte e commit**
+Rode `npm run test:e2e -- sino.spec.ts`, com o `npm run dev` derrubado antes.
+Esperado: FAIL.
+
+**Se o sino não acender, o suspeito número um é o token de autenticação do Realtime:** o canal precisa da sessão para a RLS ser avaliada com `auth.uid()` preenchido. Sem sessão o assinante é `anon`, `notifications_dono_select` nega tudo, e o sintoma é exatamente "não chega nada, sem erro nenhum". Se for o caso, chame `cliente.realtime.setAuth(...)` com o token da sessão antes de `subscribe()`, e **escreva no código por que a linha existe** — é o tipo de linha que alguém apaga por parecer supérflua.
+
+- [ ] **Step 5: Experimento de discriminação**
+
+Prove que a asserção 5 discrimina: remova a assinatura do Realtime, rode, confirme o vermelho, restaure. **Não substitua isto por leitura de código.** No Plano 3, duas leituras independentes concluíram que asserções discriminavam e as duas estavam erradas; o que separou foi rodar o experimento.
+
+- [ ] **Step 6: Verificação manual do isolamento entre usuários**
+
+O E2E acima prova que a notificação **chega** a quem deve. Que ela **não chega** a quem não deve está coberto no nível do banco pelo caso 2 do teste de integração (vendedor B não lê a notificação de A), que é onde a garantia realmente mora — a policy é o roteamento.
+
+Confirme uma vez à mão, com dois navegadores (um normal e um anônimo), que o Realtime respeita isso na prática: admin numa janela, vendedor na outra, ambos em `/funil`, ingestão com o vendedor como responsável. O sino do vendedor acende; o do admin não. **Confirme o "não acende" depois de ter visto o do vendedor acender, nunca antes** — asserção negativa observada antes de a mudança chegar não afirma nada.
+
+- [ ] **Step 7: Suíte e commit**
 
 ```bash
 npm run test:integration && npm test && npm run typecheck && npm run lint && npm run build
-git add src/lib/data/notificacoes.ts src/app/\(app\)/sino.tsx src/app/\(app\)/acoes-notificacoes.ts src/app/\(app\)/layout.tsx tests/integration/notificacoes-store.test.ts
+git add src/lib/data/notificacoes.ts src/app/\(app\)/sino.tsx src/app/\(app\)/acoes-notificacoes.ts src/app/\(app\)/layout.tsx tests/integration/notificacoes-store.test.ts tests/e2e/sino.spec.ts
 git commit -m "feat: sino de notificacoes com roteamento por RLS no Realtime"
 ```
 
@@ -1752,10 +1878,10 @@ O `external_id` único por rodada é justamente o que impede colisão, então o 
 4. Vá para `/funil` e **fique lá**.
 5. Com `request.post` do Playwright, poste na URL capturada um payload de lead do Google, com a chave capturada e `lead_id` único (use `carimbo()`).
 6. **Asserção positiva primeiro:** o card com o nome do lead aparece na coluna "Novo lead" **sem reload**, com timeout generoso. É o Realtime disparando `router.refresh()`. Esta asserção é a que dá segurança para todas as seguintes.
-7. Depois dela, o indicador de não-lidas do sino mostra pelo menos uma.
-8. Abra o painel do sino e confirme que a entrada linka para a ficha daquele lead.
-9. Poste **de novo**, com `lead_id` diferente e o mesmo telefone. Espere a asserção positiva de que a timeline do lead existente ganhou o evento de reingestão, e **só então** afirme que continua havendo um card só com aquele nome. Nunca o contrário — asserção negativa antes da mudança chegar passa observando o instante anterior.
-10. Vá a `/config` e confirme que as duas entregas aparecem no painel, com status de processado.
+7. Poste **de novo**, com `lead_id` diferente e o mesmo telefone. Espere a asserção positiva de que a timeline do lead existente ganhou o evento de reingestão, e **só então** afirme que continua havendo um card só com aquele nome. Nunca o contrário — asserção negativa antes da mudança chegar passa observando o instante anterior.
+8. Vá a `/config` e confirme que as duas entregas aparecem no painel, com status de processado.
+
+O sino **não** é asserido aqui: a Task 11 já o cobre em `tests/e2e/sino.spec.ts`, e repetir a asserção em dois arquivos faz os dois falharem juntos pelo mesmo motivo sem dizer nada a mais.
 
 Rode `npm run test:e2e -- ingestao.spec.ts` (com o `npm run dev` derrubado antes).
 Esperado: FAIL, e por motivo relacionado ao que falta, não por setup.
@@ -1766,7 +1892,7 @@ Se alguma asserção ficar vermelha, **conserte o produto, não o teste**. Foi e
 
 - [ ] **Step 4: Experimento de discriminação**
 
-Para as asserções 6 e 9, prove que discriminam: quebre o comportamento de propósito (remova a assinatura do Realtime para a 6; remova o ramo de dedup do `ingerir_lead` para a 9), rode, confirme o vermelho, restaure.
+Para as asserções 6 e 7, prove que discriminam: quebre o comportamento de propósito (remova a assinatura do Realtime para a 6; remova o ramo de dedup do `ingerir_lead` para a 7), rode, confirme o vermelho, restaure.
 
 **Este passo não é opcional e não pode ser substituído por leitura.** No Plano 3, duas leituras independentes de código concluíram que duas asserções discriminavam, e as duas estavam erradas — o que separou foi rodar o experimento. Rode uma asserção por vez: o Playwright aborta no primeiro `expect` que falha, então um experimento com as três juntas só valida a primeira.
 

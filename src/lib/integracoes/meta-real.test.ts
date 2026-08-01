@@ -114,3 +114,148 @@ describe('MetaGraphReal — falhas de rede nao escapam do contrato do port', () 
     expect(r.erro).toBe('meta_indisponivel')
   })
 })
+
+describe('MetaGraphReal — buscarLead, campanhaDoAnuncio e posseDaPagina', () => {
+  const fetchOriginal = global.fetch
+
+  afterEach(() => {
+    global.fetch = fetchOriginal
+    vi.unstubAllEnvs()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('buscarLead mapeia field_data para campos e extrai ad_id/form_id', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        field_data: [
+          { name: 'full_name', values: ['Fulano de Tal'] },
+          { name: 'email', values: ['fulano@example.com'] },
+        ],
+        ad_id: 'ad-1',
+        form_id: 'form-1',
+        created_time: '2026-01-01T00:00:00+0000',
+      }),
+    })
+    const g = new MetaGraphReal('app-id', 'app-secret')
+
+    const r = await g.buscarLead('leadgen-1', 'token-da-pagina')
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor.campos).toEqual([
+      { name: 'full_name', values: ['Fulano de Tal'] },
+      { name: 'email', values: ['fulano@example.com'] },
+    ])
+    expect(r.valor.adId).toBe('ad-1')
+    expect(r.valor.formId).toBe('form-1')
+    expect(r.valor.criadoEm).toBe('2026-01-01T00:00:00+0000')
+  })
+
+  it('buscarLead com resposta 200 sem field_data devolve meta_indisponivel em vez de estourar', async () => {
+    // Mesma guarda que listarPaginas ja tem em meta-real.ts:100: resposta bem
+    // formada (r.ok true, sem "error"), mas em formato que o codigo nao
+    // espera. Sem a guarda, ler .map de undefined levantaria TypeError e a
+    // excecao escaparia do mesmo jeito que um fetch rejeitado.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    })
+    const g = new MetaGraphReal('app-id', 'app-secret')
+
+    const r = await g.buscarLead('leadgen-1', 'token-da-pagina')
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('meta_indisponivel')
+  })
+
+  it('buscarLead devolve meta_indisponivel quando o fetch rejeita', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'))
+    const g = new MetaGraphReal('app-id', 'app-secret')
+
+    const r = await g.buscarLead('leadgen-1', 'token-da-pagina')
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('meta_indisponivel')
+  })
+
+  it('campanhaDoAnuncio le campaign.name do corpo', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ campaign: { name: 'Campanha de Verao' } }),
+    })
+    const g = new MetaGraphReal('app-id', 'app-secret')
+
+    const r = await g.campanhaDoAnuncio('ad-1', 'token-da-pagina')
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor).toBe('Campanha de Verao')
+  })
+
+  it('campanhaDoAnuncio devolve meta_indisponivel quando o fetch rejeita', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'))
+    const g = new MetaGraphReal('app-id', 'app-secret')
+
+    const r = await g.campanhaDoAnuncio('ad-1', 'token-da-pagina')
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('meta_indisponivel')
+  })
+
+  it('posseDaPagina devolve ok quando /me responde com o mesmo id, e chama GET /me — nunca /{page_id}', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: '100000000000001' }),
+    })
+    global.fetch = fetchMock
+    const g = new MetaGraphReal('app-id', 'app-secret')
+
+    const r = await g.posseDaPagina('100000000000001', 'token-da-pagina')
+    expect(r.ok).toBe(true)
+
+    // Achado 6 do review final: a substancia inteira do fechamento do
+    // squat de Page (README, secao "O que fechou o risco") e esta rota
+    // chamar /me, nunca /{page_id} — um token de pagina consegue ler campos
+    // publicos de QUALQUER pagina via GET /{page_id}?fields=id, entao essa
+    // chamada teria sucesso mesmo com o token errado e nao provaria posse
+    // nenhuma. So GET /me sempre responde como a propria pagina dona do
+    // token. Sem esta asserção de URL, uma regressao para /{page_id} passa
+    // verde em todo teste deste arquivo (inclusive o de baixo, que so
+    // confere o `id` devolvido) e reabre o squat silenciosamente.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const urlChamada = new URL(fetchMock.mock.calls[0][0] as string | URL)
+    expect(urlChamada.pathname).toBe('/v21.0/me')
+    expect(urlChamada.pathname).not.toContain('100000000000001')
+  })
+
+  it('posseDaPagina devolve posse_nao_comprovada quando /me responde com id diferente', async () => {
+    // O caso mais importante deste arquivo: um token de pagina so prova posse
+    // da propria pagina. GET /{page_id}?fields=id NAO serviria de prova — um
+    // token de pagina consegue ler campos publicos de OUTRAS paginas, entao
+    // essa chamada teria sucesso mesmo com o token errado. GET /me e diferente:
+    // ele sempre responde como a propria pagina do token, nunca como outra.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: '999999999999999' }),
+    })
+    const g = new MetaGraphReal('app-id', 'app-secret')
+
+    const r = await g.posseDaPagina('100000000000001', 'token-de-outra-pagina')
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('posse_nao_comprovada')
+  })
+
+  it('posseDaPagina devolve meta_indisponivel quando o fetch rejeita', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'))
+    const g = new MetaGraphReal('app-id', 'app-secret')
+
+    const r = await g.posseDaPagina('100000000000001', 'token-da-pagina')
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('meta_indisponivel')
+  })
+})

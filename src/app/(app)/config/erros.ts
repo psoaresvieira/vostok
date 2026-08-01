@@ -21,6 +21,15 @@ const MENSAGENS_ERRO: Record<string, string> = {
   page_id_invalido: 'O Facebook não devolveu o identificador dessa página. Tente conectar de novo.',
   fonte_nao_encontrada: 'Essa integração não existe mais. Recarregue a página.',
   segredo_vazio: 'O segredo não pode ficar em branco.',
+  posse_nao_comprovada: 'Não conseguimos confirmar no Facebook que essa página é sua.',
+  // As duas proximas sao o mesmo problema visto de dois lugares: o servidor
+  // sem INGESTAO_SEGREDO configurado. segredo_invalido vem do banco (a RPC
+  // recebeu um segredo que nao bate com ingestion_config); ingestao_nao_configurada
+  // vem do proprio servidor Next, antes de tentar a RPC (ver criarIngestaoStore
+  // em lib/data/ingestao.ts). Nenhuma das duas e algo que o usuario da tela
+  // resolve — e configuracao de ambiente.
+  segredo_invalido: 'A ingestão não está configurada neste ambiente. Fale com o suporte.',
+  ingestao_nao_configurada: 'A ingestão não está configurada neste ambiente. Fale com o suporte.',
 }
 
 export function mensagemDeErro(codigo: string): string {

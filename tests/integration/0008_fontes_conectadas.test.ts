@@ -3,6 +3,12 @@ import { comoServico, comoUsuario, limparBanco } from './helpers/db'
 import { montarCenario, type Cenario } from './helpers/cenario'
 
 const TOKEN = 'EAAG-token-de-pagina-falso'
+// A Task 10 (0012) passou a exigir o segredo de ingestao em
+// conectar_fonte_meta. Mesmo valor que supabase/seed.sql grava em
+// ingestion_config — os testes deste arquivo continuam cobrindo o caminho da
+// 0008 (RLS, grants, checagens de sessao/admin/responsavel), agora so com o
+// argumento novo na frente da chamada.
+const SEGREDO = 'segredo-de-ingestao-local'
 
 /** Uma segunda conta completa, com admin proprio. */
 async function outraContaComAdmin(
@@ -42,8 +48,8 @@ describe('0008 — fontes conectadas', () => {
   it('admin conecta uma Page e a credencial fica gravada', async () => {
     const sourceId = await comoUsuario(c.adminId, async (cli) => {
       const r = await cli.query<{ id: string }>(
-        'select public.conectar_fonte_meta($1, $2, $3, $4, $5) as id',
-        [c.accountId, '1234567890', 'Page da SE7E', TOKEN, c.vendedorAId],
+        'select public.conectar_fonte_meta($1, $2, $3, $4, $5, $6) as id',
+        [SEGREDO, c.accountId, '1234567890', 'Page da SE7E', TOKEN, c.vendedorAId],
       )
       return r.rows[0].id
     })
@@ -68,7 +74,8 @@ describe('0008 — fontes conectadas', () => {
 
   it('a mesma Page nao pode ser conectada por duas contas', async () => {
     await comoUsuario(c.adminId, (cli) =>
-      cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, null)', [
+      cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, $5, null)', [
+        SEGREDO,
         c.accountId,
         '999',
         'Page A',
@@ -79,7 +86,8 @@ describe('0008 — fontes conectadas', () => {
 
     await expect(
       comoUsuario(outra.adminId, (cli) =>
-        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, null)', [
+        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, $5, null)', [
+          SEGREDO,
           outra.accountId,
           '999',
           'Page A de novo',
@@ -138,7 +146,8 @@ describe('0008 — fontes conectadas', () => {
   it('gestor nao conecta fonte', async () => {
     await expect(
       comoUsuario(c.gestorId, (cli) =>
-        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, null)', [
+        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, $5, null)', [
+          SEGREDO,
           c.accountId,
           '777',
           'Page',
@@ -152,7 +161,8 @@ describe('0008 — fontes conectadas', () => {
     const outra = await outraContaComAdmin('Conta D', 'd@d.com')
     await expect(
       comoUsuario(c.adminId, (cli) =>
-        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, $5)', [
+        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, $5, $6)', [
+          SEGREDO,
           c.accountId,
           '888',
           'Page',
@@ -165,7 +175,8 @@ describe('0008 — fontes conectadas', () => {
 
   it('authenticated nao le source_credentials de jeito nenhum', async () => {
     await comoUsuario(c.adminId, (cli) =>
-      cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, null)', [
+      cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, $5, null)', [
+        SEGREDO,
         c.accountId,
         '111',
         'Page',
@@ -186,7 +197,8 @@ describe('0008 — fontes conectadas', () => {
 
   it('admin enxerga as fontes da propria conta e nao as de outra', async () => {
     await comoUsuario(c.adminId, (cli) =>
-      cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, null)', [
+      cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, $5, null)', [
+        SEGREDO,
         c.accountId,
         '222',
         'Minha Page',
@@ -195,7 +207,8 @@ describe('0008 — fontes conectadas', () => {
     )
     const outra = await outraContaComAdmin('Conta E', 'e@e.com')
     await comoUsuario(outra.adminId, (cli) =>
-      cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, null)', [
+      cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, $5, null)', [
+        SEGREDO,
         outra.accountId,
         '223',
         'Page alheia',
@@ -212,7 +225,8 @@ describe('0008 — fontes conectadas', () => {
 
   it('vendedor nao enxerga fonte nenhuma', async () => {
     await comoUsuario(c.adminId, (cli) =>
-      cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, null)', [
+      cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, $5, null)', [
+        SEGREDO,
         c.accountId,
         '333',
         'Page',
@@ -229,8 +243,8 @@ describe('0008 — fontes conectadas', () => {
   it('desconectar apaga fonte e credencial', async () => {
     const sourceId = await comoUsuario(c.adminId, async (cli) => {
       const r = await cli.query<{ id: string }>(
-        'select public.conectar_fonte_meta($1, $2, $3, $4, null) as id',
-        [c.accountId, '444', 'Page', TOKEN],
+        'select public.conectar_fonte_meta($1, $2, $3, $4, $5, null) as id',
+        [SEGREDO, c.accountId, '444', 'Page', TOKEN],
       )
       return r.rows[0].id
     })
@@ -250,8 +264,8 @@ describe('0008 — fontes conectadas', () => {
   it('admin de outra conta nao desconecta fonte alheia', async () => {
     const sourceId = await comoUsuario(c.adminId, async (cli) => {
       const r = await cli.query<{ id: string }>(
-        'select public.conectar_fonte_meta($1, $2, $3, $4, null) as id',
-        [c.accountId, '555', 'Page', TOKEN],
+        'select public.conectar_fonte_meta($1, $2, $3, $4, $5, null) as id',
+        [SEGREDO, c.accountId, '555', 'Page', TOKEN],
       )
       return r.rows[0].id
     })
@@ -267,8 +281,8 @@ describe('0008 — fontes conectadas', () => {
   it('admin troca o responsavel padrao por update direto', async () => {
     const sourceId = await comoUsuario(c.adminId, async (cli) => {
       const r = await cli.query<{ id: string }>(
-        'select public.conectar_fonte_meta($1, $2, $3, $4, null) as id',
-        [c.accountId, '666', 'Page', TOKEN],
+        'select public.conectar_fonte_meta($1, $2, $3, $4, $5, null) as id',
+        [SEGREDO, c.accountId, '666', 'Page', TOKEN],
       )
       return r.rows[0].id
     })
@@ -292,8 +306,8 @@ describe('0008 — fontes conectadas', () => {
     const outra = await outraContaComAdmin('Conta F', 'f@f.com')
     const sourceId = await comoUsuario(c.adminId, async (cli) => {
       const r = await cli.query<{ id: string }>(
-        'select public.conectar_fonte_meta($1, $2, $3, $4, null) as id',
-        [c.accountId, '667', 'Page', TOKEN],
+        'select public.conectar_fonte_meta($1, $2, $3, $4, $5, null) as id',
+        [SEGREDO, c.accountId, '667', 'Page', TOKEN],
       )
       return r.rows[0].id
     })
@@ -324,8 +338,8 @@ describe('0008 — fontes conectadas', () => {
   it('nao anula external_id de fonte meta por update direto (grant nao inclui a coluna)', async () => {
     const sourceId = await comoUsuario(c.adminId, async (cli) => {
       const r = await cli.query<{ id: string }>(
-        'select public.conectar_fonte_meta($1, $2, $3, $4, null) as id',
-        [c.accountId, '881', 'Page', TOKEN],
+        'select public.conectar_fonte_meta($1, $2, $3, $4, $5, null) as id',
+        [SEGREDO, c.accountId, '881', 'Page', TOKEN],
       )
       return r.rows[0].id
     })
@@ -339,7 +353,8 @@ describe('0008 — fontes conectadas', () => {
   it('conectar_fonte_meta recusa page id vazio, traduzido para codigo de dominio', async () => {
     await expect(
       comoUsuario(c.adminId, (cli) =>
-        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, null)', [
+        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, $5, null)', [
+          SEGREDO,
           c.accountId,
           null,
           'Page',
@@ -356,7 +371,8 @@ describe('0008 — fontes conectadas', () => {
   it('conectar_fonte_meta recusa page id so de espaco (btrim), traduzido para page_id_invalido', async () => {
     await expect(
       comoUsuario(c.adminId, (cli) =>
-        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, null)', [
+        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, $5, null)', [
+          SEGREDO,
           c.accountId,
           '   ',
           'Page',
@@ -382,8 +398,8 @@ describe('0008 — fontes conectadas', () => {
   it('admin carimba atualizado_em por update direto (grant inclui a coluna)', async () => {
     const sourceId = await comoUsuario(c.adminId, async (cli) => {
       const r = await cli.query<{ id: string }>(
-        'select public.conectar_fonte_meta($1, $2, $3, $4, null) as id',
-        [c.accountId, '882', 'Page', TOKEN],
+        'select public.conectar_fonte_meta($1, $2, $3, $4, $5, null) as id',
+        [SEGREDO, c.accountId, '882', 'Page', TOKEN],
       )
       return r.rows[0].id
     })
@@ -407,7 +423,8 @@ describe('0008 — fontes conectadas', () => {
   it('funcoes de fonte recusam chamada sem sessao', async () => {
     await expect(
       comoServico((cli) =>
-        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, null)', [
+        cli.query('select public.conectar_fonte_meta($1, $2, $3, $4, $5, null)', [
+          SEGREDO,
           c.accountId,
           '778',
           'Page',

@@ -92,4 +92,54 @@ describe('MetaGraphFalso', () => {
     if (!r2.ok) throw new Error(r2.erro)
     expect(r2.valor[0].nome).not.toBe('Mutada')
   })
+
+  it('buscarLead devolve o lead padrao e registra o id em buscados', async () => {
+    const g = new MetaGraphFalso()
+    const r = await g.buscarLead('leadgen-1', 'token-da-pagina-1')
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor.campos.some((c) => c.name === 'full_name')).toBe(true)
+    expect(r.valor.campos.some((c) => c.name === 'email')).toBe(true)
+    expect(r.valor.campos.some((c) => c.name === 'phone_number')).toBe(true)
+    expect(g.buscados).toEqual(['leadgen-1'])
+  })
+
+  it('buscarLead com falharEm devolve meta_indisponivel e nao registra em buscados', async () => {
+    const g = new MetaGraphFalso()
+    g.falharEm = 'buscarLead'
+    const r = await g.buscarLead('leadgen-1', 'token-da-pagina-1')
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('meta_indisponivel')
+    // Recusar depois de ja ter registrado o id nao prova nada: a Task 7
+    // precisa poder afirmar que uma acao recusada nao chegou a buscar.
+    expect(g.buscados).toEqual([])
+  })
+
+  it('posseDaPagina com o token correto daquela Page devolve ok', async () => {
+    const g = new MetaGraphFalso()
+    const r = await g.posseDaPagina('100000000000001', 'token-da-pagina-1')
+    expect(r.ok).toBe(true)
+    expect(g.posseConferida).toEqual(['100000000000001'])
+  })
+
+  it('posseDaPagina com o token de outra Page devolve posse_nao_comprovada', async () => {
+    // Este e o caso que a Task 10 usa para provar que o squat da Page esta
+    // fechado — se posseDaPagina nao discriminar entre tokens de Pages
+    // diferentes, o fechamento do buraco de squatting e decorativo.
+    const g = new MetaGraphFalso()
+    const r = await g.posseDaPagina('100000000000001', 'token-da-pagina-2')
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('posse_nao_comprovada')
+  })
+
+  it('campanhaDoAnuncio devolve um nome estavel e deterministico', async () => {
+    const g = new MetaGraphFalso()
+    const r1 = await g.campanhaDoAnuncio('ad-1', 't')
+    const r2 = await g.campanhaDoAnuncio('ad-1', 't')
+    if (!r1.ok) throw new Error(r1.erro)
+    if (!r2.ok) throw new Error(r2.erro)
+    expect(r1.valor).toBe(r2.valor)
+    expect(r1.valor.length).toBeGreaterThan(0)
+  })
 })

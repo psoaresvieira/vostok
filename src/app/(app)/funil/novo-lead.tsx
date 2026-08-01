@@ -9,6 +9,14 @@ const MENSAGENS: Record<string, string> = {
   nome_obrigatorio: 'Informe o nome do lead.',
   pipeline_sem_etapa_aberta: 'Configure ao menos uma etapa aberta antes de cadastrar leads.',
   valor_invalido: 'Digite o valor em reais, ex.: 1.500,00.',
+  // Antes do Plano 4 so um dropdown de membros reais alimentava este campo, e
+  // o codigo cru nunca chegava ate aqui. Agora ingerir_lead (0011) grava
+  // responsavel_id sem humano no meio — um responsavel padrao que saiu da
+  // conta depois de configurada a fonte pode reaparecer neste formulario
+  // (o admin reabre um lead criado por webhook). Mesma mensagem que
+  // funil/erros.ts e config/erros.ts ja usam para o mesmo codigo.
+  responsavel_invalido:
+    'Esse responsável não faz parte da sua conta. Recarregue a página e escolha de novo.',
   [FALHA_DE_CONEXAO]: MENSAGEM_FALHA_DE_CONEXAO,
 }
 

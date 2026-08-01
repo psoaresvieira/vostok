@@ -8,6 +8,9 @@ import { Motivos } from './motivos'
 import { Usuarios } from './usuarios'
 import { Integracoes } from './integracoes'
 
+/** Quantas entregas recentes o painel de diagnostico de Integracoes mostra. */
+const LIMITE_ENTREGAS = 20
+
 export default async function ConfigPage({
   searchParams,
 }: {
@@ -28,16 +31,18 @@ export default async function ConfigPage({
   if (!fonteContexto.ok) throw new Error(fonteContexto.erro)
 
   const { store } = contexto.valor
-  const [pipeline, membros, convites, fontes] = await Promise.all([
+  const [pipeline, membros, convites, fontes, entregas] = await Promise.all([
     store.pipelinePadrao(),
     store.membros(),
     adminContexto.valor.admin.convitesPendentes(),
     fonteContexto.valor.fontes.listar(),
+    fonteContexto.valor.fontes.entregasRecentes(LIMITE_ENTREGAS),
   ])
   if (!pipeline.ok) throw new Error(pipeline.erro)
   if (!membros.ok) throw new Error(membros.erro)
   if (!convites.ok) throw new Error(convites.erro)
   if (!fontes.ok) throw new Error(fontes.erro)
+  if (!entregas.ok) throw new Error(entregas.erro)
 
   // store.motivosPerda() so devolve ativos, que e o certo para o modal de perda.
   // A configuracao precisa dos inativos tambem, para poder reativar.
@@ -58,6 +63,7 @@ export default async function ConfigPage({
         membros={membros.valor}
         origem={origem}
         etapa={meta ?? null}
+        entregas={entregas.valor}
       />
     </div>
   )

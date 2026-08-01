@@ -7,6 +7,20 @@ export default defineConfig({
   // rodadas (achado do review final de branch — ver comentário no arquivo).
   globalSetup: './tests/e2e/global-setup.ts',
   timeout: 60_000,
+  // Serial de proposito. Estes testes nao sao isolados uns dos outros: todos
+  // falam com UM servidor `next dev` e UM Postgres local. Com os 5 workers que
+  // o Playwright escolhe por padrao nesta maquina, a disputa por esses dois
+  // recursos compartilhados derruba testes por timeout de forma intermitente,
+  // sempre em passos de navegacao — e o vermelho nao diz nada sobre o produto,
+  // so sobre a maquina. Medido: `funil.spec.ts` passou 6/6 em serie e falhou em
+  // rodadas paralelas, sem nenhuma mudanca de codigo entre as duas.
+  //
+  // O repo ja tomou exatamente esta decisao para os testes de integracao
+  // (`fileParallelism: false` em vitest.integration.config.ts), pelo mesmo
+  // motivo. A suite inteira leva menos de um minuto em serie; comprar
+  // determinismo por esse preco e barato, e teste que pisca ensina a ignorar
+  // vermelho, que e o pior habito que uma suite pode criar.
+  workers: 1,
   use: {
     baseURL: 'http://localhost:3000',
     // O quadro tem 7 colunas de 288px num container com overflow-x: a 1280px a
@@ -24,6 +38,10 @@ export default defineConfig({
     // Sem isto o teste bateria em facebook.com, o que a constraint global
     // proibe. reuseExistingServer: true significa que um `npm run dev` ja
     // aberto SEM esta variavel continua valendo — derrube-o antes de rodar.
-    env: { META_FAKE: '1' },
+    //
+    // INGESTAO_SEGREDO: sem isto o E2E dependeria de o .env.local da maquina
+    // estar certo, e a falha seria "o lead nao aparece" sem nada dizendo por
+    // que. Tem que ser o mesmo valor que supabase/seed.sql grava.
+    env: { META_FAKE: '1', INGESTAO_SEGREDO: 'segredo-de-ingestao-local' },
   },
 })

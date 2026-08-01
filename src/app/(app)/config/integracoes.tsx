@@ -4,12 +4,14 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { chamarAcao } from '@/lib/ui/acao'
 import type { Resultado } from '@/lib/domain/resultado'
-import type { Fonte } from '@/lib/domain/fonte'
+import type { Entrega, Fonte } from '@/lib/domain/fonte'
 import type { Membro } from '@/lib/domain/tipos'
 import { mensagemDeErro } from './erros'
+import { Entregas } from './entregas'
 import {
   listarPaginasDoMetaAction,
   conectarPaginaAction,
+  reivindicarPaginaAction,
   conectarGoogleAction,
   definirResponsavelAction,
   desconectarFonteAction,
@@ -23,9 +25,11 @@ type Props = {
   origem: string
   /** 'escolher' quando o retorno do OAuth acabou de deixar o token no cookie. */
   etapa: string | null
+  /** As ultimas entregas de webhook da conta — o painel de diagnostico. */
+  entregas: Entrega[]
 }
 
-export function Integracoes({ fontes, membros, origem, etapa }: Props) {
+export function Integracoes({ fontes, membros, origem, etapa, entregas }: Props) {
   const router = useRouter()
   const [pendente, iniciar] = useTransition()
 
@@ -53,6 +57,14 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
   const [paginas, setPaginas] = useState<PaginaOferecida[] | null>(null)
   const [nomeGoogle, setNomeGoogle] = useState('')
   const [segredoGoogle, setSegredoGoogle] = useState<SegredoDoGoogle | null>(null)
+  /**
+   * Page que voltou `page_ja_conectada` ao tentar conectar. Guarda id e nome
+   * (nao so o id) para poder nomear a Page na confirmacao sem precisar
+   * listar de novo. Reivindicar e destrutivo para um terceiro — a outra
+   * conta do CRM perde a Page e para de receber os leads dela — entao isto
+   * nunca dispara sozinho: precisa do clique explícito em "Reivindicar".
+   */
+  const [squat, setSquat] = useState<{ id: string; nome: string } | null>(null)
 
   function rodar(promessa: Promise<Resultado<void>>, aoDarCerto?: () => void) {
     iniciar(async () => {
@@ -70,9 +82,18 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
   function conectarPagina(pageId: string) {
     iniciar(async () => {
       setErroLocal(null)
+      setSquat(null)
       const r = await chamarAcao(conectarPaginaAction(pageId))
       if (!r.ok) {
         setErroLocal(mensagemDeErro(r.erro))
+        // Oferece a reivindicacao so quando o motivo e page_ja_conectada:
+        // e o unico erro cujo desfecho ("tomar a Page de outra conta") faz
+        // sentido oferecer. Um erro qualquer com um botao de "tentar de
+        // novo" disfarcado de reivindicacao seria enganoso.
+        if (r.erro === 'page_ja_conectada') {
+          const pagina = paginas?.find((p) => p.id === pageId)
+          setSquat({ id: pageId, nome: pagina?.nome ?? pageId })
+        }
         return
       }
       setPaginas(null)
@@ -83,6 +104,22 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
       // no sucesso desta acao (linha abaixo, no servidor), e a tela pintaria
       // "a conexao com o Meta expirou" por cima de uma fonte que conectou
       // perfeitamente — o achado do review que motivou esta troca.
+      router.replace('/config')
+    })
+  }
+
+  function reivindicarPagina() {
+    if (!squat) return
+    const pageId = squat.id
+    iniciar(async () => {
+      setErroLocal(null)
+      const r = await chamarAcao(reivindicarPaginaAction(pageId))
+      if (!r.ok) {
+        setErroLocal(mensagemDeErro(r.erro))
+        return
+      }
+      setSquat(null)
+      setPaginas(null)
       router.replace('/config')
     })
   }
@@ -117,6 +154,37 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
       <h2 className="text-lg font-medium">Integrações</h2>
 
       {erro && <p className="text-sm text-red-600">{erro}</p>}
+
+      {squat && (
+        <div className="flex flex-col gap-2 rounded border border-red-400 bg-red-50 p-3">
+          <p className="text-sm font-medium">
+            &ldquo;{squat.nome}&rdquo; já está conectada a outra conta do CRM.
+          </p>
+          <p className="text-xs text-gray-700">
+            Você confirmou no Facebook que administra essa página agora. Se
+            continuar, ela sai da outra conta do CRM e passa a entregar leads
+            para esta conta — a outra conta deixa de vê-la e de recebê-los.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={pendente}
+              className="rounded bg-red-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+              onClick={reivindicarPagina}
+            >
+              Reivindicar esta página
+            </button>
+            <button
+              type="button"
+              disabled={pendente}
+              className="rounded border px-3 py-2 text-sm disabled:opacity-50"
+              onClick={() => setSquat(null)}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {paginas && (
         <div className="flex flex-col gap-2 rounded border p-3">
@@ -236,6 +304,8 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
           </p>
         </div>
       )}
+
+      <Entregas entregas={entregas} />
     </section>
   )
 }
