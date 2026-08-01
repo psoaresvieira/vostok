@@ -1,3 +1,4 @@
+import { falha, ok, type Resultado } from '@/lib/domain/resultado'
 import type { Etapa, LeadOrigem, LeadStatus } from '@/lib/domain/tipos'
 
 /**
@@ -193,6 +194,33 @@ function agrupar(
   })
   nos.sort((a, b) => b.leads - a.leads || a.rotulo.localeCompare(b.rotulo, 'pt-BR'))
   return nos
+}
+
+const DIAS_PADRAO = 30
+
+/**
+ * Traduz os parametros da URL em janela de coorte. Puro, com o relogio
+ * injetado, porque a tela precisa dele testado sem subir servidor — e porque
+ * `new Date('ontem')` devolve Invalid Date sem lancar, e uma janela invalida
+ * chegaria no banco como null.
+ */
+export function interpretarPeriodo(
+  params: { dias?: string; de?: string; ate?: string },
+  agora: Date,
+): Resultado<{ de: Date; ate: Date }> {
+  if (params.de || params.ate) {
+    const de = new Date(params.de ?? '')
+    const ate = new Date(params.ate ?? '')
+    if (Number.isNaN(de.getTime()) || Number.isNaN(ate.getTime())) return falha('periodo_invalido')
+    // Janela semiaberta: de === ate nao pegaria lead nenhum, e a tela ficaria
+    // vazia sem dizer por que.
+    if (de >= ate) return falha('periodo_invalido')
+    return ok({ de, ate })
+  }
+
+  const dias = Number(params.dias)
+  const efetivos = Number.isFinite(dias) && dias > 0 ? dias : DIAS_PADRAO
+  return ok({ de: new Date(agora.getTime() - efetivos * 86_400_000), ate: agora })
 }
 
 export function canaisDaCoorte(linhas: LinhaCoorte[]): NoCanal[] {

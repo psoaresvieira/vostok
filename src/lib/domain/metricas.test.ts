@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Etapa } from '@/lib/domain/tipos'
 import {
-  canaisDaCoorte, etiquetasPorEtapa, funilDaCoorte, SEM_ANUNCIO, SEM_CAMPANHA,
+  canaisDaCoorte, etiquetasPorEtapa, funilDaCoorte, interpretarPeriodo, SEM_ANUNCIO, SEM_CAMPANHA,
   type AplicacaoEtiqueta, type LinhaCoorte,
 } from './metricas'
 
@@ -304,5 +304,55 @@ describe('canaisDaCoorte', () => {
 
   it('coorte vazia devolve lista vazia', () => {
     expect(canaisDaCoorte([])).toEqual([])
+  })
+})
+
+describe('interpretarPeriodo', () => {
+  const AGORA = new Date('2026-08-01T12:00:00Z')
+
+  it('sem parametro nenhum, usa os ultimos 30 dias', () => {
+    const r = interpretarPeriodo({}, AGORA)
+    expect(r.ok).toBe(true)
+    if (!r.ok) throw new Error('deveria ter dado certo')
+    expect(r.valor.ate).toEqual(AGORA)
+    expect(r.valor.de).toEqual(new Date('2026-07-02T12:00:00Z'))
+  })
+
+  it('dias=7 recorta sete dias', () => {
+    const r = interpretarPeriodo({ dias: '7' }, AGORA)
+    if (!r.ok) throw new Error('deveria ter dado certo')
+    expect(r.valor.de).toEqual(new Date('2026-07-25T12:00:00Z'))
+  })
+
+  it('intervalo customizado vence dias', () => {
+    const r = interpretarPeriodo({ dias: '7', de: '2026-01-01', ate: '2026-02-01' }, AGORA)
+    if (!r.ok) throw new Error('deveria ter dado certo')
+    expect(r.valor.de).toEqual(new Date('2026-01-01T00:00:00.000Z'))
+  })
+
+  it('de depois de ate e periodo_invalido', () => {
+    const r = interpretarPeriodo({ de: '2026-02-01', ate: '2026-01-01' }, AGORA)
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('periodo_invalido')
+  })
+
+  it('de igual a ate e periodo_invalido: a janela e semiaberta e nao pegaria nada', () => {
+    const r = interpretarPeriodo({ de: '2026-01-01', ate: '2026-01-01' }, AGORA)
+    expect(r.ok).toBe(false)
+  })
+
+  it('dias que nao e numero cai no padrao em vez de estourar', () => {
+    // O parametro vem da URL: o usuario pode digitar qualquer coisa.
+    const r = interpretarPeriodo({ dias: 'abc' }, AGORA)
+    if (!r.ok) throw new Error('deveria ter dado certo')
+    expect(r.valor.de).toEqual(new Date('2026-07-02T12:00:00Z'))
+  })
+
+  it('data mal formada e periodo_invalido, nunca Invalid Date silencioso', () => {
+    const r = interpretarPeriodo({ de: 'ontem', ate: '2026-02-01' }, AGORA)
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('periodo_invalido')
   })
 })
