@@ -15,6 +15,18 @@ export interface FonteStore {
     tokenDaPagina: string,
     responsavelId: string | null,
   ): Promise<Resultado<string>>
+  /**
+   * Toma a linha de quem estava conectado antes, inclusive de outra conta —
+   * a saida da Task 10 para uma Page squattada. Mesma forma de conectarMeta
+   * de proposito: e a mesma acao ("gravar esta Page para mim"), so que a RPC
+   * por baixo apaga o dono anterior em vez de recusar por unique_violation.
+   */
+  reivindicarMeta(
+    pageId: string,
+    nome: string,
+    tokenDaPagina: string,
+    responsavelId: string | null,
+  ): Promise<Resultado<string>>
   /** Devolve a URL e a chave em claro UMA vez; depois so o hash existe. */
   conectarGoogle(
     nome: string,
@@ -34,7 +46,22 @@ type LinhaFonte = {
   criado_em: string
 }
 
-/** Nomes que as funcoes da 0008 levantam com raise exception. */
+/**
+ * Nomes que as funcoes da 0008 levantam com raise exception, mais os dois que
+ * a 0012 (Task 10) acrescentou.
+ *
+ * segredo_invalido e o que segredo_confere levanta quando p_segredo nao bate
+ * com ingestion_config: sem entrar aqui, o texto cru da excecao do Postgres
+ * chegaria a tela em vez do codigo estavel.
+ *
+ * posse_nao_comprovada nunca e levantado pelo Postgres — ele vem pronto do
+ * MetaGraph.posseDaPagina (Task 5), na Server Action, e chega a este arquivo
+ * ja como Resultado, nunca como PostgrestError. Fica listado aqui do mesmo
+ * jeito, ao lado do codigo irmao, para que os dois codigos novos desta task
+ * fiquem registrados num unico lugar — e porque codigo() e total: uma
+ * chamada futura que por engano fizesse este texto passar por um
+ * raise exception ainda seria reconhecida, em vez de vazar crua.
+ */
 const CODIGOS = [
   'sem_sessao',
   'sem_permissao',
@@ -43,6 +70,8 @@ const CODIGOS = [
   'fonte_nao_encontrada',
   'responsavel_invalido',
   'segredo_vazio',
+  'segredo_invalido',
+  'posse_nao_comprovada',
 ]
 
 /**
@@ -103,7 +132,30 @@ export class SupabaseFonteStore implements FonteStore {
     tokenDaPagina: string,
     responsavelId: string | null,
   ): Promise<Resultado<string>> {
+    // process.env.INGESTAO_SEGREDO direto, sem guarda de "vazio" aqui: se
+    // faltar, segredo_confere (0010) recusa com segredo_invalido, que ja tem
+    // mensagem de operador em erros.ts. Uma segunda guarda so duplicaria a
+    // logica sem mudar o desfecho para quem esta na tela.
     const { data, error } = await this.cliente.rpc('conectar_fonte_meta', {
+      p_segredo: process.env.INGESTAO_SEGREDO ?? '',
+      p_account_id: this.accountId,
+      p_page_id: pageId,
+      p_nome: nome,
+      p_token: tokenDaPagina,
+      p_responsavel: responsavelId,
+    })
+    if (error) return falha(codigo(error))
+    return ok(data as string)
+  }
+
+  async reivindicarMeta(
+    pageId: string,
+    nome: string,
+    tokenDaPagina: string,
+    responsavelId: string | null,
+  ): Promise<Resultado<string>> {
+    const { data, error } = await this.cliente.rpc('reivindicar_fonte_meta', {
+      p_segredo: process.env.INGESTAO_SEGREDO ?? '',
       p_account_id: this.accountId,
       p_page_id: pageId,
       p_nome: nome,
