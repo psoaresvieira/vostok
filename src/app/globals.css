@@ -1,26 +1,172 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+    --font-heading: var(--font-display);
+    --font-sans: var(--font-sans);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-warning: var(--warning);
+    --color-success: var(--success);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Os tokens --sidebar-* do gestor-trafego NAO foram portados: o CRM nao tem
+   sidebar, e token sem consumidor vira ruido que o proximo leitor tenta
+   descobrir onde e usado. Se uma sidebar existir um dia, copie-os de la. */
+
+/*
+  Paleta "sala de operação", portada do gestor-trafego: navy quase-preto,
+  superficies em navy elevado, texto branco-frio, e um unico azul de acento
+  para dados e acoes. O tema e escuro por padrao: :root e .dark carregam os
+  mesmos tokens, entao nao ha modo claro para manter em paralelo.
+*/
+:root {
+    --background: #070b16;
+    --foreground: #eaf0fb;
+    --card: #0e1526;
+    --card-foreground: #eaf0fb;
+    --popover: #0e1526;
+    --popover-foreground: #eaf0fb;
+    --primary: #3d7bff;
+    --primary-foreground: #ffffff;
+    --secondary: #17223c;
+    --secondary-foreground: #eaf0fb;
+    --muted: #131d33;
+    --muted-foreground: #8496b8;
+    --accent: #182642;
+    --accent-foreground: #eaf0fb;
+    --destructive: #f2637e;
+    --success: #35d0a5;
+    /* Mesma cor de --chart-4. Existe como token proprio porque "aviso" e um
+       papel semantico, e caixa de aviso nao deve referenciar um slot de
+       grafico pelo nome. */
+    --warning: #f2b263;
+    --border: #1c2942;
+    --input: #1c2942;
+    --ring: #3d7bff;
+    --chart-1: #3d7bff;
+    --chart-2: #35d0a5;
+    --chart-3: #7aa2ff;
+    --chart-4: #f2b263;
+    --chart-5: #a78bfa;
+    --radius: 0.75rem;
+}
+
+.dark {
+    --background: #070b16;
+    --foreground: #eaf0fb;
+    --card: #0e1526;
+    --card-foreground: #eaf0fb;
+    --popover: #0e1526;
+    --popover-foreground: #eaf0fb;
+    --primary: #3d7bff;
+    --primary-foreground: #ffffff;
+    --secondary: #17223c;
+    --secondary-foreground: #eaf0fb;
+    --muted: #131d33;
+    --muted-foreground: #8496b8;
+    --accent: #182642;
+    --accent-foreground: #eaf0fb;
+    --destructive: #f2637e;
+    --success: #35d0a5;
+    --warning: #f2b263;
+    --border: #1c2942;
+    --input: #1c2942;
+    --ring: #3d7bff;
+    --chart-1: #3d7bff;
+    --chart-2: #35d0a5;
+    --chart-3: #7aa2ff;
+    --chart-4: #f2b263;
+    --chart-5: #a78bfa;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Assinatura: leve brilho azul no topo, sobre o navy quase-preto. */
+    background-image:
+      radial-gradient(1100px 520px at 50% -12%, color-mix(in oklch, var(--primary) 16%, transparent), transparent 62%);
+    background-attachment: fixed;
+  }
+  html {
+    @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Numeros de metrica alinhados em colunas. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1, "ss01" 1;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  /* Etiqueta pequena em maiusculas — "eyebrow" dos cards de metrica. */
+  .eyebrow {
+    font-size: 0.6875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    font-weight: 600;
+  }
+  /* Cartao de vidro: superficie navy com hairline e leve profundidade. */
+  .surface {
+    background: linear-gradient(180deg, color-mix(in oklch, var(--card) 100%, white 2%), var(--card));
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 20px 40px -24px rgb(0 0 0 / 0.6);
+  }
+  /* Filete de acento no topo de um card em destaque. */
+  .accent-top {
+    position: relative;
+  }
+  .accent-top::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent, var(--primary), transparent);
+    opacity: 0.7;
+  }
+  .fade-in {
+    animation: fade-in 0.5s ease both;
+  }
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fade-in { animation: none; }
+  }
 }
