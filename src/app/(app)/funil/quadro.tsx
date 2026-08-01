@@ -56,12 +56,12 @@ function Coluna({ etapa, children, total }: { etapa: Etapa; children: React.Reac
     <section className="flex w-72 shrink-0 flex-col gap-2">
       <header className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">{etapa.nome}</h2>
-        <span className="text-xs text-neutral-500">{total}</span>
+        <span className="text-xs text-muted-foreground">{total}</span>
       </header>
       <div
         ref={setNodeRef}
         className={`flex min-h-24 flex-col gap-2 rounded p-2 ${
-          isOver ? 'bg-neutral-200' : 'bg-neutral-50'
+          isOver ? 'bg-secondary' : 'bg-muted'
         }`}
       >
         {children}
@@ -139,7 +139,7 @@ export function Quadro({
   return (
     <>
       {erro && (
-        <p className="mx-6 mt-3 rounded bg-red-50 p-2 text-sm text-red-700" role="alert">
+        <p className="mx-6 mt-3 rounded bg-destructive/10 p-2 text-sm text-destructive" role="alert">
           {erro}
         </p>
       )}

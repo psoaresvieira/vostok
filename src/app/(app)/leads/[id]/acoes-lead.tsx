@@ -88,7 +88,7 @@ export function AcoesLead({
         </label>
       )}
 
-      {erro && <p className="text-sm text-red-600">{erro}</p>}
+      {erro && <p className="text-sm text-destructive">{erro}</p>}
 
       {pedido && (
         <ModalMovimento

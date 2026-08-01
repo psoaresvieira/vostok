@@ -48,7 +48,7 @@ export function EditorEtiquetas({
     <div>
       <ul className="flex flex-wrap gap-1">
         {atuais.map((e) => (
-          <li key={e.id} className="rounded bg-neutral-100 px-2 py-0.5 text-xs">
+          <li key={e.id} className="rounded bg-muted px-2 py-0.5 text-xs">
             {e.nome}
           </li>
         ))}
@@ -72,7 +72,7 @@ export function EditorEtiquetas({
               <button
                 type="button"
                 onClick={() => aplicar(s.nome)}
-                className="rounded bg-neutral-100 px-2 py-0.5 text-xs hover:bg-neutral-200"
+                className="rounded bg-muted px-2 py-0.5 text-xs hover:bg-secondary"
               >
                 {s.nome}
               </button>
@@ -80,7 +80,7 @@ export function EditorEtiquetas({
           ))}
         </ul>
       )}
-      {erro && <p className="mt-1 text-sm text-red-600">{erro}</p>}
+      {erro && <p className="mt-1 text-sm text-destructive">{erro}</p>}
     </div>
   )
 }

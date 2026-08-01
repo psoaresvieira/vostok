@@ -38,14 +38,14 @@ export function ModalMovimento({
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded bg-white p-5">
+      <div className="w-full max-w-md rounded bg-card p-5">
         <h2 className="text-lg font-semibold">
           {pedido.nomeLead} → {pedido.destino.nome}
         </h2>
 
         {exigeMotivo && (
           <label className="mt-3 block text-sm">
-            Motivo da perda <span className="text-red-600">*</span>
+            Motivo da perda <span className="text-destructive">*</span>
             <select
               value={motivoId}
               onChange={(e) => setMotivoId(e.target.value)}
@@ -82,7 +82,7 @@ export function ModalMovimento({
                   <button
                     type="button"
                     onClick={() => adicionar(s.nome)}
-                    className="rounded bg-neutral-100 px-2 py-0.5 text-xs hover:bg-neutral-200"
+                    className="rounded bg-muted px-2 py-0.5 text-xs hover:bg-secondary"
                   >
                     {s.nome}
                   </button>
@@ -93,7 +93,7 @@ export function ModalMovimento({
           {escolhidas.length > 0 && (
             <ul className="mt-2 flex flex-wrap gap-1">
               {escolhidas.map((e) => (
-                <li key={e} className="rounded bg-black px-2 py-0.5 text-xs text-white">
+                <li key={e} className="rounded bg-primary px-2 py-0.5 text-xs text-primary-foreground">
                   {e}
                   <button
                     type="button"
@@ -117,7 +117,7 @@ export function ModalMovimento({
             type="button"
             disabled={exigeMotivo && !motivoId}
             onClick={() => onConfirmar(exigeMotivo ? motivoId : null, escolhidas)}
-            className="rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-40"
+            className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-40"
           >
             Confirmar
           </button>

@@ -36,11 +36,11 @@ export function FormularioNota({ leadId }: { leadId: string }) {
       <button
         type="button"
         onClick={salvar}
-        className="self-start rounded bg-black px-3 py-1 text-sm text-white"
+        className="self-start rounded bg-primary px-3 py-1 text-sm text-primary-foreground"
       >
         Salvar nota
       </button>
-      {erro && <p className="text-sm text-red-600">{erro}</p>}
+      {erro && <p className="text-sm text-destructive">{erro}</p>}
     </div>
   )
 }

@@ -28,9 +28,9 @@ export function Usuarios({
         {membros.map((m) => (
           <li key={m.id} className="flex items-center justify-between rounded border p-2 text-sm">
             <span>
-              {m.nome} <span className="text-neutral-500">({m.email})</span>
+              {m.nome} <span className="text-muted-foreground">({m.email})</span>
             </span>
-            <span className="text-xs text-neutral-500">{m.papel}</span>
+            <span className="text-xs text-muted-foreground">{m.papel}</span>
           </li>
         ))}
       </ul>
@@ -45,7 +45,7 @@ export function Usuarios({
                 className="flex items-center justify-between rounded border border-dashed p-2 text-sm"
               >
                 <span>
-                  {c.email} <span className="text-xs text-neutral-500">({c.papel})</span>
+                  {c.email} <span className="text-xs text-muted-foreground">({c.papel})</span>
                 </span>
                 <button
                   type="button"
@@ -91,18 +91,18 @@ export function Usuarios({
             setEmail('')
             setLink(`${origem}/convite/${r.valor}`)
           }}
-          className="rounded bg-black px-3 py-1 text-sm text-white"
+          className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground"
         >
           Convidar
         </button>
       </div>
 
       {link && (
-        <p className="mt-2 rounded bg-neutral-100 p-2 text-sm">
+        <p className="mt-2 rounded bg-muted p-2 text-sm">
           Envie este link ao convidado: <code className="break-all">{link}</code>
         </p>
       )}
-      {erro && <p className="mt-1 text-sm text-red-600">{erro}</p>}
+      {erro && <p className="mt-1 text-sm text-destructive">{erro}</p>}
     </section>
   )
 }

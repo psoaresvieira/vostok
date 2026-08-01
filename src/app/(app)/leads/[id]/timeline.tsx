@@ -43,7 +43,7 @@ export function Timeline({
   nomePessoa: Map<string, string>
 }) {
   if (eventos.length === 0) {
-    return <p className="text-sm text-neutral-500">Nada aconteceu ainda.</p>
+    return <p className="text-sm text-muted-foreground">Nada aconteceu ainda.</p>
   }
 
   return (
@@ -51,7 +51,7 @@ export function Timeline({
       {eventos.map((e) => (
         <li key={e.id} className="border-l-2 pl-3">
           <p className="text-sm">{rotuloEvento(e, nomeEtapa, nomePessoa)}</p>
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-muted-foreground">
             {FORMATO.format(e.criadoEm)}
             {e.atorId ? ` · ${nomePessoa.get(e.atorId) ?? ''}` : ''}
           </p>

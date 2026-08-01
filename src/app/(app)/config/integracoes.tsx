@@ -153,14 +153,14 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas }: Props)
     <section className="flex flex-col gap-4">
       <h2 className="text-lg font-medium">Integrações</h2>
 
-      {erro && <p className="text-sm text-red-600">{erro}</p>}
+      {erro && <p className="text-sm text-destructive">{erro}</p>}
 
       {squat && (
-        <div className="flex flex-col gap-2 rounded border border-red-400 bg-red-50 p-3">
+        <div className="flex flex-col gap-2 rounded border border-destructive/40 bg-destructive/10 p-3">
           <p className="text-sm font-medium">
             &ldquo;{squat.nome}&rdquo; já está conectada a outra conta do CRM.
           </p>
-          <p className="text-xs text-gray-700">
+          <p className="text-xs text-muted-foreground">
             Você confirmou no Facebook que administra essa página agora. Se
             continuar, ela sai da outra conta do CRM e passa a entregar leads
             para esta conta — a outra conta deixa de vê-la e de recebê-los.
@@ -169,7 +169,7 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas }: Props)
             <button
               type="button"
               disabled={pendente}
-              className="rounded bg-red-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+              className="rounded bg-destructive px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
               onClick={reivindicarPagina}
             >
               Reivindicar esta página
@@ -190,7 +190,7 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas }: Props)
         <div className="flex flex-col gap-2 rounded border p-3">
           <p className="text-sm font-medium">Escolha a página que traz os leads</p>
           {paginas.length === 0 && (
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               Nenhuma página encontrada nesta conta do Facebook.
             </p>
           )}
@@ -199,7 +199,7 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas }: Props)
               key={p.id}
               type="button"
               disabled={pendente}
-              className="rounded border px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:opacity-50"
+              className="rounded border px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
               onClick={() => conectarPagina(p.id)}
             >
               {p.nome}
@@ -212,7 +212,7 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas }: Props)
         {fontes.map((f) => (
           <li key={f.id} className="flex flex-wrap items-center gap-2 rounded border p-3">
             <span className="text-sm font-medium">{f.nome}</span>
-            <span className="rounded bg-gray-100 px-2 py-0.5 text-xs uppercase">
+            <span className="rounded bg-muted px-2 py-0.5 text-xs uppercase">
               {f.provedor}
             </span>
             <label className="ml-auto flex items-center gap-2 text-sm">
@@ -244,14 +244,14 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas }: Props)
           </li>
         ))}
         {fontes.length === 0 && (
-          <li className="text-sm text-gray-600">Nenhuma fonte conectada ainda.</li>
+          <li className="text-sm text-muted-foreground">Nenhuma fonte conectada ainda.</li>
         )}
       </ul>
 
       <div className="flex flex-wrap items-end gap-2">
         <a
           href="/api/integracoes/meta/iniciar"
-          className="rounded bg-blue-600 px-3 py-2 text-sm text-white"
+          className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground"
         >
           Conectar Facebook
         </a>
@@ -288,17 +288,17 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas }: Props)
       </div>
 
       {segredoGoogle && (
-        <div className="flex flex-col gap-1 rounded border border-amber-400 bg-amber-50 p-3">
+        <div className="flex flex-col gap-1 rounded border border-warning/40 bg-warning/10 p-3">
           <p className="text-sm font-medium">
             Copie agora — não mostramos de novo.
           </p>
           <code className="break-all text-xs">{segredoGoogle.url}</code>
           <code className="break-all text-xs">chave: {segredoGoogle.chave}</code>
-          <p className="text-xs text-gray-700">
+          <p className="text-xs text-muted-foreground">
             No Google Ads, cole os dois em Ativo de formulário de lead → Integração via
             webhook.
           </p>
-          <p className="text-xs text-gray-700">
+          <p className="text-xs text-muted-foreground">
             Fechou sem copiar? Não há como reabrir esta caixa: desconecte esta
             integração e conecte de novo para gerar uma URL e uma chave novas.
           </p>

@@ -17,7 +17,7 @@ export function FormularioCadastro({ convite }: { convite: string | null }) {
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-6">
       <h1 className="text-2xl font-semibold">Criar conta</h1>
       {convite && (
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-muted-foreground">
           Você foi convidado para uma conta que já existe. Use o email que recebeu o convite.
         </p>
       )}
@@ -50,11 +50,11 @@ export function FormularioCadastro({ convite }: { convite: string | null }) {
           required
           className="rounded border p-2"
         />
-        <button type="submit" className="rounded bg-black p-2 text-white">
+        <button type="submit" className="rounded bg-primary p-2 text-primary-foreground">
           Criar conta
         </button>
       </form>
-      {erro && <p className="text-sm text-red-600">{erro}</p>}
+      {erro && <p className="text-sm text-destructive">{erro}</p>}
       <Link
         href={convite ? `/login?convite=${encodeURIComponent(convite)}` : '/login'}
         className="text-sm underline"

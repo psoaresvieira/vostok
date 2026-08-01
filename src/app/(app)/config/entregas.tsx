@@ -106,10 +106,10 @@ function mensagemDeErro(erro: string): string {
 export function Entregas({ entregas }: { entregas: Entrega[] }) {
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-sm font-medium text-gray-700">Últimas entregas</h3>
+      <h3 className="text-sm font-medium text-muted-foreground">Últimas entregas</h3>
 
       {entregas.length === 0 ? (
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           Nenhuma entrega chegou ainda. Isso quer dizer que o webhook desta
           conta ainda não recebeu nenhum lead — confira se a Page do Facebook
           ou a URL do formulário do Google Ads estão configuradas
@@ -120,15 +120,15 @@ export function Entregas({ entregas }: { entregas: Entrega[] }) {
           {entregas.map((e) => (
             <li key={e.id} className="flex flex-col gap-1 rounded border p-2 text-sm">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded bg-gray-100 px-2 py-0.5 text-xs uppercase">
+                <span className="rounded bg-muted px-2 py-0.5 text-xs uppercase">
                   {e.provedor}
                 </span>
                 <span className="font-medium">{STATUS[e.status]}</span>
-                <span className="ml-auto text-xs text-gray-500">
+                <span className="ml-auto text-xs text-muted-foreground">
                   {FORMATO.format(e.criadoEm)}
                 </span>
               </div>
-              {e.erro && <p className="text-xs text-red-600">{mensagemDeErro(e.erro)}</p>}
+              {e.erro && <p className="text-xs text-destructive">{mensagemDeErro(e.erro)}</p>}
             </li>
           ))}
         </ul>

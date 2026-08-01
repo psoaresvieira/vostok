@@ -17,7 +17,7 @@ export function FormularioLogin({ convite }: { convite: string | null }) {
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-6">
       <h1 className="text-2xl font-semibold">Entrar</h1>
       {convite && (
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-muted-foreground">
           Entre com o email que recebeu o convite para aceitá-lo.
         </p>
       )}
@@ -38,11 +38,11 @@ export function FormularioLogin({ convite }: { convite: string | null }) {
           required
           className="rounded border p-2"
         />
-        <button type="submit" className="rounded bg-black p-2 text-white">
+        <button type="submit" className="rounded bg-primary p-2 text-primary-foreground">
           Entrar
         </button>
       </form>
-      {erro && <p className="text-sm text-red-600">{erro}</p>}
+      {erro && <p className="text-sm text-destructive">{erro}</p>}
       <Link
         href={convite ? `/signup?convite=${encodeURIComponent(convite)}` : '/signup'}
         className="text-sm underline"
