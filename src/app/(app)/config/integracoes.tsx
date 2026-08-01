@@ -4,9 +4,10 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { chamarAcao } from '@/lib/ui/acao'
 import type { Resultado } from '@/lib/domain/resultado'
-import type { Fonte } from '@/lib/domain/fonte'
+import type { Entrega, Fonte } from '@/lib/domain/fonte'
 import type { Membro } from '@/lib/domain/tipos'
 import { mensagemDeErro } from './erros'
+import { Entregas } from './entregas'
 import {
   listarPaginasDoMetaAction,
   conectarPaginaAction,
@@ -24,9 +25,11 @@ type Props = {
   origem: string
   /** 'escolher' quando o retorno do OAuth acabou de deixar o token no cookie. */
   etapa: string | null
+  /** As ultimas entregas de webhook da conta — o painel de diagnostico. */
+  entregas: Entrega[]
 }
 
-export function Integracoes({ fontes, membros, origem, etapa }: Props) {
+export function Integracoes({ fontes, membros, origem, etapa, entregas }: Props) {
   const router = useRouter()
   const [pendente, iniciar] = useTransition()
 
@@ -301,6 +304,8 @@ export function Integracoes({ fontes, membros, origem, etapa }: Props) {
           </p>
         </div>
       )}
+
+      <Entregas entregas={entregas} />
     </section>
   )
 }
