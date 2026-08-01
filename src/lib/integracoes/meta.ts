@@ -17,6 +17,22 @@ export type LeadDoMeta = {
 }
 
 /**
+ * Os tres niveis da arvore de um anuncio do Meta. Id e nome andam em par
+ * porque a metrica agrupa pelo ID (renomear campanha no gerenciador e rotina
+ * e nao pode partir o historico em duas linhas) e exibe o NOME. Nome nulo e
+ * estado legitimo: o Google nunca manda nome nenhum, e o Meta pode omitir um
+ * nivel numa resposta parcial.
+ */
+export type ArvoreDeAnuncio = {
+  anuncioId: string
+  anuncioNome: string | null
+  conjuntoId: string | null
+  conjuntoNome: string | null
+  campanhaId: string | null
+  campanhaNome: string | null
+}
+
+/**
  * Tudo que o CRM precisa do Graph API para conectar uma fonte. Port, e nao
  * chamadas de fetch espalhadas, para que nenhum teste automatizado toque a
  * rede: a constraint vale para o E2E tambem.
@@ -35,8 +51,14 @@ export interface MetaGraph {
   desassinarLeadgen(pageId: string, tokenDaPagina: string): Promise<Resultado<void>>
   /** O corpo do lead que chegou no webhook: campos do formulario, ad e form de origem. */
   buscarLead(leadgenId: string, tokenDaPagina: string): Promise<Resultado<LeadDoMeta>>
-  /** Nome da campanha dona do anuncio, para popular o lead sem o usuario digitar nada. */
+  /** Nome da campanha dona do anuncio. Substituido por arvoreDoAnuncio; sai no fim deste plano. */
   campanhaDoAnuncio(adId: string, tokenDaPagina: string): Promise<Resultado<string>>
+  /**
+   * Anuncio, conjunto e campanha numa ida so ao Graph. Substitui
+   * campanhaDoAnuncio: mesma chamada, mesmo custo, tres niveis em vez de um
+   * nome — e com os ids, que sao o que a metrica agrupa.
+   */
+  arvoreDoAnuncio(adId: string, tokenDaPagina: string): Promise<Resultado<ArvoreDeAnuncio>>
   /**
    * Prova que `tokenDaPagina` administra `pageId`. Fecha o buraco de
    * squatting: sem isto, qualquer um que soubesse o id publico de uma Page

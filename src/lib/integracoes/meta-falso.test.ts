@@ -142,4 +142,28 @@ describe('MetaGraphFalso', () => {
     expect(r1.valor).toBe(r2.valor)
     expect(r1.valor.length).toBeGreaterThan(0)
   })
+
+  it('arvoreDoAnuncio e deterministica no proprio adId', async () => {
+    const g = new MetaGraphFalso()
+
+    const r1 = await g.arvoreDoAnuncio('ad-1', 't')
+    const r2 = await g.arvoreDoAnuncio('ad-1', 't')
+
+    expect(r1).toEqual(r2)
+    expect(r1.ok).toBe(true)
+    if (!r1.ok) return
+    expect(r1.valor.anuncioId).toBe('ad-1')
+    expect(r1.valor.campanhaNome).toBe('Campanha ad-1')
+  })
+
+  it('arvoreDoAnuncio respeita o barrado', async () => {
+    const g = new MetaGraphFalso()
+    g.falharEm = 'arvoreDoAnuncio'
+
+    const r = await g.arvoreDoAnuncio('ad-1', 't')
+
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.erro).toBe('meta_indisponivel')
+  })
 })

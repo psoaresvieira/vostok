@@ -1,5 +1,5 @@
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
-import type { LeadDoMeta, MetaGraph, PaginaDoMeta } from './meta'
+import type { ArvoreDeAnuncio, LeadDoMeta, MetaGraph, PaginaDoMeta } from './meta'
 
 const PAGINAS_PADRAO: PaginaDoMeta[] = [
   { id: '100000000000001', nome: 'SE7E Marketing', token: 'token-da-pagina-1' },
@@ -113,6 +113,20 @@ export class MetaGraphFalso implements MetaGraph {
     // Deterministico no proprio adId, sem estado nem Math.random: o mesmo
     // adId tem que devolver o mesmo nome em chamadas repetidas do mesmo teste.
     return ok(`Campanha ${adId}`)
+  }
+
+  async arvoreDoAnuncio(adId: string, _tokenDaPagina: string): Promise<Resultado<ArvoreDeAnuncio>> {
+    if (this.barrado('arvoreDoAnuncio')) return falha('meta_indisponivel')
+    // Deterministico no proprio adId, sem estado nem Math.random: o mesmo
+    // adId devolve a mesma arvore em chamadas repetidas do mesmo teste.
+    return ok({
+      anuncioId: adId,
+      anuncioNome: `Anuncio ${adId}`,
+      conjuntoId: `adset-${adId}`,
+      conjuntoNome: `Conjunto ${adId}`,
+      campanhaId: `camp-${adId}`,
+      campanhaNome: `Campanha ${adId}`,
+    })
   }
 
   async posseDaPagina(pageId: string, tokenDaPagina: string): Promise<Resultado<void>> {
