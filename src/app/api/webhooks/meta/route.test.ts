@@ -332,5 +332,60 @@ describe('/api/webhooks/meta', () => {
 
       consoleErro.mockRestore()
     })
+
+    // Achado 2 do review final. Antes desta correcao a rota respondia 200
+    // para QUALQUER falha de registrarEntrega, inclusive uma transitoria
+    // (banco inalcancavel, pool esgotado) -- e um 200 diz ao Meta "recebido e
+    // guardado" para um lead que na verdade sumiu sem deixar linha nenhuma em
+    // integration_log, e o Meta nunca reenvia um 200.
+    it('registrarEntrega falhando com erro transitorio (nao external_id_invalido) devolve 500 e nao agenda nada', async () => {
+      const consoleErro = vi.spyOn(console, 'error').mockImplementation(() => {})
+      ingestao.falharRegistrarEntregaTransitoriamentePara = 'leadgen-1'
+
+      const res = await POST(requisicaoPost(corpoUmaEntrega, assinar(corpoUmaEntrega, SEGREDO)))
+
+      expect(res.status).toBe(500)
+      expect(agendados).toHaveLength(0)
+      expect(consoleErro).toHaveBeenCalled()
+
+      consoleErro.mockRestore()
+    })
+
+    // Complementa o teste acima: uma falha transitoria em UMA entrega do
+    // lote tem que derrubar a resposta do lote inteiro para 500, mesmo que
+    // outra entrega do mesmo lote tenha registrado com sucesso -- o Meta so
+    // sabe reenviar o lote completo, e reenviar e seguro (a entrega que ja
+    // registrou bate em 'duplicado' no reenvio, sem card duplicado).
+    it('uma falha transitoria em uma entrega do lote derruba a resposta do lote inteiro para 500', async () => {
+      const consoleErro = vi.spyOn(console, 'error').mockImplementation(() => {})
+      ingestao.falharRegistrarEntregaTransitoriamentePara = 'leadgen-1'
+
+      const corpoDoisEntry = JSON.stringify({
+        object: 'page',
+        entry: [
+          {
+            id: 'page-1',
+            time: 1,
+            changes: [{ field: 'leadgen', value: { leadgen_id: 'leadgen-1', page_id: 'page-1' } }],
+          },
+          {
+            id: 'page-2',
+            time: 2,
+            changes: [{ field: 'leadgen', value: { leadgen_id: 'leadgen-2', page_id: 'page-2' } }],
+          },
+        ],
+      })
+
+      const res = await POST(requisicaoPost(corpoDoisEntry, assinar(corpoDoisEntry, SEGREDO)))
+
+      expect(res.status).toBe(500)
+      // leadgen-2 registrou com sucesso, mas nada foi agendado: um 500 nao
+      // pode deixar o after() rodando por baixo dos panos enquanto diz ao
+      // Meta que a entrega inteira falhou.
+      expect(agendados).toHaveLength(0)
+      expect(consoleErro).toHaveBeenCalled()
+
+      consoleErro.mockRestore()
+    })
   })
 })

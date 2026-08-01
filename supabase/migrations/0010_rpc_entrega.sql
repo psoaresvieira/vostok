@@ -157,12 +157,28 @@ $$;
 -- Varredura do cron. Devolve tudo que o processamento precisa para nao ter que
 -- voltar ao banco: o payload cru e, no Meta, o token da Page.
 --
--- Backoff por numero de tentativas: 3^n minutos. Na pratica a janela observada
--- comeca em 3 e nao em 1, porque so registrar_falha marca 'falhou' e ela sempre
--- incrementa antes — entao toda linha que chega aqui em 'falhou' ja tem
--- tentativas >= 1. A sequencia real e 3, 9, 27 e 81 minutos. Desiste em 5:
--- alem disso a falha nao e transitoria, e retentar so gasta cota do Graph e
--- enche o log.
+-- CLAIM-ON-HANDOUT (achado 3 do review final). Esta funcao carimba
+-- ultima_tentativa_em = now() em toda linha que devolve, na MESMA instrucao
+-- que as seleciona — nao so nas que passam por registrar_falha. Sem isto, uma
+-- linha 'pendente' que nunca falhou (ultima_tentativa_em nulo) e devolvida por
+-- TODA varredura, e sempre primeiro (`order by criado_em asc`). Se o
+-- processamento dela for lento o bastante para a plataforma matar o handler
+-- no meio do lote (ver LIMITE_POR_INVOCACAO / maxDuration na rota de
+-- reprocessamento), a linha volta pendente, sem tentativa registrada, e
+-- ordena primeiro de novo na proxima varredura — a fila trava no mesmo ponto
+-- para sempre. E livelock GLOBAL, nao so da conta lenta: a fila e
+-- compartilhada entre todos os tenants, entao uma Page lenta de um cliente
+-- esfomeia a entrega de todo mundo. Carimbar aqui sujeita toda linha
+-- devolvida a mesma janela de backoff de uma linha que ja falhou, mesmo que
+-- ela nunca chegue a chamar registrar_falha.
+--
+-- Backoff por numero de tentativas: 3^n minutos. Uma linha 'pendente' recem
+-- devolvida (tentativas = 0) so pode ser devolvida de novo depois de 1
+-- minuto — e o que fecha o livelock acima. Para linhas que ja passaram por
+-- registrar_falha a sequencia observada e 3, 9, 27 e 81 minutos (tentativas
+-- sempre >= 1 nesse caminho, porque registrar_falha incrementa antes de
+-- marcar 'falhou'). Desiste em 5: alem disso a falha nao e transitoria, e
+-- retentar so gasta cota do Graph e enche o log.
 create or replace function public.entregas_pendentes(p_segredo text, p_limite integer)
 returns table (
   log_id uuid,
@@ -180,20 +196,41 @@ begin
     raise exception 'segredo_invalido';
   end if;
 
-  -- Todas as referencias qualificadas por `l.`/`sc.`: os nomes de saida
+  -- `candidatos` escolhe e TRAVA as linhas (`for update`) antes de qualquer
+  -- update; `marcados` carimba so essas linhas e devolve o que o corpo da
+  -- funcao precisa. O `for update` fecha a mesma corrida que o comentario de
+  -- ingerir_lead (0011) descreve para o after() da rota vs. o cron: duas
+  -- chamadas concorrentes a entregas_pendentes (dois sweeps, ou o cron e uma
+  -- corrida manual) nao podem devolver a mesma linha — a segunda so enxerga a
+  -- linha depois que a primeira commitou o carimbo, e nesse ponto o proprio
+  -- `where` de `candidatos` ja a exclui pela janela de backoff.
+  return query
+  with candidatos as (
+    select l.id
+      from public.integration_log l
+     where (l.status = 'pendente' or (l.status = 'falhou' and l.tentativas < 5))
+       and (
+         l.ultima_tentativa_em is null
+         or l.ultima_tentativa_em < now() - (interval '1 minute' * power(3, l.tentativas))
+       )
+     order by l.criado_em asc
+     limit p_limite
+       for update of l
+  ),
+  marcados as (
+    update public.integration_log l
+       set ultima_tentativa_em = now()
+      from candidatos
+     where l.id = candidatos.id
+     returning l.id, l.provedor, l.payload_bruto, l.tentativas, l.source_id, l.criado_em
+  )
+  -- Todas as referencias qualificadas por `m.`/`sc.`: os nomes de saida
   -- (provedor, payload_bruto, tentativas) colidem com colunas da tabela, e sem
   -- a qualificacao o plpgsql recusa por referencia ambigua.
-  return query
-  select l.id, l.provedor, l.payload_bruto, sc.meta_page_token, l.tentativas
-    from public.integration_log l
-    left join public.source_credentials sc on sc.source_id = l.source_id
-   where (l.status = 'pendente' or (l.status = 'falhou' and l.tentativas < 5))
-     and (
-       l.ultima_tentativa_em is null
-       or l.ultima_tentativa_em < now() - (interval '1 minute' * power(3, l.tentativas))
-     )
-   order by l.criado_em asc
-   limit p_limite;
+  select m.id, m.provedor, m.payload_bruto, sc.meta_page_token, m.tentativas
+    from marcados m
+    left join public.source_credentials sc on sc.source_id = m.source_id
+   order by m.criado_em asc;
 end;
 $$;
 

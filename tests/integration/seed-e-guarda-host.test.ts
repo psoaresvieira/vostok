@@ -21,6 +21,32 @@ describe('exigirHostLocal', () => {
   it('lanca quando a string nao e uma URL — parse que falha tem que recusar', () => {
     expect(() => exigirHostLocal('isso nao e uma url de conexao')).toThrow()
   })
+
+  // Achado 8 do review final: a mensagem antiga interpolava a SUPABASE_DB_URL
+  // inteira, senha incluida, e essa string aparece em log de CI.
+  it('a mensagem de host remoto nunca inclui a senha da string de conexao', () => {
+    const conexao = 'postgresql://user:senha-secreta-123@db.projeto.supabase.co:5432/postgres'
+    try {
+      exigirHostLocal(conexao)
+      throw new Error('deveria ter lancado')
+    } catch (e) {
+      expect(e).toBeInstanceOf(Error)
+      expect((e as Error).message).not.toContain('senha-secreta-123')
+      expect((e as Error).message).toContain('db.projeto.supabase.co')
+    }
+  })
+
+  it('a mensagem de parse invalido nunca inclui a string de conexao, e encadeia a causa original', () => {
+    const conexao = 'postgresql://user:senha-secreta-456@isso nao e uma url valida'
+    try {
+      exigirHostLocal(conexao)
+      throw new Error('deveria ter lancado')
+    } catch (e) {
+      expect(e).toBeInstanceOf(Error)
+      expect((e as Error).message).not.toContain('senha-secreta-456')
+      expect((e as Error).cause).toBeInstanceOf(Error)
+    }
+  })
 })
 
 describe('segredo de ingestao semeado', () => {

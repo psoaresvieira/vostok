@@ -69,8 +69,16 @@ const ERROS: Record<string, string> = {
     'Esta fonte não tem um token de Page do Facebook salvo. Reconecte a integração em Integrações.',
   leadgen_id_ausente:
     'O Facebook enviou uma notificação sem o identificador do lead — normalmente uma falha passageira do próprio Facebook.',
+  // Achado 4 do review final: esta mensagem prometia retentativa automatica
+  // sem prazo, mas o backoff (migration 0010) desiste depois de 5 tentativas
+  // -- uma indisponibilidade do Graph com mais de ~2h de duracao (3+9+27+81
+  // minutos) esgota as tentativas e a linha fica terminal, sem nada que a
+  // tire de 'falhou' sozinho. A partir da tentativa 5 esta frase e falsa.
+  // Nao afirma prazo nenhum: "pode tentar de novo" cobre tanto quem ainda
+  // esta dentro do backoff quanto quem ja esgotou, sem inventar uma garantia
+  // que o sistema nao tem.
   meta_indisponivel:
-    'O Facebook não respondeu (ou respondeu de forma inesperada) ao buscarmos os dados do lead. O reprocessamento automático vai tentar de novo.',
+    'O Facebook não respondeu (ou respondeu de forma inesperada) ao buscarmos os dados do lead. O sistema pode tentar de novo automaticamente, mas o reprocessamento não é garantido — se esta entrega persistir aqui, veja "Reprocessamento manual de entregas" no README.',
   segredo_invalido: 'Falha de configuração do servidor de ingestão. Fale com o time técnico.',
   log_nao_encontrado:
     'Falha interna ao localizar esta entrega durante o reprocessamento. Fale com o time técnico.',

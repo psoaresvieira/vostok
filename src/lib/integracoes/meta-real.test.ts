@@ -203,16 +203,31 @@ describe('MetaGraphReal — buscarLead, campanhaDoAnuncio e posseDaPagina', () =
     expect(r.erro).toBe('meta_indisponivel')
   })
 
-  it('posseDaPagina devolve ok quando /me responde com o mesmo id', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+  it('posseDaPagina devolve ok quando /me responde com o mesmo id, e chama GET /me — nunca /{page_id}', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({ id: '100000000000001' }),
     })
+    global.fetch = fetchMock
     const g = new MetaGraphReal('app-id', 'app-secret')
 
     const r = await g.posseDaPagina('100000000000001', 'token-da-pagina')
     expect(r.ok).toBe(true)
+
+    // Achado 6 do review final: a substancia inteira do fechamento do
+    // squat de Page (README, secao "O que fechou o risco") e esta rota
+    // chamar /me, nunca /{page_id} — um token de pagina consegue ler campos
+    // publicos de QUALQUER pagina via GET /{page_id}?fields=id, entao essa
+    // chamada teria sucesso mesmo com o token errado e nao provaria posse
+    // nenhuma. So GET /me sempre responde como a propria pagina dona do
+    // token. Sem esta asserção de URL, uma regressao para /{page_id} passa
+    // verde em todo teste deste arquivo (inclusive o de baixo, que so
+    // confere o `id` devolvido) e reabre o squat silenciosamente.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const urlChamada = new URL(fetchMock.mock.calls[0][0] as string | URL)
+    expect(urlChamada.pathname).toBe('/v21.0/me')
+    expect(urlChamada.pathname).not.toContain('100000000000001')
   })
 
   it('posseDaPagina devolve posse_nao_comprovada quando /me responde com id diferente', async () => {

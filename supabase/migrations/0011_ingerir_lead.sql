@@ -129,6 +129,24 @@ begin
     insert into public.lead_events (lead_id, tipo, payload, ator_id)
     values (v_lead, 'reingestao', v_evento, null);
 
+    -- Mesmo guard de v_resp_padrao la em cima (linha ~64), e pelo mesmo
+    -- motivo: a RLS nao alcanca SECURITY DEFINER, entao o with check da 0007
+    -- tambem nao. Aqui o risco e mais direto ainda -- v_dono vem de
+    -- leads.responsavel_id de um lead JA EXISTENTE, e nada nulifica essa
+    -- coluna quando a membership e revogada (a 0007 so limpou o estado
+    -- existente uma vez, na propria migration; dali em diante o invariante
+    -- vive so no with check de policy, que codigo definer nunca avalia). Um
+    -- admin remove um vendedor da conta, o lead aberto dele continua
+    -- apontando pra ele, a mesma pessoa preenche o formulario nao mais, e sem
+    -- este guard o ex-membro receberia uma notification 'lead_reincidente' de
+    -- uma conta da qual ele nao faz mais parte -- e notifications_dono_select
+    -- e so `usuario_id = auth.uid()`, sem escopo de conta nenhum, entao ela
+    -- apareceria no sino dele, vazando o UUID do lead e o fato de ter havido
+    -- reingestao numa conta que ele nao integra mais.
+    if not public.e_membro_da_conta(v_account, v_dono) then
+      v_dono := null;
+    end if;
+
     -- Notifica quem ja cuida do lead, e nao o responsavel padrao da fonte: e
     -- essa pessoa que precisa saber que a mesma pessoa voltou.
     if v_dono is not null then

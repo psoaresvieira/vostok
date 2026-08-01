@@ -48,6 +48,16 @@ export class InMemoryIngestaoStore implements IngestaoStore {
   falharRegistrarEntregaPara: string | null = null
 
   /**
+   * Mesma ideia de `falharRegistrarEntregaPara`, mas simula uma falha
+   * TRANSITORIA (banco inalcancavel, pool esgotado, PostgREST fora do ar) em
+   * vez de `external_id_invalido` -- os dois codigos levam a rota a decisoes
+   * de status HTTP opostas (achado 2 do review final: 200 so quando o corpo
+   * nunca vai suceder em retentativa, 500 para qualquer outra coisa), e sem
+   * um seletor dedicado nao havia como simular o segundo caso pelo duplo.
+   */
+  falharRegistrarEntregaTransitoriamentePara: string | null = null
+
+  /**
    * ExternalId que deve fazer `registrarEntrega` devolver sucesso com
    * status 'ignorado', no mesmo estilo de `falharRegistrarEntregaPara`
    * acima. A RPC real (0010) chega em 'ignorado' por mais de um caminho --
@@ -94,6 +104,10 @@ export class InMemoryIngestaoStore implements IngestaoStore {
     googleKey?: string | null
   }): Promise<Resultado<ResultadoEntrega>> {
     this.entregas.push({ ...e, googleKey: e.googleKey ?? null })
+
+    if (this.falharRegistrarEntregaTransitoriamentePara === e.externalId) {
+      return falha('banco_indisponivel')
+    }
 
     if (this.falharRegistrarEntregaPara === e.externalId) {
       return falha('external_id_invalido')

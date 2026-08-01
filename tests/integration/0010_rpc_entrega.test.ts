@@ -423,6 +423,41 @@ describe('0010 — RPCs de entrega gateadas no segredo de ingestao', () => {
     expect(linhas.map((l) => l.log_id)).toContain(id)
   })
 
+  // Caso 13b — claim-on-handout (achado 3 do review final). Sem o carimbo,
+  // uma linha 'pendente' sem ultima_tentativa_em seria devolvida por TODA
+  // chamada, sempre primeiro por criado_em -- o livelock que trava a fila
+  // inteira quando o processamento dessa linha e lento demais.
+  it('entregas_pendentes carimba ultima_tentativa_em ao devolver, entao a mesma linha nao volta na chamada seguinte', async () => {
+    const id = await inserirLogBruto({ c, externalId: 'claim-1', status: 'pendente', criadoMinutosAtras: 5 })
+
+    const logAntes = await buscarLog(id)
+    expect(logAntes.ultima_tentativa_em).toBeNull()
+
+    const primeira = await comoServico(async (cli) => {
+      const r = await cli.query<{ log_id: string }>(
+        'select * from public.entregas_pendentes($1, 10)',
+        [SEGREDO],
+      )
+      return r.rows
+    })
+    expect(primeira.map((l) => l.log_id)).toContain(id)
+
+    const segunda = await comoServico(async (cli) => {
+      const r = await cli.query<{ log_id: string }>(
+        'select * from public.entregas_pendentes($1, 10)',
+        [SEGREDO],
+      )
+      return r.rows
+    })
+    expect(segunda.map((l) => l.log_id)).not.toContain(id)
+
+    const logDepois = await buscarLog(id)
+    expect(logDepois.ultima_tentativa_em).not.toBeNull()
+    // O carimbo nao mexe em status nem tentativas -- so no relogio do backoff.
+    expect(logDepois.status).toBe('pendente')
+    expect(logDepois.tentativas).toBe(0)
+  })
+
   // Caso 13
   it('registrar_falha incrementa tentativas e carimba ultima_tentativa_em, e nao mexe em processado', async () => {
     const idPendente = await inserirLogBruto({ c, externalId: 'falha-1', status: 'pendente' })

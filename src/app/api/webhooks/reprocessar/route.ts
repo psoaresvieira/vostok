@@ -4,10 +4,31 @@ import { criarIngestaoStore } from '@/lib/data/ingestao'
 import { processarEntrega } from '@/lib/ingestao/processar'
 import { metaGraph } from '@/lib/integracoes/fabrica'
 
-// A plataforma mata o handler por tempo. Uma varredura sem limite tenta
-// esvaziar a fila inteira numa execucao so e nao termina nenhuma entrega --
-// 20 por invocacao deixa o cron seguinte pegar o resto.
+// A plataforma mata o handler por tempo (ver `maxDuration` abaixo). Uma
+// varredura sem limite tenta esvaziar a fila inteira numa execucao so e nao
+// termina nenhuma entrega.
+//
+// Achado 3 do review final: "20 por invocacao deixa o cron seguinte pegar o
+// resto" so e verdade quando a CABECA da fila e rapida. `entregas_pendentes`
+// (migration 0010) agora carimba `ultima_tentativa_em` em toda linha que
+// devolve (claim-on-handout), entao uma linha lenta ou cuja entrega mata o
+// handler no meio do lote nao volta a ser devolvida na proxima varredura —
+// ela cai no mesmo backoff de uma linha que falhou de verdade. Sem esse
+// carimbo, uma unica linha lenta no topo da fila (sempre primeira por
+// `order by criado_em asc`) travaria a fila no mesmo ponto pra sempre — e
+// como a fila e global entre contas, essa trava e de todo mundo, nao so da
+// conta lenta.
 const LIMITE_POR_INVOCACAO = 20
+
+// Deliberadamente abaixo do teto de execucao da plataforma, nao no teto: com
+// ate 20 entregas por chamada e o Graph podendo levar ate TIMEOUT_MS
+// (meta-real.ts, 10s) por tentativa — buscarLead e campanhaDoAnuncio, ate
+// duas chamadas por entrega de Meta —, um lote no pior caso passaria de
+// varios minutos sem este limite. Cortar aqui e previsivel: a linha em
+// processamento no corte fica sem `registrar_falha` (o mesmo estado que o
+// claim-on-handout de `entregas_pendentes` acima ja cobre), entao ela so
+// volta a ser tentada depois do proprio backoff, nunca imediatamente.
+export const maxDuration = 60
 
 const PREFIXO_BEARER = 'Bearer '
 

@@ -19,11 +19,17 @@ export function exigirHostLocal(conexao: string): string {
   let host: string
   try {
     host = new URL(conexao).hostname
-  } catch {
-    throw new Error(`SUPABASE_DB_URL nao e uma URL de conexao valida: "${conexao}"`)
+  } catch (e) {
+    // Nunca interpola `conexao` na mensagem (achado 8 do review final): ela
+    // carrega a senha do Postgres, e essa mensagem lanca ate a raiz e pousa
+    // em log de CI. `{ cause }` preserva o erro de parse original para quem
+    // depurar sem reabrir esse vazamento.
+    throw new Error('SUPABASE_DB_URL nao e uma URL de conexao valida.', { cause: e })
   }
 
   if (host !== '127.0.0.1' && host !== 'localhost') {
+    // So o host, nunca a string de conexao inteira: ela carrega usuario e
+    // senha, e essa e a unica coisa entre esse segredo e o log de CI.
     throw new Error(
       `SUPABASE_DB_URL aponta para um host que nao e local ("${host}"). ` +
         'Operacoes destrutivas de teste (limparBanco, global-setup) so rodam ' +

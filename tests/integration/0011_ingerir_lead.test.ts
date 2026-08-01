@@ -524,6 +524,40 @@ describe('0011 — ingerir_lead: decide se a entrega vira card ou aviso', () => 
     expect(lead.responsavel_id).toBeNull()
   })
 
+  // Caso 14b — mesmo guard do caso 14, so que no caminho de dedup. Achado 1
+  // do review final: v_dono vem de leads.responsavel_id de um lead ja
+  // existente, sem passar por e_membro_da_conta antes desta correcao.
+  it('dono do lead existente que nao e mais membro da conta nao recebe notification de reincidencia (caminho de dedup)', async () => {
+    const fonte = await criarFonteMeta(c, { responsavelPadraoId: c.vendedorAId })
+    const entrega1 = await registrarEntrega(fonte.externalId)
+    const r1 = await ingerirLead(entrega1.log_id!, dadosPadrao({ telefone_e164: '+5511900001111' }))
+    expect(r1.status).toBe('criado')
+
+    // Revoga a membership de quem ficou dono do lead, sem tocar
+    // responsavel_id -- exatamente o cenario que o comentario da 0011
+    // descreve: nada nulifica responsavel_id na revogacao.
+    await comoServico((cli) =>
+      cli.query('delete from public.memberships where account_id = $1 and user_id = $2', [
+        c.accountId,
+        c.vendedorAId,
+      ]),
+    )
+
+    const fonte2 = await criarFonteMeta(c, { responsavelPadraoId: c.gestorId })
+    const entrega2 = await registrarEntrega(fonte2.externalId)
+    const r2 = await ingerirLead(
+      entrega2.log_id!,
+      dadosPadrao({ telefone_e164: '+5511900001111', email_norm: 'outro14b@example.com' }),
+    )
+
+    expect(r2.status).toBe('reincidente')
+    expect(r2.lead_id).toBe(r1.lead_id)
+
+    const notifs = await buscarNotifications(r1.lead_id!)
+    const reincidentes = notifs.filter((n) => n.tipo === 'lead_reincidente')
+    expect(reincidentes).toHaveLength(0)
+  })
+
   // Caso 15
   it('log sem source_id levanta fonte_nao_encontrada', async () => {
     const logId = await inserirLogPendenteSemFonte()

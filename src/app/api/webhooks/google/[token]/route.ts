@@ -5,6 +5,41 @@ import { metaGraph } from '@/lib/integracoes/fabrica'
 
 type RotaComToken = { params: Promise<{ token: string }> }
 
+/** 256 KiB e generoso para um formulario de lead (Achado 5 do review final).
+ * Diferente do Meta, esta rota nao tem prova de origem antes de gravar --
+ * so o segredo dentro de registrar_entrega, e esse so entra depois que a
+ * conta ja foi resolvida. Um corpo grande demais viraria payload_bruto
+ * gigante gravado em integration_log sem limite, sem rate limit, e sem dono
+ * (account_id fica nulo pra fonte desconhecida) -- disk-fill contra um banco
+ * compartilhado por todo tenant. */
+const LIMITE_CORPO_BYTES = 256 * 1024
+
+/** Le o corpo respeitando LIMITE_CORPO_BYTES sem nunca bufferizar mais do que
+ * isso mais um chunk: `req.text()` sozinho ja teria lido o corpo inteiro na
+ * memoria antes de qualquer checagem, o que so resolve a metade do problema
+ * (a linha em integration_log) e nao a outra (o handler aceitando um corpo
+ * arbitrariamente grande na memoria do processo). */
+async function lerCorpoLimitado(req: NextRequest): Promise<{ ok: true; texto: string } | { ok: false }> {
+  const reader = req.body?.getReader()
+  if (!reader) return { ok: true, texto: await req.text() }
+
+  const decoder = new TextDecoder()
+  let texto = ''
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > LIMITE_CORPO_BYTES) {
+      await reader.cancel()
+      return { ok: false }
+    }
+    texto += decoder.decode(value, { stream: true })
+  }
+  texto += decoder.decode()
+  return { ok: true, texto }
+}
+
 /**
  * Webhook do Google Ads (lead form extensions). Diferente do Meta: um
  * request carrega um lead so, sem lote, e nao ha assinatura para verificar --
@@ -21,9 +56,17 @@ type RotaComToken = { params: Promise<{ token: string }> }
 export async function POST(req: NextRequest, { params }: RotaComToken) {
   const { token } = await params
 
+  const lido = await lerCorpoLimitado(req)
+  if (!lido.ok) {
+    // 413, nunca 200/500: corpo grande demais nao e falha transitoria nem
+    // sucesso, e' o chamador mandando algo fora do que um formulario de lead
+    // jamais produz. Nada foi gravado.
+    return new Response(null, { status: 413 })
+  }
+
   let corpo: unknown
   try {
-    corpo = JSON.parse(await req.text())
+    corpo = JSON.parse(lido.texto)
   } catch {
     // Corpo torto de um chamador que ja tem o token certo (ele so chega aqui
     // com a rota resolvida) nunca vira valido em retentativa, e 500 faria o
@@ -69,18 +112,25 @@ export async function POST(req: NextRequest, { params }: RotaComToken) {
     googleKey,
   })
 
+  if (!resultado.ok) {
+    console.error('webhook google: registrarEntrega falhou', resultado.erro, leadId)
+    // external_id_invalido e a RPC recusando ANTES de gravar por um corpo que
+    // nunca vai ficar valido em retentativa: leadId ja passou pelo guard de
+    // string vazia acima, mas ainda pode ser so espaco em branco (a RPC faz
+    // btrim; esta checagem aqui nao) -- 200 e o certo, reenviar bateria na
+    // mesma recusa para sempre. Qualquer outro erro (banco inalcancavel, pool
+    // esgotado, PostgREST fora do ar) e transitorio: NADA foi gravado, e 200
+    // diria ao Google "recebido e guardado" para um lead que sumiu com so
+    // este console.error atras. 500 faz o Google retentar (ele so retenta em
+    // cima de 5xx), a tempo do operador corrigir o que quer que tenha caido.
+    const status = resultado.erro === 'external_id_invalido' ? 200 : 500
+    return new Response(null, { status })
+  }
+
   // Responde 200 ANTES de qualquer processamento: o Google nao pode ficar
   // esperando, e o payload ja esta gravado (reprocessavel pelo cron mesmo se
   // o mapeamento falhar).
   const resposta = new Response(null, { status: 200 })
-
-  if (!resultado.ok) {
-    // Uma entrega que falha ao registrar nao pode virar 500: diferente do
-    // store indisponivel, aqui o lead JA foi tentado, e o Google so retenta
-    // 5xx -- o mesmo corpo tortuoso voltaria para sempre. Fica so o log.
-    console.error('webhook google: registrarEntrega falhou', resultado.erro, leadId)
-    return resposta
-  }
 
   if (resultado.valor.status === 'pendente' && resultado.valor.logId) {
     const entrega: EntregaParaProcessar = {

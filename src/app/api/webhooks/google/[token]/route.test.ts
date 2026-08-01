@@ -186,7 +186,7 @@ describe('/api/webhooks/google/[token]', () => {
     consoleErro.mockRestore()
   })
 
-  it('registrarEntrega falhando devolve 200 mesmo assim, e loga o erro', async () => {
+  it('registrarEntrega falhando com external_id_invalido devolve 200 mesmo assim -- corpo nunca vai suceder em retentativa', async () => {
     const consoleErro = vi.spyOn(console, 'error').mockImplementation(() => {})
     ingestao.falharRegistrarEntregaPara = 'lead-google-1'
 
@@ -197,5 +197,53 @@ describe('/api/webhooks/google/[token]', () => {
     expect(consoleErro).toHaveBeenCalled()
 
     consoleErro.mockRestore()
+  })
+
+  // Achado 2 do review final. Antes desta correcao a rota respondia 200 para
+  // QUALQUER falha de registrarEntrega -- inclusive uma transitoria (banco
+  // inalcancavel, pool esgotado), onde nada foi gravado e o lead sumiria com
+  // so um console.error atras. O Google nao reenvia um 200, entao essa era a
+  // falha MAIS provavel recebendo a resposta ERRADA.
+  it('registrarEntrega falhando com erro transitorio (nao external_id_invalido) devolve 500, nao 200', async () => {
+    const consoleErro = vi.spyOn(console, 'error').mockImplementation(() => {})
+    ingestao.falharRegistrarEntregaTransitoriamentePara = 'lead-google-1'
+
+    const res = await POST(requisicao(corpoValido), contexto())
+
+    expect(res.status).toBe(500)
+    expect(agendados).toHaveLength(0)
+    expect(consoleErro).toHaveBeenCalled()
+
+    consoleErro.mockRestore()
+  })
+
+  // Achado 5 do review final: sem cap de tamanho, qualquer corpo grande vira
+  // payload_bruto gigante em integration_log -- disk-fill nao autenticado,
+  // ja que esta rota nao tem prova de origem antes da escrita.
+  it('corpo acima de 256 KiB devolve 413 e nao chega a chamar registrarEntrega', async () => {
+    const corpoGigante = JSON.stringify({
+      lead_id: 'lead-google-gigante',
+      google_key: 'chave-do-cliente',
+      user_column_data: [{ column_id: 'FULL_NAME', string_value: 'x'.repeat(300 * 1024) }],
+    })
+
+    const res = await POST(requisicao(corpoGigante), contexto())
+
+    expect(res.status).toBe(413)
+    expect(ingestao.entregas).toHaveLength(0)
+    expect(agendados).toHaveLength(0)
+  })
+
+  it('corpo dentro do limite de 256 KiB continua processando normalmente', async () => {
+    const corpoNoLimite = JSON.stringify({
+      lead_id: 'lead-google-no-limite',
+      google_key: 'chave-do-cliente',
+      user_column_data: [{ column_id: 'FULL_NAME', string_value: 'x'.repeat(10 * 1024) }],
+    })
+
+    const res = await POST(requisicao(corpoNoLimite), contexto())
+
+    expect(res.status).toBe(200)
+    expect(ingestao.entregas).toHaveLength(1)
   })
 })

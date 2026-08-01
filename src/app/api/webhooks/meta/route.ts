@@ -68,6 +68,10 @@ export async function POST(req: NextRequest) {
     : []
 
   const pendentes: EntregaParaProcessar[] = []
+  // true quando ALGUMA entrega do lote falhou ao registrar por um motivo que
+  // nao e external_id_invalido -- ver o `if` dentro do loop, que decide qual
+  // e qual.
+  let falhaTransitoria = false
   for (const entry of entries) {
     const changes = Array.isArray(entry?.changes) ? (entry.changes as ChangeDoMeta[]) : []
     for (const change of changes) {
@@ -101,6 +105,15 @@ export async function POST(req: NextRequest) {
       })
       if (!resultado.ok) {
         console.error('webhook meta: registrarEntrega falhou', resultado.erro, leadgenId)
+        // external_id_invalido e a RPC recusando ANTES de gravar por um
+        // corpo que nunca vai ficar valido em retentativa (leadgenId ja foi
+        // provado nao-vazio acima) -- reenviar bateria na mesma recusa para
+        // sempre, 200 e o certo. Qualquer outro erro (banco inalcancavel,
+        // pool esgotado, PostgREST fora do ar) e transitorio: NADA foi
+        // gravado para esta entrega, e 200 diria ao Meta "recebido e
+        // guardado" para um lead que sumiu com so este console.error atras
+        // -- o Meta nunca reenvia um 200, so retenta em cima de 5xx.
+        if (resultado.erro !== 'external_id_invalido') falhaTransitoria = true
         continue
       }
       if (resultado.valor.status === 'pendente' && resultado.valor.logId) {
@@ -112,6 +125,17 @@ export async function POST(req: NextRequest) {
         })
       }
     }
+  }
+
+  if (falhaTransitoria) {
+    // 500 faz o Meta reenviar o LOTE inteiro, nao so a entrega que falhou --
+    // o Meta nao tem como pedir so uma parte de volta. Isso e seguro para as
+    // entregas que ja registraram nesta mesma passada: o indice unico
+    // (provedor, external_id) da 0009 faz o reenvio delas bater em
+    // 'duplicado' (registrar_entrega, 0010), sem criar card duplicado nem
+    // reprocessar de novo. So a entrega que falhou ganha uma chance real de
+    // gravar na proxima tentativa.
+    return new Response(null, { status: 500 })
   }
 
   // Responde 200 ANTES de qualquer chamada externa: o provedor nao pode
