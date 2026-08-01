@@ -1673,6 +1673,15 @@ Em `fontes.ts`: `conectarMeta` passa `p_segredo` lendo `process.env.INGESTAO_SEG
 
 Em `acoes-fontes.ts`: `posseDaPagina` entra **antes** do `assinarLeadgen`, não depois. `reivindicarPaginaAction` repete a mesma sequência e chama `reivindicarMeta`.
 
+**A compensação de `desassinarLeadgen` só pode desfazer o que esta chamada fez.** `assinarLeadgen` é idempotente do lado do Meta: quando a Page já pertence a outra conta do CRM, ela **já está inscrita**, e a chamada não cria nada. Se a gravação falhar depois disso, uma compensação incondicional remove a inscrição que o *outro* tenant depende — e aquele cliente para de receber lead, sem erro nenhum em lugar nenhum. É o mesmo desfecho catastrófico e silencioso que a compensação existe para evitar, só que aplicado à vítima em vez de ao invasor.
+
+Duas regras fecham os dois caminhos por onde isso é alcançável:
+
+- **Nunca compense no caminho de reivindicação.** Ali a premissa é que a Page já pertence a alguém, logo a inscrição nunca é nossa.
+- **Nunca compense quando o erro for `page_ja_conectada`.** Esse código é a prova de que a Page já era de outra conta, e portanto de que a inscrição não foi criada agora.
+
+E uma terceira que evita o caso mais provável na estreia: **valide `INGESTAO_SEGREDO` antes de tocar no Graph.** Sem isso, um deploy que suba sem a variável faz todo clique em Conectar inscrever e desinscrever a Page de um terceiro, com o operador vendo apenas "a ingestão não está configurada".
+
 Em `erros.ts`: mensagens para `posse_nao_comprovada` ("Não conseguimos confirmar no Facebook que essa página é sua."), `segredo_invalido` ("A ingestão não está configurada neste ambiente. Fale com o suporte.") e `ingestao_nao_configurada` (mesma mensagem).
 
 Em `integracoes.tsx`: quando uma tentativa de conectar volta `page_ja_conectada`, ofereça o botão de reivindicar, com texto que diga o que vai acontecer — a página sai da outra conta do CRM e passa para esta. Ação destrutiva para um terceiro tem que ser escolha consciente, não um "tentar de novo".
