@@ -1,67 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { comoServico, comoUsuario, criarUsuario, limparBanco } from './helpers/db'
 import { montarCenario, etapa, type Cenario } from './helpers/cenario'
+import { SEGREDO, unico, criarFonteMeta, registrarEntrega } from './helpers/ingestao'
 
-const SEGREDO = 'segredo-de-ingestao-local'
 const ERRADO = 'segredo-errado'
 const VAZIO = '00000000-0000-0000-0000-000000000000'
 
-type ResultadoEntrega = {
-  log_id: string | null
-  status: string
-  token: string | null
-  externalId: string
-}
 type ResultadoIngestao = { status: string; lead_id: string | null }
-
-let contador = 0
-/** Sufixo unico por chamada: varios casos disparam varias entregas na mesma conta. */
-function unico(prefixo: string): string {
-  contador += 1
-  return `${prefixo}-${contador}`
-}
-
-/** Cria uma fonte Meta direto nas tabelas — nao pela RPC, que muda na Task 10. */
-async function criarFonteMeta(
-  c: { accountId: string },
-  opts: { responsavelPadraoId?: string | null; ativo?: boolean } = {},
-): Promise<{ sourceId: string; externalId: string }> {
-  const externalId = unico('page')
-  return comoServico(async (cli) => {
-    const r = await cli.query<{ id: string }>(
-      `insert into public.lead_sources (account_id, provedor, external_id, nome, responsavel_padrao_id, ativo)
-       values ($1, 'meta', $2, $3, $4, $5) returning id`,
-      [
-        c.accountId,
-        externalId,
-        `Page ${externalId}`,
-        opts.responsavelPadraoId ?? null,
-        opts.ativo ?? true,
-      ],
-    )
-    await cli.query(
-      `insert into public.source_credentials (source_id, meta_page_token) values ($1, 'tok')`,
-      [r.rows[0].id],
-    )
-    return { sourceId: r.rows[0].id, externalId }
-  })
-}
-
-/** Chama registrar_entrega (Task 3) para gerar o log_id que ingerir_lead consome. */
-async function registrarEntrega(
-  chaveDaFonte: string,
-  payload: unknown = {},
-  segredo = SEGREDO,
-): Promise<ResultadoEntrega> {
-  const externalId = unico('ext')
-  return comoServico(async (cli) => {
-    const r = await cli.query<{ resultado: Omit<ResultadoEntrega, 'externalId'> }>(
-      `select public.registrar_entrega($1, 'meta', $2, $3, $4) as resultado`,
-      [segredo, externalId, JSON.stringify(payload), chaveDaFonte],
-    )
-    return { ...r.rows[0].resultado, externalId }
-  })
-}
 
 /** Insere integration_log direto, pendente e sem source_id — estado que registrar_entrega nunca produz (fonte desconhecida vira 'ignorado', nao 'pendente'), mas que ingerir_lead precisa recusar mesmo assim. */
 async function inserirLogPendenteSemFonte(): Promise<string> {

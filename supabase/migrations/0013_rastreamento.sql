@@ -47,12 +47,13 @@ create index leads_account_campanha_idx on public.leads (account_id, campanha_id
 -- antiga antes: `create or replace` com argumentos diferentes cria uma
 -- SOBRECARGA e as duas versoes convivem — foi o que a 0012 teve que tratar.
 --
--- Corpo copiado de supabase/migrations/0011_ingerir_lead.sql, alterando
--- APENAS o `insert into public.leads` para gravar as oito colunas de
--- rastreamento no lugar de campanha_origem/formulario_origem. Todo o resto
--- (e_membro_da_conta reafirmado nos dois ramos, o `for update` que serializa
--- a entrega, o coalesce do nome, a dedup, as notifications) e identico a
--- 0011 — nao reescrito de memoria.
+-- Corpo copiado de supabase/migrations/0011_ingerir_lead.sql, alterando o
+-- `insert into public.leads` para gravar as oito colunas de rastreamento no
+-- lugar de campanha_origem/formulario_origem, e as duas chaves lidas em
+-- v_evento (campanha/formulario), que apontavam para as mesmas colunas
+-- retiradas. Todo o resto (e_membro_da_conta reafirmado nos dois ramos, o
+-- `for update` que serializa a entrega, o coalesce do nome, a dedup, as
+-- notifications) e identico a 0011 — nao reescrito de memoria.
 create or replace function public.ingerir_lead(
   p_segredo text,
   p_log_id uuid,
@@ -141,11 +142,18 @@ begin
   -- O que a timeline vai contar. `extras` sao os campos do formulario que
   -- nenhum mapeador conhece — as perguntas de qualificacao que o cliente
   -- escreveu. Sao o motivo de o payload cru nunca ser descartado.
+  -- campanha_nome (nao campanha_id): este payload e a timeline legivel por
+  -- humano do lead, e campanha_id e opaco. formulario_id (nao um nome de
+  -- formulario): nenhum mapeador busca nome de formulario hoje. As colunas
+  -- campanha_origem/formulario_origem que estas chaves liam antes saem nesta
+  -- mesma migration (ver o insert abaixo) -- ler as chaves antigas aqui
+  -- gravaria null para sempre em lead_events, que e append-only e nunca e
+  -- reconstruido depois.
   v_evento := jsonb_build_object(
     'provedor', v_log.provedor,
     'external_id', v_log.external_id,
-    'campanha', p_dados ->> 'campanha_origem',
-    'formulario', p_dados ->> 'formulario_origem',
+    'campanha', p_dados ->> 'campanha_nome',
+    'formulario', p_dados ->> 'formulario_id',
     'extras', coalesce(p_dados -> 'extras', '{}'::jsonb)
   );
 

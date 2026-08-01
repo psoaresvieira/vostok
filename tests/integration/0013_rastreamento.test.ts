@@ -1,49 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { comoServico, limparBanco } from './helpers/db'
 import { montarCenario, type Cenario } from './helpers/cenario'
-
-// Mesmo segredo local usado em tests/integration/0011_ingerir_lead.test.ts —
-// nao ha helper compartilhado para isto, e um segundo caminho de leitura de
-// env divergiria em silencio do que o proprio arquivo 0011 ja fixa.
-const SEGREDO = 'segredo-de-ingestao-local'
-
-let contador = 0
-/** Sufixo unico por chamada, igual ao helper `unico` de 0011_ingerir_lead.test.ts. */
-function unico(prefixo: string): string {
-  contador += 1
-  return `${prefixo}-${contador}`
-}
-
-/** Copia fiel de criarFonteMeta em 0011_ingerir_lead.test.ts: cria a fonte
- * direto nas tabelas, nao pela RPC (que muda na Task 10). */
-async function criarFonteMeta(c: Cenario): Promise<{ sourceId: string; externalId: string }> {
-  const externalId = unico('page')
-  return comoServico(async (cli) => {
-    const r = await cli.query<{ id: string }>(
-      `insert into public.lead_sources (account_id, provedor, external_id, nome, responsavel_padrao_id, ativo)
-       values ($1, 'meta', $2, $3, $4, true) returning id`,
-      [c.accountId, externalId, `Page ${externalId}`, c.vendedorAId],
-    )
-    await cli.query(
-      `insert into public.source_credentials (source_id, meta_page_token) values ($1, 'tok')`,
-      [r.rows[0].id],
-    )
-    return { sourceId: r.rows[0].id, externalId }
-  })
-}
-
-/** Copia fiel de registrarEntrega em 0011_ingerir_lead.test.ts: chama a RPC
- * da Task 3 para gerar o log_id pendente que ingerir_lead consome. */
-async function registrarEntrega(chaveDaFonte: string): Promise<{ log_id: string }> {
-  const externalId = unico('ext')
-  return comoServico(async (cli) => {
-    const r = await cli.query<{ resultado: { log_id: string } }>(
-      `select public.registrar_entrega($1, 'meta', $2, $3, $4) as resultado`,
-      [SEGREDO, externalId, JSON.stringify({}), chaveDaFonte],
-    )
-    return r.rows[0].resultado
-  })
-}
+import { SEGREDO, criarFonteMeta, registrarEntrega } from './helpers/ingestao'
 
 describe('0013 — colunas de rastreamento: campanha_origem/formulario_origem saem, oito colunas novas entram', () => {
   let c: Cenario
@@ -75,7 +33,7 @@ describe('0013 — colunas de rastreamento: campanha_origem/formulario_origem sa
   })
 
   it('ingerir_lead grava os oito campos de rastreamento do Meta', async () => {
-    const fonte = await criarFonteMeta(c)
+    const fonte = await criarFonteMeta(c, { responsavelPadraoId: c.vendedorAId })
     const entrega = await registrarEntrega(fonte.externalId)
 
     await comoServico((cli) =>
@@ -106,6 +64,10 @@ describe('0013 — colunas de rastreamento: campanha_origem/formulario_origem sa
         [c.accountId],
       ),
     )
+    // Sem order by/limit, r.rows[0] so e a lead certa porque o cenario nao
+    // semeia nenhuma outra lead nesta conta -- invariante de outro arquivo.
+    // Assertar aqui torna essa dependencia visivel onde ela e usada.
+    expect(r.rows).toHaveLength(1)
     expect(r.rows[0]).toEqual({
       campanha_id: 'camp-7',
       campanha_nome: 'Campanha de Verao',
@@ -121,7 +83,7 @@ describe('0013 — colunas de rastreamento: campanha_origem/formulario_origem sa
   it('ingerir_lead aceita payload sem nenhum campo de rastreamento', async () => {
     // Lead do Google sem os ids opcionais, ou Meta com arvore falhada. Nao
     // pode estourar: nada aqui e obrigatorio.
-    const fonte = await criarFonteMeta(c)
+    const fonte = await criarFonteMeta(c, { responsavelPadraoId: c.vendedorAId })
     const entrega = await registrarEntrega(fonte.externalId)
 
     await comoServico((cli) =>
@@ -138,7 +100,47 @@ describe('0013 — colunas de rastreamento: campanha_origem/formulario_origem sa
         [c.accountId],
       ),
     )
+    // Mesma dependencia da lead unica na conta que o teste acima assume.
+    expect(r.rows).toHaveLength(1)
     expect(r.rows[0]).toEqual({ campanha_id: null, anuncio_id: null })
+  })
+
+  it('lead_events grava campanha/formulario a partir das chaves NOVAS do payload, nao das aposentadas', async () => {
+    // Achado 1 do review: v_evento lia campanha_origem/formulario_origem, que
+    // saem nesta mesma migration. Enquanto o TS ainda emitia as duas chaves
+    // (antiga e nova) isso passava batido; assim que a chave antiga sumir do
+    // payload, campanha/formulario gravariam null para sempre em
+    // lead_events, que e append-only e nunca e reconstruido depois.
+    const fonte = await criarFonteMeta(c, { responsavelPadraoId: c.vendedorAId })
+    const entrega = await registrarEntrega(fonte.externalId)
+
+    const ingestao = await comoServico((cli) =>
+      cli.query<{ resultado: { lead_id: string } }>(
+        `select public.ingerir_lead($1, $2, $3) as resultado`,
+        [
+          SEGREDO,
+          entrega.log_id,
+          JSON.stringify({
+            nome: 'Beltrano',
+            email: 'beltrano@example.com',
+            campanha_nome: 'Campanha de Inverno',
+            formulario_id: 'form-42',
+            extras: {},
+          }),
+        ],
+      ),
+    )
+    const leadId = ingestao.rows[0].resultado.lead_id
+
+    const eventos = await comoServico((cli) =>
+      cli.query<{ payload: { campanha: string | null; formulario: string | null } }>(
+        `select payload from public.lead_events where lead_id = $1 and tipo = 'criado_por_webhook'`,
+        [leadId],
+      ),
+    )
+    expect(eventos.rows).toHaveLength(1)
+    expect(eventos.rows[0].payload.campanha).toBe('Campanha de Inverno')
+    expect(eventos.rows[0].payload.formulario).toBe('form-42')
   })
 
   it('ingerir_lead continua com uma assinatura so, sem sobrecarga', async () => {
@@ -153,5 +155,18 @@ describe('0013 — colunas de rastreamento: campanha_origem/formulario_origem sa
       ),
     )
     expect(r.rows[0]?.n).toBe('1')
+
+    // count() sozinho tambem passaria se a assinatura tivesse mudado E a
+    // versao antiga tivesse sido dropada -- so contar linhas nao discrimina
+    // "continua a mesma" de "trocou por outra unica versao". Fixar os
+    // argumentos exatos fecha essa lacuna.
+    const args = await comoServico((cli) =>
+      cli.query<{ args: string }>(
+        `select pg_get_function_identity_arguments(oid) as args
+           from pg_proc
+          where pronamespace = 'public'::regnamespace and proname = 'ingerir_lead'`,
+      ),
+    )
+    expect(args.rows[0]?.args).toBe('p_segredo text, p_log_id uuid, p_dados jsonb')
   })
 })
