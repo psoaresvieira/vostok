@@ -128,7 +128,11 @@ Decisão: uma constante `FUSO_PADRAO = 'America/Sao_Paulo'` no domínio, com `cl
 
 ### 3.4 Port `TarefaStore`
 
-Port novo, **não** métodos novos no `CrmStore` — que já tem ~25 métodos, com `memory.ts` (376 linhas) e `supabase.ts` (501) implementando os dois lados. O precedente é o `NotificacaoStore`, que já vive fora. Duas implementações, in-memory e Supabase, como todo port deste repo.
+Port novo, **não** métodos novos no `CrmStore` — que já tem ~25 métodos, com `memory.ts` (376 linhas) e `supabase.ts` (501) implementando os dois lados. O precedente é o `NotificacaoStore`, que já vive fora.
+
+**Uma implementação só, a Supabase** — e isto é escolha, não esquecimento. O repo tem in-memory em dois lugares por razões diferentes: `InMemoryIngestaoStore` existe porque três handlers de webhook são testados unitariamente contra ele, ou seja, tem consumidor real; `InMemoryCrmStore` **não tem consumidor nenhum além do próprio `memory.test.ts`** — são 376 linhas mantidas em paralelo com o SQL, e o Plano 6 já gastou um commit (`bc0154c`) cobrindo ramificações dele "que podiam divergir do SQL".
+
+Nada consumiria um `InMemoryTarefaStore`: as telas são server components, cobertos por integração contra Postgres real e por E2E. Duplicar a lógica aqui só criaria uma segunda fonte de verdade capaz de divergir em silêncio. `NotificacaoStore`, que é o análogo mais próximo, já segue exatamente este caminho.
 
 ```ts
 export type Tarefa = {
