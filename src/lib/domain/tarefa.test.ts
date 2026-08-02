@@ -95,6 +95,9 @@ describe('instanteDeDatetimeLocal', () => {
     expect(instanteDeDatetimeLocal('2026-02-31T10:00', FUSO_PADRAO)).toBeNull()
     expect(instanteDeDatetimeLocal('2026-08-10T10:99', FUSO_PADRAO)).toBeNull()
     expect(instanteDeDatetimeLocal('2026-13-10T10:00', FUSO_PADRAO)).toBeNull()
+    // Segundo fora de faixa transborda em silencio como os demais campos:
+    // ':99' viraria +1min39s se so ano/mes/dia/hora/minuto fossem conferidos.
+    expect(instanteDeDatetimeLocal('2026-08-10T10:00:99', FUSO_PADRAO)).toBeNull()
   })
 })
 

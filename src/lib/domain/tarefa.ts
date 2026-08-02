@@ -93,11 +93,15 @@ export function instanteDeDatetimeLocal(naive: string, fuso: string): string | n
   if (!casou) return null
 
   const [, ano, mes, dia, hora, minuto, segundo] = casou
-  const alvo = Date.UTC(+ano, +mes - 1, +dia, +hora, +minuto, segundo ? +segundo : 0)
+  const segundoNumero = segundo ? +segundo : 0
+  const alvo = Date.UTC(+ano, +mes - 1, +dia, +hora, +minuto, segundoNumero)
 
   // Date.UTC nao rejeita campo fora de faixa, ele transborda: '2026-02-31'
-  // vira 3 de marco e '10:99' vira 11:39. Conferir os campos de volta e o que
-  // separa data invalida de data valida — o regex sozinho so ve o formato.
+  // vira 3 de marco, '10:99' vira 11:39 e ':99' de segundo vira +1min39s.
+  // Conferir os campos de volta e o que separa data invalida de data valida
+  // — o regex sozinho so ve o formato. Os segundos entram na conferencia
+  // tambem: sem isso 'T10:00:99' passava e transbordava em silencio para
+  // 10:01:39, o mesmo modo de falha que hora/minuto/dia ja barram.
   const provisorio = new Date(alvo)
   if (
     Number.isNaN(alvo) ||
@@ -105,7 +109,8 @@ export function instanteDeDatetimeLocal(naive: string, fuso: string): string | n
     provisorio.getUTCMonth() !== +mes - 1 ||
     provisorio.getUTCDate() !== +dia ||
     provisorio.getUTCHours() !== +hora ||
-    provisorio.getUTCMinutes() !== +minuto
+    provisorio.getUTCMinutes() !== +minuto ||
+    provisorio.getUTCSeconds() !== segundoNumero
   ) {
     return null
   }
@@ -115,6 +120,16 @@ export function instanteDeDatetimeLocal(naive: string, fuso: string): string | n
   // do outro lado de uma mudanca de horario de verao e por isso mediu o
   // deslocamento errado. America/Sao_Paulo nao tem mais DST, mas a funcao
   // recebe o fuso por parametro e nao pode assumir isso.
+  //
+  // Limitacao conhecida, nao corrigida: para um horario LOCAL INEXISTENTE por
+  // causa de uma virada de "spring forward" (ex: 'America/New_York',
+  // '2026-03-08T02:30', que pula direto de 01:59 para 03:00 local), o ponto
+  // fixo abaixo converge para um instante que, relido no fuso, cai ANTES da
+  // virada (01:30) em vez de ser empurrado para depois dela (03:30), que e' o
+  // modo "compatible" que browsers e Temporal escolhem. America/Sao_Paulo nao
+  // tem esse buraco (sem DST) e nenhum chamador deste repo passa outro fuso
+  // hoje, mas a funcao e' generica por assinatura — registrar aqui em vez de
+  // deixar a garantia implicita.
   const primeira = alvo - (camposComoUTC(provisorio, fuso) - alvo)
   const segunda = alvo - (camposComoUTC(new Date(primeira), fuso) - primeira)
 
