@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Etapa } from '@/lib/domain/tipos'
 import {
   canaisDaCoorte, etiquetasPorEtapa, funilDaCoorte, interpretarPeriodo, SEM_ANUNCIO, SEM_CAMPANHA,
+  urlComEtapa,
   type AplicacaoEtiqueta, type LinhaCoorte,
 } from './metricas'
 
@@ -354,5 +355,25 @@ describe('interpretarPeriodo', () => {
     expect(r.ok).toBe(false)
     if (r.ok) throw new Error('deveria ter falhado')
     expect(r.erro).toBe('periodo_invalido')
+  })
+})
+
+describe('urlComEtapa', () => {
+  it('janela de 90 dias sobrevive a troca de etapa', () => {
+    // Bug do review: o link antigo montava so `?etapa=`, descartando dias/
+    // de/ate/responsavel em silencio. Este teste prova que um filtro de
+    // periodo continua na URL depois do clique.
+    const url = urlComEtapa({ dias: '90' }, 'e2')
+    expect(url).toBe('/metricas?dias=90&etapa=e2')
+  })
+
+  it('etapa ja presente na URL e trocada, nunca duplicada', () => {
+    const url = urlComEtapa({ etapa: 'e1', responsavel: 'r1' }, 'e2')
+    expect(url).toBe('/metricas?etapa=e2&responsavel=r1')
+  })
+
+  it('parametro ausente (undefined) nao vira "undefined" na URL', () => {
+    const url = urlComEtapa({ dias: undefined, responsavel: 'r1' }, 'e3')
+    expect(url).toBe('/metricas?responsavel=r1&etapa=e3')
   })
 })

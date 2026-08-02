@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import type { RankingEtiquetas } from '@/lib/domain/metricas'
+import { urlComEtapa, type RankingEtiquetas } from '@/lib/domain/metricas'
 import type { Etapa } from '@/lib/domain/tipos'
 
 /**
@@ -14,10 +14,14 @@ export function Etiquetas({
   ranking,
   etapas,
   escolhida,
+  params,
 }: {
   ranking: RankingEtiquetas
   etapas: Etapa[]
   escolhida: Etapa
+  // Parametros atuais da URL (dias/de/ate/responsavel/etapa), para o link de
+  // cada etapa preservar os demais filtros — ver urlComEtapa.
+  params: Record<string, string | undefined>
 }) {
   return (
     <section className="surface rounded-lg p-6">
@@ -26,7 +30,7 @@ export function Etiquetas({
         {etapas.map((e) => (
           <Link
             key={e.id}
-            href={`/metricas?etapa=${e.id}`}
+            href={urlComEtapa(params, e.id)}
             className={
               e.id === escolhida.id
                 ? 'rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground'

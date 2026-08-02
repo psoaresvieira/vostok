@@ -223,6 +223,25 @@ export function interpretarPeriodo(
   return ok({ de: new Date(agora.getTime() - efetivos * 86_400_000), ate: agora })
 }
 
+/**
+ * Monta a query string do link de troca de etapa a partir dos parametros
+ * atuais da URL (dias/de/ate/responsavel/etapa), trocando so `etapa` — o
+ * resto sobrevive ao clique. URLSearchParams em vez de concatenar string a
+ * mao: um valor com caractere especial (ex.: id de responsavel) nao corrompe
+ * a URL, e set() troca uma `etapa` ja presente em vez de duplicar a chave.
+ */
+export function urlComEtapa(
+  paramsAtuais: Record<string, string | undefined>,
+  etapaId: string,
+): string {
+  const novos = new URLSearchParams()
+  for (const [chave, valor] of Object.entries(paramsAtuais)) {
+    if (valor !== undefined) novos.set(chave, valor)
+  }
+  novos.set('etapa', etapaId)
+  return `/metricas?${novos.toString()}`
+}
+
 export function canaisDaCoorte(linhas: LinhaCoorte[]): NoCanal[] {
   return agrupar(
     linhas,

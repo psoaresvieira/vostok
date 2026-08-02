@@ -8,9 +8,17 @@ import { Etiquetas } from './etiquetas'
 import { Funil } from './funil'
 import { Filtros } from './filtros'
 
+// Mapa local, e nao reuso de config/erros.ts: aquele modulo cobre os codigos
+// das Server Actions de configuracao (nome_obrigatorio, ordem_invalida etc,
+// a maioria irrelevante aqui) e seu fallback devolve o codigo cru quando nao
+// encontra traducao — o oposto do que esta tela exige (nunca mostrar texto
+// cru na tela). Copiar so a mensagem de pipeline_nao_encontrado, em vez de
+// importar o modulo inteiro, evita acoplar metricas a configuracao.
 const MENSAGENS: Record<string, string> = {
   periodo_invalido: 'O período escolhido é inválido: a data inicial tem que vir antes da final.',
-  pipeline_invalido: 'Esse funil não existe nesta conta.',
+  // pipelinePadrao() (supabase.ts, memory.ts, admin.ts) so devolve este
+  // codigo — pipeline_invalido nunca existiu do lado do backend.
+  pipeline_nao_encontrado: 'Não encontramos o funil da sua conta.',
 }
 
 /** Mensagem crua do PostgREST nao chega na tela: o backlog aponta ~30 sitios
@@ -76,7 +84,10 @@ export default async function MetricasPage({
       ) : (
         <>
           <Funil funil={funil} />
-          <Etiquetas ranking={ranking} etapas={etapas} escolhida={etapaEscolhida} />
+          {/* params completo, nao so `etapa`: o seletor de etapa precisa dos
+              demais filtros (dias/de/ate/responsavel) para preserva-los ao
+              trocar de etapa — ver urlComEtapa em lib/domain/metricas.ts. */}
+          <Etiquetas ranking={ranking} etapas={etapas} escolhida={etapaEscolhida} params={params} />
           <Canais raizes={canais} />
         </>
       )}
