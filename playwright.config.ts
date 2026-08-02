@@ -42,6 +42,21 @@ export default defineConfig({
     // INGESTAO_SEGREDO: sem isto o E2E dependeria de o .env.local da maquina
     // estar certo, e a falha seria "o lead nao aparece" sem nada dizendo por
     // que. Tem que ser o mesmo valor que supabase/seed.sql grava.
-    env: { META_FAKE: '1', INGESTAO_SEGREDO: 'segredo-de-ingestao-local' },
+    //
+    // META_APP_SECRET: metricas.spec.ts (Plano 6) e o primeiro E2E a POSTAR
+    // de verdade em /api/webhooks/meta, para provar o canal Meta -> campanha
+    // -> anuncio com o MetaGraphFalso de verdade (nao um insert direto no
+    // banco fingindo que o Graph respondeu). assinaturaValida (hmac.ts) falha
+    // FECHADO quando o segredo esta vazio — e e isso que .env.local.example
+    // deixa por padrao, porque META_FAKE=1 nunca precisou de credencial real
+    // do Meta. Sem fixar um valor aqui, a rota devolveria 401 para qualquer
+    // assinatura, MESMO correta, e o teste nao teria como provar nada. O
+    // valor e local ao processo do `npm run dev` que o Playwright sobe; metricas.spec.ts
+    // assina o corpo com o mesmo literal.
+    env: {
+      META_FAKE: '1',
+      INGESTAO_SEGREDO: 'segredo-de-ingestao-local',
+      META_APP_SECRET: 'segredo-webhook-meta-e2e',
+    },
   },
 })
