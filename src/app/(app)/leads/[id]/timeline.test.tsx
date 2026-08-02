@@ -4,9 +4,12 @@ import { render, screen, cleanup } from '@testing-library/react'
 import { rotuloEvento, Timeline } from './timeline'
 import type { EventoLead } from '@/lib/domain/tipos'
 
-// RTL's automatic afterEach(cleanup) only registers when globals: true is set.
-// This config deliberately avoids globals to keep test helpers explicit.
-// We register cleanup manually here to prevent DOM leakage between tests.
+// O cleanup automatico do @testing-library/react so se registra quando
+// globals: true esta ligado, e este vitest.config nao liga de proposito — o
+// repo importa helper de teste explicitamente em todo lugar. Sem o registro
+// manual abaixo, o document do jsdom persiste entre os it() deste arquivo e,
+// do segundo render() em diante, as consultas acham no velho ou estouram
+// "multiple elements found". Todo teste de componente novo copia esta linha.
 afterEach(cleanup)
 
 function evento(overrides: Partial<EventoLead> = {}): EventoLead {
