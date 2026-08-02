@@ -43,11 +43,14 @@ describe('rotuloEvento', () => {
   })
 
   it('cai no default para tipo desconhecido', () => {
-    const e = evento({ tipo: 'tarefa_concluida', payload: {} })
+    // 'tarefa_concluida' ganhou case proprio na Task 5 — trocado por um tipo
+    // que continua nao existindo, preservando a intencao original do teste:
+    // provar que o default protege a timeline de tipos futuros.
+    const e = evento({ tipo: 'tipo_que_nao_existe', payload: {} })
 
     const resultado = rotuloEvento(e, new Map(), new Map())
 
-    expect(resultado).toBe('tarefa_concluida')
+    expect(resultado).toBe('tipo_que_nao_existe')
   })
 })
 

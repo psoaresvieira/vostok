@@ -184,6 +184,9 @@ export class SupabaseTarefaStore implements TarefaStore {
   }
 
   async concluir(id: string): Promise<Resultado<void>> {
+    // O select devolve lead_id/titulo/tipo no mesmo update, sem outra ida ao
+    // banco: sao exatamente os campos que o evento de timeline abaixo precisa
+    // como snapshot, e a tarefa pode ser excluida depois desta chamada.
     const { data, error } = await this.cliente
       .from('tasks')
       .update({
@@ -192,12 +195,31 @@ export class SupabaseTarefaStore implements TarefaStore {
         atualizado_em: new Date().toISOString(),
       })
       .eq('id', id)
-      .select('id')
+      .select('id, lead_id, titulo, tipo')
     if (error) return falha(ERRO_AO_ATUALIZAR_TAREFA)
     // Zero linhas depois da RLS e' "nao encontrado" — id inexistente OU
     // tarefa fora do alcance, indistinguiveis daqui, mesma convencao de
     // marcarLida em notificacoes.ts. Nunca um sucesso mudo.
     if (!data || data.length === 0) return falha('tarefa_nao_encontrada')
+
+    // lead_events e' dominio de CrmStore em supabase.ts, mas o cliente
+    // subjacente e' o mesmo Postgrest client — SupabaseCrmStore ja cruza essa
+    // fronteira para etiqueta_aplicada e lead_criado. Escrever aqui evita
+    // reabrir TarefaStore para expor o cliente cru na camada de acoes.ts, que
+    // neste repo nunca chama .from() diretamente (ver notificacoes.ts,
+    // supabase.ts). Payload guarda titulo/tipo como snapshot: a tarefa pode
+    // sumir depois e a historia do lead nao pode apontar para o vazio.
+    const linha = data[0]
+    const { error: erroEvento } = await this.cliente.from('lead_events').insert({
+      lead_id: linha.lead_id,
+      tipo: 'tarefa_concluida',
+      payload: { titulo: linha.titulo, tipo: linha.tipo },
+      ator_id: this.usuarioId,
+    })
+    // Nunca a mensagem crua do Postgres na tela — mesma regra do resto deste
+    // arquivo. A tarefa ja foi concluida com sucesso; o que falhou foi so o
+    // registro na timeline, entao o codigo de erro generico de escrita serve.
+    if (erroEvento) return falha(ERRO_AO_ATUALIZAR_TAREFA)
     return ok(undefined)
   }
 
