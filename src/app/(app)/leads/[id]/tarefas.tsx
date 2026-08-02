@@ -2,10 +2,15 @@
 
 import { useState } from 'react'
 import type { Tarefa, TipoTarefa } from '@/lib/data/tarefas'
-import { classificar, FUSO_PADRAO } from '@/lib/domain/tarefa'
+import { classificar, FUSO_PADRAO, instanteDeDatetimeLocal } from '@/lib/domain/tarefa'
 import { chamarAcao } from '@/lib/ui/acao'
-import { mensagemDeErroTarefa } from '../../tarefas/erros'
-import { criarTarefa, concluirTarefa, reabrirTarefa, excluirTarefa } from '../../tarefas/acoes'
+import { mensagemDeErroTarefa } from '@/app/(app)/tarefas/erros'
+import {
+  criarTarefa,
+  concluirTarefa,
+  reabrirTarefa,
+  excluirTarefa,
+} from '@/app/(app)/tarefas/acoes'
 
 const ROTULO_TIPO: Record<TipoTarefa, string> = {
   ligacao: 'Ligação',
@@ -57,7 +62,7 @@ function ItemTarefa({
         </p>
         <p className="text-xs text-muted-foreground">
           {ROTULO_TIPO[t.tipo]} · vence {FORMATO_PRAZO.format(t.venceEm)}
-          {t.concluidaEm && ` · concluida ${FORMATO_PRAZO.format(t.concluidaEm)}`}
+          {t.concluidaEm && ` · concluída ${FORMATO_PRAZO.format(t.concluidaEm)}`}
         </p>
       </div>
       <div className="flex shrink-0 gap-2">
@@ -109,15 +114,22 @@ export function PainelTarefas({
   const concluidas = tarefas.filter((t) => t.concluidaEm !== null)
 
   async function criar() {
+    // O <input type="datetime-local"> devolve string naive ('2026-08-10T14:30')
+    // e a conversao tem que acontecer no fuso do produto, nunca no da maquina
+    // de quem digita — ver instanteDeDatetimeLocal. A funcao devolve null em
+    // vez de lancar: `new Date(x).toISOString()` estouraria RangeError aqui, na
+    // CONSTRUCAO do argumento, fora do try do chamarAcao (que so protege a
+    // promessa ja criada); setErro e setEnviando(false) nunca rodariam e o
+    // botao ficaria disabled para sempre. Barrar antes de ligar `enviando`
+    // garante que nenhum caminho de erro deixa o botao preso.
+    const venceEmISO = instanteDeDatetimeLocal(prazo, FUSO_PADRAO)
+    if (venceEmISO === null) {
+      setErro(mensagemDeErroTarefa('prazo_invalido'))
+      return
+    }
+
     setEnviando(true)
-    const r = await chamarAcao(
-      criarTarefa({
-        leadId,
-        titulo,
-        tipo,
-        venceEmISO: prazo ? new Date(prazo).toISOString() : '',
-      }),
-    )
+    const r = await chamarAcao(criarTarefa({ leadId, titulo, tipo, venceEmISO }))
     setEnviando(false)
     if (!r.ok) {
       setErro(mensagemDeErroTarefa(r.erro))
@@ -154,7 +166,7 @@ export function PainelTarefas({
         <input
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}
-          placeholder="titulo da tarefa"
+          placeholder="título da tarefa"
           className="rounded border p-2 text-sm"
         />
         <div className="flex gap-2">

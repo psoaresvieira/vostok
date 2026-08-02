@@ -1,7 +1,11 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { criarTarefaStoreDoServidor, type TipoTarefa } from '@/lib/data/tarefas'
+import {
+  criarTarefaStoreDoServidor,
+  TAREFA_CONCLUIDA_SEM_EVENTO,
+  type TipoTarefa,
+} from '@/lib/data/tarefas'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 
 // Task 6 chama concluirTarefa (e as demais) de /tarefas tambem — um lugar so
@@ -46,7 +50,15 @@ export async function concluirTarefa(id: string, leadId: string): Promise<Result
   // TarefaStore.concluir — ver comentario em lib/data/tarefas.ts. Se a
   // conclusao falhar, este r.ok e false e nenhum evento foi inserido.
   const r = await contexto.valor.concluir(id)
-  if (!r.ok) return falha(r.erro)
+  if (!r.ok) {
+    // Excecao unica: neste codigo a tarefa FOI concluida no banco e so o
+    // evento da timeline falhou. O estado mudou, entao a tela tem que ser
+    // revalidada assim mesmo — sem isto o painel seguiria mostrando a tarefa
+    // aberta com o botao "Concluir", e o proximo clique re-carimbaria
+    // concluida_em/concluida_por e gravaria um segundo evento.
+    if (r.erro === TAREFA_CONCLUIDA_SEM_EVENTO) revalidarTelasDeTarefa(leadId)
+    return falha(r.erro)
+  }
 
   revalidarTelasDeTarefa(leadId)
   return ok(undefined)

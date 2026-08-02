@@ -64,6 +64,17 @@ const ERRO_AO_CARREGAR_TAREFAS = 'erro_ao_carregar_tarefas'
  */
 const ERRO_AO_ATUALIZAR_TAREFA = 'erro_ao_atualizar_tarefa'
 
+/** Codigo para o unico caminho em que a escrita pedida pelo usuario DEU CERTO
+ * e ainda assim ha o que contar: a tarefa foi concluida em tasks, mas o evento
+ * tarefa_concluida nao entrou em lead_events. Nao pode virar
+ * ERRO_AO_ATUALIZAR_TAREFA porque a mensagem daquele codigo ("Nao foi possivel
+ * atualizar a tarefa") seria falsa — a tarefa esta concluida no banco. Alem de
+ * mentir, mandava o usuario clicar de novo e re-carimbar concluida_em.
+ * Exportado porque concluirTarefa (app/(app)/tarefas/acoes.ts) precisa
+ * distinguir este caso para revalidar as telas assim mesmo: o estado mudou.
+ */
+export const TAREFA_CONCLUIDA_SEM_EVENTO = 'tarefa_concluida_sem_evento'
+
 /**
  * Mapeia o erro do insert em tasks para um codigo estavel, nunca
  * error.message cru.
@@ -217,9 +228,11 @@ export class SupabaseTarefaStore implements TarefaStore {
       ator_id: this.usuarioId,
     })
     // Nunca a mensagem crua do Postgres na tela — mesma regra do resto deste
-    // arquivo. A tarefa ja foi concluida com sucesso; o que falhou foi so o
-    // registro na timeline, entao o codigo de erro generico de escrita serve.
-    if (erroEvento) return falha(ERRO_AO_ATUALIZAR_TAREFA)
+    // arquivo. Mas tambem nao o codigo generico de escrita: a tarefa JA esta
+    // concluida no banco, e dizer "nao foi possivel atualizar a tarefa" seria
+    // mentira. Codigo proprio, para quem chama poder revalidar a tela mesmo
+    // neste caminho e para a mensagem contar o que de fato aconteceu.
+    if (erroEvento) return falha(TAREFA_CONCLUIDA_SEM_EVENTO)
     return ok(undefined)
   }
 

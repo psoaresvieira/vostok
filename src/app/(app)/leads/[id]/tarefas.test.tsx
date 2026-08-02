@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { render, screen, cleanup, within, fireEvent } from '@testing-library/react'
 import { PainelTarefas } from './tarefas'
+import { mensagemDeErroTarefa } from '@/app/(app)/tarefas/erros'
 import type { Tarefa } from '@/lib/data/tarefas'
 
 // O cleanup automatico do @testing-library/react so se registra quando
@@ -82,5 +83,31 @@ describe('PainelTarefas', () => {
 
     screen.getByText(/nenhuma tarefa/i)
     expect(screen.queryAllByRole('listitem')).toHaveLength(0)
+  })
+
+  it('prazo invalido mostra a mensagem de prazo e nao deixa o botao travado', async () => {
+    // O modo de falha que este teste tranca: a conversao do prazo acontecia
+    // com `new Date(prazo).toISOString()` DENTRO do argumento de criarTarefa,
+    // fora do try do chamarAcao. Prazo invalido lancava RangeError ali, o
+    // setErro/setEnviando(false) nunca rodavam e o botao ficava disabled para
+    // sempre — a tela muda que a regra do chamarAcao existe para impedir.
+    render(<PainelTarefas leadId="lead-1" tarefas={[]} agora={AGORA} />)
+
+    fireEvent.change(screen.getByPlaceholderText(/t[íi]tulo da tarefa/i), {
+      target: { value: 'Ligar para o cliente' },
+    })
+    const botao = screen.getByRole('button', { name: /criar tarefa/i }) as HTMLButtonElement
+    // Prazo vazio. O jsdom aplica a mesma sanitizacao de valor que o browser
+    // real faz em <input type="datetime-local">: qualquer string que nao seja
+    // um datetime local valido vira '' (conferido: '2026-02-31T10:00' e
+    // 'lixo total' viram os dois ''). Entao a string vazia e a UNICA entrada
+    // invalida que da para injetar por aqui — e e tambem a que chega de um
+    // browser sem suporte a datetime-local, onde o campo degrada para texto
+    // livre. Nenhuma Server Action chega a ser chamada; a validacao do cliente
+    // e conveniencia, a borda de verdade continua sendo criarTarefa no servidor.
+    fireEvent.click(botao)
+
+    expect(await screen.findByText(mensagemDeErroTarefa('prazo_invalido'))).toBeTruthy()
+    expect(botao.disabled).toBe(false)
   })
 })

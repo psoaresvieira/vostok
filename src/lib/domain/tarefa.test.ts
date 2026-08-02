@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { FUSO_PADRAO, classificar, contarUrgentes } from './tarefa'
+import {
+  FUSO_PADRAO,
+  classificar,
+  contarUrgentes,
+  instanteDeDatetimeLocal,
+} from './tarefa'
 
 describe('classificar', () => {
   it('um milissegundo antes de agora e atrasada', () => {
@@ -39,6 +44,57 @@ describe('classificar', () => {
     const amanhaMais7 = new Date('2026-08-10T12:00:00-03:00')
     expect(classificar(amanhaMais6, agora, FUSO_PADRAO)).toBe('proximos7')
     expect(classificar(amanhaMais7, agora, FUSO_PADRAO)).toBe('depois')
+  })
+})
+
+describe('instanteDeDatetimeLocal', () => {
+  it('caso que so o fuso resolve: a mesma string naive vira instantes diferentes em fusos diferentes', () => {
+    // Este e o caso que fica vermelho se a implementacao usar
+    // `new Date(naive)` cru: sem aplicar o fuso, as duas chamadas devolveriam
+    // o MESMO instante (o do fuso da maquina que roda o teste), e uma
+    // maquina em qualquer fuso derruba pelo menos uma das duas asserções.
+    const naive = '2026-08-10T14:30'
+    expect(instanteDeDatetimeLocal(naive, 'America/Sao_Paulo')).toBe('2026-08-10T17:30:00.000Z')
+    expect(instanteDeDatetimeLocal(naive, 'America/Manaus')).toBe('2026-08-10T18:30:00.000Z')
+  })
+
+  it('faz round-trip: reformatado no mesmo fuso, devolve a hora digitada', () => {
+    const iso = instanteDeDatetimeLocal('2026-01-05T09:07', FUSO_PADRAO)
+    expect(iso).not.toBeNull()
+    const devolta = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: FUSO_PADRAO,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(new Date(iso!))
+    expect(devolta).toBe('09:07')
+  })
+
+  it('respeita horario de verao do fuso pedido, nao um deslocamento fixo', () => {
+    // 2026-03-08 e a virada para EDT em New York (UTC-5 -> UTC-4). Meio-dia
+    // depois da virada e 16:00Z; um deslocamento fixo de -5h daria 17:00Z.
+    expect(instanteDeDatetimeLocal('2026-03-08T12:00', 'America/New_York')).toBe(
+      '2026-03-08T16:00:00.000Z',
+    )
+    expect(instanteDeDatetimeLocal('2026-01-08T12:00', 'America/New_York')).toBe(
+      '2026-01-08T17:00:00.000Z',
+    )
+  })
+
+  it('entrada vazia devolve null, sem lancar', () => {
+    expect(instanteDeDatetimeLocal('', FUSO_PADRAO)).toBeNull()
+    expect(instanteDeDatetimeLocal('   ', FUSO_PADRAO)).toBeNull()
+  })
+
+  it('entrada malformada devolve null, sem lancar', () => {
+    // Nunca lancar e o ponto: o chamador e componente cliente, e um
+    // RangeError na construcao do argumento cai fora do try do chamarAcao.
+    expect(instanteDeDatetimeLocal('nao e data', FUSO_PADRAO)).toBeNull()
+    expect(instanteDeDatetimeLocal('2026-08-10', FUSO_PADRAO)).toBeNull()
+    // Formato certo, calendario errado: Date.UTC transbordaria em silencio.
+    expect(instanteDeDatetimeLocal('2026-02-31T10:00', FUSO_PADRAO)).toBeNull()
+    expect(instanteDeDatetimeLocal('2026-08-10T10:99', FUSO_PADRAO)).toBeNull()
+    expect(instanteDeDatetimeLocal('2026-13-10T10:00', FUSO_PADRAO)).toBeNull()
   })
 })
 

@@ -42,6 +42,30 @@ describe('rotuloEvento', () => {
     expect(resultado).toContain('Qualificado')
   })
 
+  it('traduz tarefa_concluida lendo o titulo do payload', () => {
+    // O payload guarda o titulo como snapshot de proposito: a tarefa pode ser
+    // excluida depois e a historia do lead nao pode apontar para o vazio.
+    const e = evento({
+      tipo: 'tarefa_concluida',
+      payload: { titulo: 'Ligar para confirmar reuniao', tipo: 'ligacao' },
+    })
+
+    const resultado = rotuloEvento(e, new Map(), new Map())
+
+    expect(resultado).toBe('Tarefa concluída: Ligar para confirmar reuniao')
+  })
+
+  it('tarefa_concluida sem titulo no payload cai no fallback, nao em undefined', () => {
+    // lead_events e append-only e o payload e jsonb livre: linha antiga ou
+    // gravada por outro caminho pode nao ter titulo. A timeline mostra '?',
+    // nunca 'undefined' nem quebra.
+    const e = evento({ tipo: 'tarefa_concluida', payload: {} })
+
+    const resultado = rotuloEvento(e, new Map(), new Map())
+
+    expect(resultado).toBe('Tarefa concluída: ?')
+  })
+
   it('cai no default para tipo desconhecido', () => {
     // 'tarefa_concluida' ganhou case proprio na Task 5 — trocado por um tipo
     // que continua nao existindo, preservando a intencao original do teste:
