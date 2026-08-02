@@ -57,6 +57,13 @@ const SELECT_TAREFA_MINHAS_ABERTAS = SELECT_TAREFA.replace(
  */
 const ERRO_AO_CARREGAR_TAREFAS = 'erro_ao_carregar_tarefas'
 
+/** Codigo generico para falha de escrita (concluir, reabrir, excluir): nao ha
+ * decisao do usuario que mude o resultado — a falha e tecnica, nao validacao
+ * de formulario —, entao nunca vale a pena distinguir a causa Postgres na
+ * tela. Como em ERRO_AO_CARREGAR_TAREFAS, nunca vazar error.message cru.
+ */
+const ERRO_AO_ATUALIZAR_TAREFA = 'erro_ao_atualizar_tarefa'
+
 /**
  * Mapeia o erro do insert em tasks para um codigo estavel, nunca
  * error.message cru.
@@ -186,7 +193,7 @@ export class SupabaseTarefaStore implements TarefaStore {
       })
       .eq('id', id)
       .select('id')
-    if (error) return falha(error.message)
+    if (error) return falha(ERRO_AO_ATUALIZAR_TAREFA)
     // Zero linhas depois da RLS e' "nao encontrado" — id inexistente OU
     // tarefa fora do alcance, indistinguiveis daqui, mesma convencao de
     // marcarLida em notificacoes.ts. Nunca um sucesso mudo.
@@ -204,7 +211,7 @@ export class SupabaseTarefaStore implements TarefaStore {
       })
       .eq('id', id)
       .select('id')
-    if (error) return falha(error.message)
+    if (error) return falha(ERRO_AO_ATUALIZAR_TAREFA)
     if (!data || data.length === 0) return falha('tarefa_nao_encontrada')
     return ok(undefined)
   }
@@ -215,7 +222,7 @@ export class SupabaseTarefaStore implements TarefaStore {
       .delete()
       .eq('id', id)
       .select('id')
-    if (error) return falha(error.message)
+    if (error) return falha(ERRO_AO_ATUALIZAR_TAREFA)
     if (!data || data.length === 0) return falha('tarefa_nao_encontrada')
     return ok(undefined)
   }
