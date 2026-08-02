@@ -213,6 +213,29 @@ describe('etiquetasPorEtapa', () => {
     const r = etiquetasPorEtapa(linhas, [aplic({ leadId: 'forasteiro' })], ETAPAS[2]!)
     expect(r.linhas).toEqual([])
   })
+
+  it('lead reaberto e ganho depois nao conta no ranking de Perdido, mesmo com tag congelada la', () => {
+    // move_lead_stage nao impede sair de Ganho/Perdido, o kanban desenha
+    // qualquer etapa como alvo de drop, e aplicarEtiquetas congela
+    // stage_id_no_momento incondicionalmente — inclusive enquanto o lead
+    // estava em Perdido. Fluxo real: lead vai pra Perdido, ganha a tag "Preco
+    // alto", o cliente volta e o lead e reaberto e depois ganho. Um segundo
+    // lead esta genuinamente perdido com a mesma tag. O denominador (status
+    // atual) e 1, mas o guard antigo usava a coorte inteira, entao o
+    // numerador contava os dois leads e o percentual furava 100.
+    const linhas = [
+      linha({ leadId: 'a', status: 'ganho', ordemMax: 3 }), // reaberto, ganho no fim
+      linha({ leadId: 'b', status: 'perdido', ordemMax: 2 }), // perdido de verdade
+    ]
+    const aplicacoes = [
+      aplic({ leadId: 'a', tagId: 't1', tagNome: 'Preço alto', stageIdNoMomento: 'x', ordemNoMomento: 7 }),
+      aplic({ leadId: 'b', tagId: 't1', tagNome: 'Preço alto', stageIdNoMomento: 'x', ordemNoMomento: 7 }),
+    ]
+    const r = etiquetasPorEtapa(linhas, aplicacoes, ETAPAS[4]!)
+    expect(r.denominador).toBe(1)
+    expect(r.linhas[0]).toMatchObject({ leads: 1, percentual: 100 })
+    expect(r.linhas.every((l) => l.percentual <= 100)).toBe(true)
+  })
 })
 
 describe('canaisDaCoorte', () => {
@@ -306,6 +329,23 @@ describe('canaisDaCoorte', () => {
   it('coorte vazia devolve lista vazia', () => {
     expect(canaisDaCoorte([])).toEqual([])
   })
+
+  it('empate exato de criadoEm desempata por leadId, mesmo resultado nas duas ordens', () => {
+    // metricas_coorte nao tem ORDER BY. Sem desempate deterministico, a linha
+    // escolhida seria "a que apareceu primeiro na lista que o Postgres
+    // devolveu" — e essa ordem pode mudar entre dois reloads com os mesmos
+    // dados, trocando o nome de campanha exibido sem nenhum dado ter mudado.
+    const mesmoInstante = new Date('2026-07-01T00:00:00Z')
+    const a = linha({
+      leadId: 'lead-a', campanhaId: 'c1', campanhaNome: 'Campanha A', criadoEm: mesmoInstante,
+    })
+    const b = linha({
+      leadId: 'lead-b', campanhaId: 'c1', campanhaNome: 'Campanha B', criadoEm: mesmoInstante,
+    })
+    const rotuloOrdem1 = canaisDaCoorte([a, b])[0]!.filhos[0]!.rotulo
+    const rotuloOrdem2 = canaisDaCoorte([b, a])[0]!.filhos[0]!.rotulo
+    expect(rotuloOrdem1).toBe(rotuloOrdem2)
+  })
 })
 
 describe('interpretarPeriodo', () => {
@@ -338,8 +378,27 @@ describe('interpretarPeriodo', () => {
     expect(r.erro).toBe('periodo_invalido')
   })
 
-  it('de igual a ate e periodo_invalido: a janela e semiaberta e nao pegaria nada', () => {
+  it('de e ate no mesmo dia (datas soltas) e um dia inteiro valido, nao periodo_invalido', () => {
+    // Antes do fix do item 2 isso dava periodo_invalido: de===ate na leitura
+    // crua. Mas de e ate soltos ('YYYY-MM-DD') sao a escolha legitima de "so
+    // este dia" no seletor — empurrar `ate` pro dia seguinte torna a janela
+    // valida e cobre o dia inteiro, em vez de forcar o usuario a escolher
+    // datas diferentes pra ver um unico dia.
     const r = interpretarPeriodo({ de: '2026-01-01', ate: '2026-01-01' }, AGORA)
+    expect(r.ok).toBe(true)
+    if (!r.ok) throw new Error('deveria ter dado certo')
+    expect(r.valor.de).toEqual(new Date('2026-01-01T00:00:00.000Z'))
+    expect(r.valor.ate).toEqual(new Date('2026-01-02T00:00:00.000Z'))
+  })
+
+  it('de igual a ate com timestamp completo continua periodo_invalido', () => {
+    // Com componente de hora nao ha bare-date pra empurrar: a janela semiaberta
+    // ainda tem que rejeitar de===ate, senao pegaria lead nenhum e a tela
+    // ficaria vazia sem dizer por que.
+    const r = interpretarPeriodo(
+      { de: '2026-01-01T10:00:00.000Z', ate: '2026-01-01T10:00:00.000Z' },
+      AGORA,
+    )
     expect(r.ok).toBe(false)
   })
 
@@ -352,6 +411,39 @@ describe('interpretarPeriodo', () => {
 
   it('data mal formada e periodo_invalido, nunca Invalid Date silencioso', () => {
     const r = interpretarPeriodo({ de: 'ontem', ate: '2026-02-01' }, AGORA)
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('periodo_invalido')
+  })
+
+  it('ate solto (YYYY-MM-DD) inclui o dia inteiro escolhido', () => {
+    // <input type="date"> manda '2026-07-31', que new Date parseia como meia-
+    // noite UTC de 31/07. A janela e < ate, entao sem o ajuste o dia 31 inteiro
+    // ficava de fora — o usuario pedia "ate 31/07" e o 31/07 nao aparecia em
+    // nenhuma consulta, nem nesta nem na do periodo seguinte.
+    const r = interpretarPeriodo({ de: '2026-07-01', ate: '2026-07-31' }, AGORA)
+    if (!r.ok) throw new Error('deveria ter dado certo')
+    expect(r.valor.ate).toEqual(new Date('2026-08-01T00:00:00.000Z'))
+    // O 31/07 as 23h esta dentro da janela agora.
+    expect(new Date('2026-07-31T23:00:00.000Z') < r.valor.ate).toBe(true)
+  })
+
+  it('ate com componente de hora nao e deslocado', () => {
+    // O ajuste e so para 'YYYY-MM-DD' puro. Um timestamp completo (ex.: vindo
+    // de outra tela que ja manda ISO com hora) representa um instante exato e
+    // nao pode ganhar +1 dia por engano.
+    const r = interpretarPeriodo({ de: '2026-07-01', ate: '2026-07-31T15:00:00.000Z' }, AGORA)
+    if (!r.ok) throw new Error('deveria ter dado certo')
+    expect(r.valor.ate).toEqual(new Date('2026-07-31T15:00:00.000Z'))
+  })
+
+  it('dias absurdamente grande e periodo_invalido, nunca RangeError no render', () => {
+    // Number('999999999') e finito e positivo, passa pelo guard de dias> 0,
+    // mas agora.getTime() - dias*86_400_000 estoura o range do Date e vira
+    // Invalid Date. Sem esta guarda, f.de.toISOString() em metricasDaCoorte
+    // lancava RangeError direto no render — o exato problema que o docstring
+    // desta funcao promete que nunca acontece.
+    const r = interpretarPeriodo({ dias: '999999999999999' }, AGORA)
     expect(r.ok).toBe(false)
     if (r.ok) throw new Error('deveria ter falhado')
     expect(r.erro).toBe('periodo_invalido')

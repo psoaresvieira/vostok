@@ -50,6 +50,12 @@ export function Filtros({
     // metade cairia em periodo_invalido (Invalid Date do lado vazio) sem o
     // usuario ter pedido isso.
     if (!de || !ate) return
+    // 'YYYY-MM-DD' compara certo como string (ordem lexicografica == ordem
+    // cronologica). Barra aqui o erro mais comum — data final antes da
+    // inicial — antes de gerar um load de pagina inteiro so pra mostrar
+    // periodo_invalido; a pagina de metricas continua validando de novo, pra
+    // quem chegar direto por link com parametros manuais.
+    if (de >= ate) return
     irPara({ de, ate, dias: null })
   }
 

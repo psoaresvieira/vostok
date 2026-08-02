@@ -62,8 +62,28 @@ export default async function MetricasPage({
     store.metricasDaCoorte(filtro),
     store.etiquetasDaCoorte(filtro),
   ])
-  if (!coorte.ok) return <p className="p-6 text-destructive">{mensagem(coorte.erro)}</p>
-  if (!aplicacoes.ok) return <p className="p-6 text-destructive">{mensagem(aplicacoes.erro)}</p>
+  // Pipeline e membros ja carregaram com sucesso aqui, entao ha o suficiente
+  // pra desenhar os filtros: renderiza-los acima do erro deixa o usuario
+  // corrigir o periodo/responsavel no lugar, em vez de so poder usar o Voltar
+  // do navegador. Os erros ANTES deste ponto (periodo_invalido, pipeline e
+  // membros) nao tem isso: ou faltam os dados que Filtros exige (membros), ou
+  // o problema e o proprio parametro que os filtros ofereceriam de novo.
+  if (!coorte.ok) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <Filtros membros={membros.valor} podeFiltrarPorResponsavel={papel !== 'vendedor'} />
+        <p className="text-destructive">{mensagem(coorte.erro)}</p>
+      </div>
+    )
+  }
+  if (!aplicacoes.ok) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <Filtros membros={membros.valor} podeFiltrarPorResponsavel={papel !== 'vendedor'} />
+        <p className="text-destructive">{mensagem(aplicacoes.erro)}</p>
+      </div>
+    )
+  }
 
   const funil = funilDaCoorte(coorte.valor, etapas)
   const etapaEscolhida = etapas.find((e) => e.id === params.etapa) ?? etapas[0]!

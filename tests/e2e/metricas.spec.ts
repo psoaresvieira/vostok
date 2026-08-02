@@ -79,9 +79,13 @@ function secaoFunil(page: Page): Locator {
 }
 
 function totalDaCoorte(page: Page): Locator {
+  // 'no período' (nao 'leads criados no período'): desde o item 7 do review
+  // final, a tela concorda o singular/plural com a contagem ("1 lead criado"
+  // vs "2 leads criados"), e este teste passa por exatamente essa fronteira
+  // (linha 268, coorte com 1 lead so). Um texto fixo no plural quebraria ali.
   return secaoFunil(page)
     .locator('p')
-    .filter({ hasText: 'leads criados no período' })
+    .filter({ hasText: 'no período' })
     .locator('span.tabular')
 }
 

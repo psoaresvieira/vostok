@@ -6,12 +6,13 @@ export function Funil({ funil }: { funil: DadosFunil }) {
     <section className="surface rounded-lg p-6">
       <p className="eyebrow">Funil da coorte</p>
       <p className="mb-4 text-sm text-muted-foreground">
-        <span className="tabular">{funil.totalDaCoorte}</span> leads criados no período.
+        <span className="tabular">{funil.totalDaCoorte}</span>{' '}
+        {funil.totalDaCoorte === 1 ? 'lead criado' : 'leads criados'} no período.
         Lead recente ainda está descendo o funil — o período corrente sempre parece
         pior que um já fechado.
       </p>
       <ul className="flex flex-col gap-2">
-        {funil.degraus.map((d) => (
+        {funil.degraus.map((d, i) => (
           <li key={d.etapaId} className="flex items-center gap-3">
             <span className="w-40 shrink-0 text-sm">{d.nome}</span>
             <div className="h-6 flex-1 rounded bg-muted">
@@ -25,7 +26,11 @@ export function Funil({ funil }: { funil: DadosFunil }) {
             </div>
             <span className="tabular w-12 text-right text-sm">{d.alcancaram}</span>
             <span className="tabular w-16 text-right text-sm text-muted-foreground">
-              {Math.round(d.percentualDoAnterior)}%
+              {/* funilDaCoorte fixa o primeiro degrau em 100% de si mesmo (e
+                  correto quando ha lead) — mas com contagem zero isso lia
+                  "0 | 100%" pra quem acabou de conectar a conta. Sem
+                  degrau anterior pra comparar, zero nao tem percentual. */}
+              {i === 0 && d.alcancaram === 0 ? '—' : `${Math.round(d.percentualDoAnterior)}%`}
             </span>
           </li>
         ))}
