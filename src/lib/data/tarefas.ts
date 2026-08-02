@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 
@@ -39,6 +39,42 @@ export interface TarefaStore {
 
 const SELECT_TAREFA =
   'id, lead_id, titulo, tipo, vence_em, concluida_em, concluida_por, criado_por, criado_em, leads(nome)'
+
+// minhasAbertas precisa do mesmo conjunto de colunas de SELECT_TAREFA, so
+// trocando o embed leads(nome) por leads!inner(nome, responsavel_id) — dai
+// derivar em vez de retypar, para as duas listas nao se desalinharem.
+const SELECT_TAREFA_MINHAS_ABERTAS = SELECT_TAREFA.replace(
+  'leads(nome)',
+  'leads!inner(nome, responsavel_id)',
+)
+
+/** Codigo generico para falha de leitura (doLead, minhasAbertas): nao ha
+ * decisao do usuario que mude o resultado — nem "corrija o formulario" nem
+ * "recarregue e tente outro valor" fazem sentido aqui —, entao nunca vale a
+ * pena distinguir a causa Postgres na tela. Mostrar error.message cru e
+ * exatamente o defeito que aplicarEtiquetas (supabase.ts) ja pagou uma vez
+ * (comentario la cita PGRST116 vazando para o usuario).
+ */
+const ERRO_AO_CARREGAR_TAREFAS = 'erro_ao_carregar_tarefas'
+
+/**
+ * Mapeia o erro do insert em tasks para um codigo estavel, nunca
+ * error.message cru.
+ *
+ * 23503 (foreign_key_violation) e 42501 (insufficient_privilege, a negacao
+ * do with check de tasks_insert) tem causas tecnicas diferentes — uma e
+ * lead_id que nao existe, a outra e lead_id que existe mas pode_ver_lead_id
+ * nega — mas para quem preenche o formulario as duas contam a mesma
+ * historia: o lead escolhido nao esta disponivel para essa tarefa. Nao ha
+ * acao diferente a tomar entre "nao existe" e "existe mas voce nao alcanca",
+ * entao as duas colapsam no mesmo codigo, ja usado no funil para esse
+ * sentido (funil/erros.ts). Qualquer outro erro cai num codigo generico —
+ * nunca a mensagem do Postgres na tela.
+ */
+function codigoDoErroAoCriarTarefa(erro: Pick<PostgrestError, 'code'>): string {
+  if (erro.code === '23503' || erro.code === '42501') return 'lead_nao_encontrado'
+  return 'erro_ao_criar_tarefa'
+}
 
 type LinhaTarefa = {
   id: string
@@ -89,7 +125,7 @@ export class SupabaseTarefaStore implements TarefaStore {
       .order('vence_em', { ascending: true })
       .order('criado_em', { ascending: true })
       .order('id', { ascending: true })
-    if (error) return falha(error.message)
+    if (error) return falha(ERRO_AO_CARREGAR_TAREFAS)
     return ok((data as unknown as LinhaTarefa[]).map(paraTarefa))
   }
 
@@ -103,9 +139,7 @@ export class SupabaseTarefaStore implements TarefaStore {
     // e incondicional, nao uma condicionalidade emprestada da RLS.
     let query = this.cliente
       .from('tasks')
-      .select(
-        'id, lead_id, titulo, tipo, vence_em, concluida_em, concluida_por, criado_por, criado_em, leads!inner(nome, responsavel_id)',
-      )
+      .select(SELECT_TAREFA_MINHAS_ABERTAS)
       .is('concluida_em', null)
       .order('vence_em', { ascending: true })
       .order('criado_em', { ascending: true })
@@ -117,7 +151,7 @@ export class SupabaseTarefaStore implements TarefaStore {
         : query.eq('leads.responsavel_id', responsavelId)
 
     const { data, error } = await query
-    if (error) return falha(error.message)
+    if (error) return falha(ERRO_AO_CARREGAR_TAREFAS)
     return ok((data as unknown as LinhaTarefa[]).map(paraTarefa))
   }
 
@@ -138,7 +172,7 @@ export class SupabaseTarefaStore implements TarefaStore {
       })
       .select('id')
       .single()
-    if (error) return falha(error.message)
+    if (error) return falha(codigoDoErroAoCriarTarefa(error))
     return ok(data.id)
   }
 

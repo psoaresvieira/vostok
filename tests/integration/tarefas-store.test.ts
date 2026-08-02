@@ -117,6 +117,45 @@ describe('SupabaseTarefaStore', () => {
     }
   })
 
+  it('minhasAbertas ordena por prazo, vence_em asc, entre leads diferentes do mesmo responsavel', async () => {
+    const leadA = await criarLead(c, 'Lead A', c.vendedorAId, etapa(c, 'Novo lead'))
+    const leadB = await criarLead(c, 'Lead B', c.vendedorAId, etapa(c, 'Novo lead'))
+    const cliente = await clienteDoUsuario(c.vendedorAId)
+    const store = new SupabaseTarefaStore(cliente, c.vendedorAId)
+
+    // Caso 1 (doLead) ja cobre ordenacao dentro de um unico lead; aqui as
+    // tres linhas de tasks.order() em minhasAbertas (tarefas.ts:110-112)
+    // nunca sao exercitadas por nenhum caso existente, ja que todos devolvem
+    // 0 ou 1 linha. Duas leads diferentes, tres tarefas fora de ordem.
+    const t3 = await store.criar({
+      leadId: leadB,
+      titulo: 'Terceira',
+      tipo: 'outro',
+      venceEm: new Date('2026-08-13T12:00:00.000Z'),
+    })
+    const t1 = await store.criar({
+      leadId: leadA,
+      titulo: 'Primeira',
+      tipo: 'outro',
+      venceEm: new Date('2026-08-11T12:00:00.000Z'),
+    })
+    const t2 = await store.criar({
+      leadId: leadB,
+      titulo: 'Segunda',
+      tipo: 'outro',
+      venceEm: new Date('2026-08-12T12:00:00.000Z'),
+    })
+    if (!t1.ok || !t2.ok || !t3.ok) throw new Error('setup falhou')
+
+    const r = await store.minhasAbertas(c.vendedorAId)
+    if (!r.ok) throw new Error(r.erro)
+    // Por posicao, nao toContain — mesma regra do caso 1.
+    expect(r.valor).toHaveLength(3)
+    expect(r.valor[0].id).toBe(t1.valor)
+    expect(r.valor[1].id).toBe(t2.valor)
+    expect(r.valor[2].id).toBe(t3.valor)
+  })
+
   it('minhasAbertas do admin nao traz tarefa de lead alheio, mesmo a RLS deixando ver', async () => {
     const leadAdmin = await criarLead(c, 'Lead do admin', c.adminId, etapa(c, 'Novo lead'))
     const leadA = await criarLead(c, 'Lead do A', c.vendedorAId, etapa(c, 'Novo lead'))
@@ -209,7 +248,7 @@ describe('SupabaseTarefaStore', () => {
     expect(depois.valor).toEqual([])
   })
 
-  it('concluir carimba concluida_em e concluida_por; reabrir devolve os dois a null', async () => {
+  it('concluir carimba concluida_em, concluida_por e atualizado_em; reabrir devolve os dois primeiros a null e tambem avanca atualizado_em', async () => {
     const leadA = await criarLead(c, 'Lead do A', c.vendedorAId, etapa(c, 'Novo lead'))
     const cliente = await clienteDoUsuario(c.vendedorAId)
     const store = new SupabaseTarefaStore(cliente, c.vendedorAId)
@@ -222,12 +261,35 @@ describe('SupabaseTarefaStore', () => {
     })
     if (!criada.ok) throw new Error('setup falhou')
 
+    // Nao ha trigger de atualizado_em neste repo (por desenho, ver comentario
+    // em tarefas.ts) — concluir/reabrir escrevem a coluna na aplicacao, e e
+    // exatamente essa escrita que este teste tem que travar. Um `>` estrito
+    // contra o valor de criacao arriscaria empatar no mesmo tick do relogio
+    // do Postgres se as duas escritas (criar, concluir) caissem no mesmo
+    // instante; em vez de afrouxar para `>=` — que passaria mesmo se
+    // atualizado_em fosse removido do payload do update, derrotando o
+    // proposito do teste —, regride o valor explicitamente para uma data
+    // fixa no passado antes de cada escrita sob teste. Assim a comparacao
+    // discrimina de verdade e nunca flaca.
+    const PASSADO = '2020-01-01T00:00:00.000Z'
+    await comoServico((cli) =>
+      cli.query('update public.tasks set atualizado_em = $1 where id = $2', [PASSADO, criada.valor]),
+    )
+
     const concluiu = await store.concluir(criada.valor)
     expect(concluiu.ok).toBe(true)
 
     const linhaConcluida = await lerTarefa(criada.valor)
     expect(linhaConcluida?.concluida_em).not.toBeNull()
     expect(linhaConcluida?.concluida_por).toBe(c.vendedorAId)
+    expect(new Date(linhaConcluida!.atualizado_em).getTime()).toBeGreaterThan(
+      new Date(PASSADO).getTime(),
+    )
+
+    // Regride de novo antes de reabrir, pelo mesmo motivo acima.
+    await comoServico((cli) =>
+      cli.query('update public.tasks set atualizado_em = $1 where id = $2', [PASSADO, criada.valor]),
+    )
 
     const reabriu = await store.reabrir(criada.valor)
     expect(reabriu.ok).toBe(true)
@@ -235,6 +297,30 @@ describe('SupabaseTarefaStore', () => {
     const linhaReaberta = await lerTarefa(criada.valor)
     expect(linhaReaberta?.concluida_em).toBeNull()
     expect(linhaReaberta?.concluida_por).toBeNull()
+    expect(new Date(linhaReaberta!.atualizado_em).getTime()).toBeGreaterThan(
+      new Date(PASSADO).getTime(),
+    )
+  })
+
+  it('criar com lead fora do alcance falha com lead_nao_encontrado, nunca a mensagem crua do Postgres', async () => {
+    const leadB = await criarLead(c, 'Lead do B', c.vendedorBId, etapa(c, 'Novo lead'))
+    const clienteA = await clienteDoUsuario(c.vendedorAId)
+    const storeA = new SupabaseTarefaStore(clienteA, c.vendedorAId)
+
+    // leadB pertence ao vendedor B: pode_ver_lead_id nega para o vendedor A,
+    // e o with check de tasks_insert (0015_tarefas.sql) devolve 42501. E
+    // esse SQLSTATE, mapeado por codigoDoErroAoCriarTarefa, que tem que
+    // aparecer aqui — nunca a mensagem padrao do PostgREST para negacao de
+    // RLS.
+    const r = await storeA.criar({
+      leadId: leadB,
+      titulo: 'Nao deveria criar',
+      tipo: 'outro',
+      venceEm: new Date('2026-08-15T12:00:00.000Z'),
+    })
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('nao deveria ter sucesso')
+    expect(r.erro).toBe('lead_nao_encontrado')
   })
 
   it('excluir uma tarefa de lead fora do alcance falha, e a linha continua existindo', async () => {
