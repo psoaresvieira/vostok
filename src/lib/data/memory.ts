@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import { normalizarNomeEtiqueta } from '@/lib/domain/normalizacao'
 import type { NovoLead } from '@/lib/domain/lead'
+import type { AplicacaoEtiqueta, LinhaCoorte } from '@/lib/domain/metricas'
 import type {
   Conta,
   Etapa,
@@ -12,7 +13,7 @@ import type {
   MotivoPerda,
   Pipeline,
 } from '@/lib/domain/tipos'
-import type { CrmStore, FiltroLeads } from './store'
+import type { CrmStore, FiltroLeads, FiltroMetricas } from './store'
 
 const ETAPAS_PADRAO: { nome: string; tipo: Etapa['tipo'] }[] = [
   { nome: 'Novo lead', tipo: 'aberta' },
@@ -46,6 +47,9 @@ export class InMemoryCrmStore implements CrmStore {
   private tags: Etiqueta[] = []
   private leadTags: LeadTag[] = []
   private eventos: EventoLead[] = []
+  /** Espelha stage_history. Sem ele, ordemMax so enxergaria a etapa atual e
+   * lead que voltou de etapa perderia a profundidade que ja alcancou. */
+  private movimentos: { leadId: string; origem: string | null; destino: string }[] = []
 
   semear(nomeConta: string, usuarioId: string): void {
     this.usuarioAtual = usuarioId
@@ -198,6 +202,9 @@ export class InMemoryCrmStore implements CrmStore {
 
     const origem = lead.stageId
     const agora = new Date()
+    // Espelha stage_history: metricasDaCoorte precisa da uniao de toda etapa
+    // que o lead ja ocupou, nao so da atual.
+    this.movimentos.push({ leadId, origem, destino: destino.id })
     lead.stageId = destino.id
     lead.status = destino.tipo === 'aberta' ? 'aberto' : destino.tipo
     lead.lossReasonId = destino.tipo === 'perdido' ? lossReasonId! : null
@@ -298,5 +305,72 @@ export class InMemoryCrmStore implements CrmStore {
       criadoEm: new Date(),
     })
     return ok(undefined)
+  }
+
+  async metricasDaCoorte(f: FiltroMetricas): Promise<Resultado<LinhaCoorte[]>> {
+    const ordemDe = new Map(this.etapas.map((e) => [e.id, e]))
+    const linhas = this.leads
+      .filter(
+        (l) =>
+          l.pipelineId === f.pipelineId &&
+          l.criadoEm >= f.de &&
+          l.criadoEm < f.ate &&
+          (f.responsavelId == null || l.responsavelId === f.responsavelId),
+      )
+      .map((l) => {
+        // Mesma uniao do SQL: stage atual + toda origem e destino do
+        // historico, filtrando so etapa aberta.
+        const ocupadas = new Set<string>([l.stageId])
+        for (const m of this.movimentos.filter((m) => m.leadId === l.id)) {
+          if (m.origem) ocupadas.add(m.origem)
+          ocupadas.add(m.destino)
+        }
+        const ordens = [...ocupadas]
+          .map((id) => ordemDe.get(id))
+          .filter((e) => e?.tipo === 'aberta')
+          .map((e) => e!.ordem)
+        return {
+          leadId: l.id,
+          criadoEm: l.criadoEm,
+          origem: l.origem,
+          status: l.status,
+          responsavelId: l.responsavelId,
+          campanhaId: null,
+          campanhaNome: null,
+          conjuntoId: null,
+          conjuntoNome: null,
+          anuncioId: null,
+          anuncioNome: null,
+          ordemMax: ordens.length > 0 ? Math.max(...ordens) : 0,
+        }
+      })
+    return ok(linhas)
+  }
+
+  async etiquetasDaCoorte(f: FiltroMetricas): Promise<Resultado<AplicacaoEtiqueta[]>> {
+    const ordemDe = new Map(this.etapas.map((e) => [e.id, e.ordem]))
+    const naJanela = new Set(
+      this.leads
+        .filter(
+          (l) =>
+            l.pipelineId === f.pipelineId &&
+            l.criadoEm >= f.de &&
+            l.criadoEm < f.ate &&
+            (f.responsavelId == null || l.responsavelId === f.responsavelId),
+        )
+        .map((l) => l.id),
+    )
+    const porId = new Map(this.tags.map((t) => [t.id, t.nome]))
+    return ok(
+      this.leadTags
+        .filter((lt) => naJanela.has(lt.leadId))
+        .map((lt) => ({
+          leadId: lt.leadId,
+          tagId: lt.tagId,
+          tagNome: porId.get(lt.tagId) ?? '',
+          stageIdNoMomento: lt.stageIdNoMomento,
+          ordemNoMomento: ordemDe.get(lt.stageIdNoMomento) ?? 0,
+        })),
+    )
   }
 }

@@ -42,6 +42,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <a href="/funil" className="text-sm underline">
             Funil
           </a>
+          <a href="/metricas" className="text-sm underline">
+            Métricas
+          </a>
           {r.valor.papel === 'admin' && (
             <a href="/config" className="text-sm underline">
               Configuração

@@ -13,7 +13,8 @@ import type {
   Papel,
   Pipeline,
 } from '@/lib/domain/tipos'
-import type { CrmStore, FiltroLeads } from './store'
+import type { AplicacaoEtiqueta, LinhaCoorte } from '@/lib/domain/metricas'
+import type { CrmStore, FiltroLeads, FiltroMetricas } from './store'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 import { resolverContaAtiva } from './conta'
 import { valorPostgrest, padraoIlike } from './filtro'
@@ -372,6 +373,72 @@ export class SupabaseCrmStore implements CrmStore {
     })
     if (error) return falha(error.message)
     return ok(undefined)
+  }
+
+  async metricasDaCoorte(f: FiltroMetricas): Promise<Resultado<LinhaCoorte[]>> {
+    const { data, error } = await this.cliente.rpc('metricas_coorte', {
+      p_pipeline_id: f.pipelineId,
+      p_de: f.de.toISOString(),
+      p_ate: f.ate.toISOString(),
+      p_responsavel_id: f.responsavelId ?? null,
+    })
+    if (error) return falha(codigoDoErroPostgres(error))
+    const linhas = (data ?? []) as {
+      lead_id: string
+      criado_em: string
+      origem: Lead['origem']
+      status: Lead['status']
+      responsavel_id: string | null
+      campanha_id: string | null
+      campanha_nome: string | null
+      conjunto_id: string | null
+      conjunto_nome: string | null
+      anuncio_id: string | null
+      anuncio_nome: string | null
+      ordem_max: number
+    }[]
+    return ok(
+      linhas.map((l) => ({
+        leadId: l.lead_id,
+        criadoEm: new Date(l.criado_em),
+        origem: l.origem,
+        status: l.status,
+        responsavelId: l.responsavel_id,
+        campanhaId: l.campanha_id,
+        campanhaNome: l.campanha_nome,
+        conjuntoId: l.conjunto_id,
+        conjuntoNome: l.conjunto_nome,
+        anuncioId: l.anuncio_id,
+        anuncioNome: l.anuncio_nome,
+        ordemMax: l.ordem_max,
+      })),
+    )
+  }
+
+  async etiquetasDaCoorte(f: FiltroMetricas): Promise<Resultado<AplicacaoEtiqueta[]>> {
+    const { data, error } = await this.cliente.rpc('metricas_etiquetas', {
+      p_pipeline_id: f.pipelineId,
+      p_de: f.de.toISOString(),
+      p_ate: f.ate.toISOString(),
+      p_responsavel_id: f.responsavelId ?? null,
+    })
+    if (error) return falha(codigoDoErroPostgres(error))
+    const linhas = (data ?? []) as {
+      lead_id: string
+      tag_id: string
+      tag_nome: string
+      stage_id_no_momento: string
+      ordem_no_momento: number
+    }[]
+    return ok(
+      linhas.map((l) => ({
+        leadId: l.lead_id,
+        tagId: l.tag_id,
+        tagNome: l.tag_nome,
+        stageIdNoMomento: l.stage_id_no_momento,
+        ordemNoMomento: l.ordem_no_momento,
+      })),
+    )
   }
 }
 

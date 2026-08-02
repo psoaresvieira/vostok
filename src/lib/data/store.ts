@@ -1,5 +1,6 @@
 import type { Resultado } from '@/lib/domain/resultado'
 import type { NovoLead } from '@/lib/domain/lead'
+import type { AplicacaoEtiqueta, LinhaCoorte } from '@/lib/domain/metricas'
 import type {
   Conta,
   Etapa,
@@ -16,6 +17,15 @@ export type FiltroLeads = {
   origem?: Lead['origem'] | null
   desde?: Date | null
   busca?: string | null
+}
+
+export type FiltroMetricas = {
+  pipelineId: string
+  /** Inclusivo. */
+  de: Date
+  /** EXCLUSIVO: dois periodos adjacentes nao contam o mesmo lead duas vezes. */
+  ate: Date
+  responsavelId?: string | null
 }
 
 export interface CrmStore {
@@ -45,4 +55,7 @@ export interface CrmStore {
 
   eventosDoLead(leadId: string): Promise<Resultado<EventoLead[]>>
   registrarNota(leadId: string, texto: string): Promise<Resultado<void>>
+
+  metricasDaCoorte(f: FiltroMetricas): Promise<Resultado<LinhaCoorte[]>>
+  etiquetasDaCoorte(f: FiltroMetricas): Promise<Resultado<AplicacaoEtiqueta[]>>
 }
