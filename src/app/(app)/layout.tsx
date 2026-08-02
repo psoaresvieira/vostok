@@ -18,6 +18,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     throw new Error(r.erro)
   }
 
+  // Os dois blocos abaixo (sino e badge de tarefas) so precisam de r.valor,
+  // ja resolvido acima, e nao dependem um do outro. Antes rodavam em serie —
+  // criarTarefaStoreDoServidor() (criarClienteServidor() + auth.getUser())
+  // so disparava DEPOIS do round-trip inteiro do sino — somando duas idas ao
+  // servidor extras, em serie, a latencia de toda pagina do app, inclusive
+  // para quem nunca clica em Tarefas. Promise.all os poe em paralelo sem
+  // abrir mao da tolerancia a falha de nenhum dos dois: cada bloco degrada
+  // para o proprio "vazio" checando `.ok`, nunca lanca, e a falha de um
+  // nunca impede o outro nem a pagina. Achado Important 2 do review da
+  // Task 6.
+  const [contextoNotif, contextoTarefas] = await Promise.all([
+    criarNotificacaoStoreDoServidor(),
+    criarTarefaStoreDoServidor(),
+  ])
+
   // Degrada para sino vazio em vez de derrubar a navegacao inteira: este
   // layout envolve TODA pagina do app, e uma falha aqui (banco fora do ar,
   // sessao inconsistente) nao pode impedir quem so queria ver o funil.
@@ -26,15 +41,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // numa corrida de logout entre as duas chamadas.
   let contagemNaoLidas = 0
   let notificacoes: Notificacao[] = []
-  const contextoNotif = await criarNotificacaoStoreDoServidor()
-  if (contextoNotif.ok) {
-    const [c, n] = await Promise.all([
-      contextoNotif.valor.naoLidas(),
-      contextoNotif.valor.listar(LIMITE_NOTIFICACOES),
-    ])
-    if (c.ok) contagemNaoLidas = c.valor
-    if (n.ok) notificacoes = n.valor
-  }
 
   // Mesmo padrao tolerante a falha do bloco do sino acima: falha aqui vira
   // badge zero, nunca derruba a navegacao inteira. Conta SEMPRE as tarefas do
@@ -44,17 +50,29 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // mudasse com o filtro de outra pessoa seria mentira. contarUrgentes recebe
   // Date[], nao Tarefa[]: e dominio puro e nao conhece o tipo do port.
   let tarefasUrgentes = 0
-  const contextoTarefas = await criarTarefaStoreDoServidor()
-  if (contextoTarefas.ok) {
-    const t = await contextoTarefas.valor.minhasAbertas(r.valor.usuarioId)
-    if (t.ok) {
-      tarefasUrgentes = contarUrgentes(
-        t.valor.map((tarefa) => tarefa.venceEm),
-        new Date(),
-        FUSO_PADRAO,
-      )
-    }
-  }
+
+  await Promise.all([
+    (async () => {
+      if (!contextoNotif.ok) return
+      const [c, n] = await Promise.all([
+        contextoNotif.valor.naoLidas(),
+        contextoNotif.valor.listar(LIMITE_NOTIFICACOES),
+      ])
+      if (c.ok) contagemNaoLidas = c.valor
+      if (n.ok) notificacoes = n.valor
+    })(),
+    (async () => {
+      if (!contextoTarefas.ok) return
+      const t = await contextoTarefas.valor.minhasAbertas(r.valor.usuarioId)
+      if (t.ok) {
+        tarefasUrgentes = contarUrgentes(
+          t.valor.map((tarefa) => tarefa.venceEm),
+          new Date(),
+          FUSO_PADRAO,
+        )
+      }
+    })(),
+  ])
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -70,7 +88,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <a href="/tarefas" className="text-sm underline">
             Tarefas
             {tarefasUrgentes > 0 && (
-              <span className="ml-1 rounded-full bg-destructive px-1.5 text-xs leading-4 text-destructive-foreground">
+              // aria-label proprio: sem ele o nome acessivel do link vira so
+              // "Tarefas 2" (o digito cru concatenado ao texto), que nao diz
+              // o que o numero significa. Com o aria-label, o nome acessivel
+              // do <a> passa a ser "Tarefas 2 tarefas urgentes" — continua
+              // comecando por "Tarefas", entao um getByRole por esse
+              // substring (o E2E da Task 7 vai usar algo assim) continua
+              // casando. Achado minor do review da Task 6.
+              <span
+                className="ml-1 rounded-full bg-destructive px-1.5 text-xs leading-4 text-destructive-foreground"
+                aria-label={
+                  tarefasUrgentes === 1 ? '1 tarefa urgente' : `${tarefasUrgentes} tarefas urgentes`
+                }
+              >
                 {tarefasUrgentes}
               </span>
             )}

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import type { Tarefa, TipoTarefa } from '@/lib/data/tarefas'
 import { classificar, FUSO_PADRAO, type Balde } from '@/lib/domain/tarefa'
 import { chamarAcao } from '@/lib/ui/acao'
-import { mensagemDeErroTarefa } from '@/app/(app)/tarefas/erros'
+import { mensagemDeErroTarefa } from './erros'
 import { concluirTarefa } from '@/app/(app)/tarefas/acoes'
 
 const ROTULO_TIPO: Record<TipoTarefa, string> = {
@@ -74,10 +74,6 @@ export function Lista({ tarefas, agora }: { tarefas: Tarefa[]; agora: Date }) {
     else setErro(null)
   }
 
-  if (tarefas.length === 0) {
-    return <p className="text-sm text-muted-foreground">Nenhuma tarefa aberta.</p>
-  }
-
   const porBalde = new Map<Balde, Tarefa[]>()
   for (const t of tarefas) {
     const balde = classificar(t.venceEm, agora, FUSO_PADRAO)
@@ -88,21 +84,31 @@ export function Lista({ tarefas, agora }: { tarefas: Tarefa[]; agora: Date }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Fora do ramo de lista vazia, de proposito: concluir a ultima tarefa
+          aberta pelo caminho TAREFA_CONCLUIDA_SEM_EVENTO seta `erro` e
+          revalida /tarefas, que chega aqui de novo com `tarefas` vazio. Se
+          este aviso estivesse dentro do `if (tarefas.length === 0)` abaixo,
+          a mensagem nunca apareceria exatamente no caso em que ela mais
+          importa (achado do review da Task 6). */}
       {erro && <p className="text-sm text-destructive">{erro}</p>}
-      {ORDEM_BALDES.map((balde) => {
-        const doBalde = porBalde.get(balde)
-        if (!doBalde || doBalde.length === 0) return null
-        return (
-          <section key={balde}>
-            <h2 className="mb-1 text-sm font-semibold">{ROTULO_BALDE[balde]}</h2>
-            <ul>
-              {doBalde.map((t) => (
-                <ItemTarefa key={t.id} t={t} onConcluir={concluir} />
-              ))}
-            </ul>
-          </section>
-        )
-      })}
+      {tarefas.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhuma tarefa aberta.</p>
+      ) : (
+        ORDEM_BALDES.map((balde) => {
+          const doBalde = porBalde.get(balde)
+          if (!doBalde || doBalde.length === 0) return null
+          return (
+            <section key={balde}>
+              <h2 className="mb-1 text-sm font-semibold">{ROTULO_BALDE[balde]}</h2>
+              <ul>
+                {doBalde.map((t) => (
+                  <ItemTarefa key={t.id} t={t} onConcluir={concluir} />
+                ))}
+              </ul>
+            </section>
+          )
+        })
+      )}
     </div>
   )
 }

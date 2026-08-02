@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation'
 import { criarStoreDoServidor } from '@/lib/data/supabase'
 import { criarTarefaStoreDoServidor } from '@/lib/data/tarefas'
-import type { Papel } from '@/lib/domain/tipos'
+import { ok } from '@/lib/domain/resultado'
+import type { Membro, Papel } from '@/lib/domain/tipos'
 import { Lista } from './lista'
 import { mensagemDeErroTarefa } from './erros'
 
@@ -34,10 +35,24 @@ export default async function TarefasPage({
   if (!contexto.ok) redirect('/login')
   const { store, papel, usuarioId } = contexto.valor
 
-  const membros = await store.membros()
+  // store.membros() so alimenta o <select> de responsavel abaixo, que so
+  // aparece para gestor/admin (papel !== 'vendedor', linha ~60). Antes esta
+  // consulta rodava sempre, incondicional, e um erro dela virava
+  // `throw new Error(membros.erro)` (convencao ja existente do repo — ver
+  // funil/page.tsx, leads/[id]/page.tsx, config/page.tsx) que derrubava a
+  // pagina inteira de /tarefas para o vendedor, por causa de um dado que ele
+  // nunca ve. Para vendedor nem chamamos store.membros(): o resultado fica
+  // fixo em `ok([])`, que nunca falha, entao o `throw` abaixo nunca dispara
+  // por causa desse ramo. Achado Important 4 do review da Task 6.
+  //
+  // Independente de membros() (so precisa de `store`), entao roda em
+  // paralelo com criarTarefaStoreDoServidor() — os dois `await` em serie que
+  // o mesmo review pediu para juntar.
+  const [membros, tarefaStore] = await Promise.all([
+    papel === 'vendedor' ? Promise.resolve(ok<Membro[]>([])) : store.membros(),
+    criarTarefaStoreDoServidor(),
+  ])
   if (!membros.ok) throw new Error(membros.erro)
-
-  const tarefaStore = await criarTarefaStoreDoServidor()
   if (!tarefaStore.ok) throw new Error(tarefaStore.erro)
 
   const responsavelId = resolverResponsavelId(papel, usuarioId, params.responsavel)
