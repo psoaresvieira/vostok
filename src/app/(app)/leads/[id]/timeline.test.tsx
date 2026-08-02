@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, afterEach } from 'vitest'
+import { render, screen, cleanup } from '@testing-library/react'
 import { rotuloEvento, Timeline } from './timeline'
 import type { EventoLead } from '@/lib/domain/tipos'
+
+// RTL's automatic afterEach(cleanup) only registers when globals: true is set.
+// This config deliberately avoids globals to keep test helpers explicit.
+// We register cleanup manually here to prevent DOM leakage between tests.
+afterEach(cleanup)
 
 function evento(overrides: Partial<EventoLead> = {}): EventoLead {
   return {
@@ -47,6 +52,6 @@ describe('Timeline', () => {
   it('renderiza o estado vazio quando não há eventos', () => {
     render(<Timeline eventos={[]} nomeEtapa={new Map()} nomePessoa={new Map()} />)
 
-    expect(screen.getByText('Nada aconteceu ainda.')).toBeTruthy()
+    screen.getByText('Nada aconteceu ainda.')
   })
 })
