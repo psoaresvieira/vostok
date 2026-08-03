@@ -33,12 +33,12 @@ async function segundaConta(nome: string, email: string): Promise<{ adminId: str
 }
 
 /** Etapa descartavel, criada "pelo servico" (sem RLS), fora do 1..7 do seed. */
-async function criarEtapaDescartavel(c: Cenario, nome = 'Descartavel', ordem = 50): Promise<string> {
+async function criarEtapaDescartavel(c: Cenario): Promise<string> {
   return comoServico(async (cli) => {
     const r = await cli.query<{ id: string }>(
       `insert into public.stages (pipeline_id, nome, ordem, tipo)
-       values ($1, $2, $3, 'aberta') returning id`,
-      [c.pipelineId, nome, ordem],
+       values ($1, 'Descartavel', 50, 'aberta') returning id`,
+      [c.pipelineId],
     )
     return r.rows[0].id
   })
@@ -209,6 +209,29 @@ describe('0018 — excluir_etapa, reordenar_etapas e resumo_etapas', () => {
       await expect(
         comoUsuario(outra.adminId, (cli) =>
           cli.query('select public.reordenar_etapas($1::uuid[])', [idsDaContaA]),
+        ),
+      ).rejects.toThrow(/ordem_invalida/)
+
+      const depois = await ordensDoPipeline(c.pipelineId)
+      expect(depois).toEqual(antes)
+    })
+
+    it('Caso 13: lista mista — reais mais um id estranho no lugar de um real — e recusada com ordem_invalida e nenhuma ordem muda', async () => {
+      // Seis ids reais e um uuid inventado no lugar do setimo. As tres
+      // contagens de tamanho (v_total, v_distintos) fechariam sozinhas — e a
+      // funcao aplicaria uma ordem que nao corresponde a lista pedida, ou
+      // estouraria 23505 cru no indice unico — se nao houver uma checagem
+      // extra de que CADA id resolve para uma etapa deste pipeline.
+      const antes = await ordensDoPipeline(c.pipelineId)
+      const idsOriginais = [...c.etapas].sort((a, b) => a.ordem - b.ordem).map((e) => e.id)
+      const misturada = [
+        ...idsOriginais.slice(0, 6),
+        '00000000-0000-0000-0000-000000000000',
+      ]
+
+      await expect(
+        comoUsuario(c.adminId, (cli) =>
+          cli.query('select public.reordenar_etapas($1::uuid[])', [misturada]),
         ),
       ).rejects.toThrow(/ordem_invalida/)
 

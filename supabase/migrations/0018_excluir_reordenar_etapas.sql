@@ -80,6 +80,7 @@ declare
   v_pipeline uuid;
   v_total bigint;
   v_distintos bigint;
+  v_encontrados bigint;
 begin
   if p_ids_na_ordem is null or coalesce(array_length(p_ids_na_ordem, 1), 0) = 0 then
     raise exception 'ordem_invalida';
@@ -104,13 +105,22 @@ begin
   -- se abracarem em deadlock).
   perform 1 from public.stages s where s.pipeline_id = v_pipeline order by s.id for update;
 
-  -- Permutacao EXATA: mesmo tamanho, sem repeticao, todos deste pipeline.
-  -- Sem isto, lista parcial deixaria buracos e id repetido colidiria no
-  -- indice unico no meio da escrita.
+  -- Permutacao EXATA: mesmo tamanho, sem repeticao, e CADA id resolvendo para
+  -- uma etapa deste pipeline. A terceira contagem nao e redundante com o
+  -- array_agg la de cima: array_agg agrega so as linhas que casaram, entao uma
+  -- lista com um id inexistente (ou invisivel pela RLS) no lugar de um real
+  -- ainda resolve para um pipeline so e fecha as outras duas contagens — e o
+  -- update aplicaria uma ordem que nao corresponde a lista pedida, ou
+  -- estouraria 23505 cru no indice unico.
   select count(*) into v_total from public.stages s where s.pipeline_id = v_pipeline;
   select count(distinct x) into v_distintos from unnest(p_ids_na_ordem) as x;
+  select count(*) into v_encontrados
+    from public.stages s
+   where s.id = any (p_ids_na_ordem)
+     and s.pipeline_id = v_pipeline;
   if v_total <> array_length(p_ids_na_ordem, 1)
-     or v_distintos <> array_length(p_ids_na_ordem, 1) then
+     or v_distintos <> array_length(p_ids_na_ordem, 1)
+     or v_encontrados <> array_length(p_ids_na_ordem, 1) then
     raise exception 'ordem_invalida';
   end if;
 
