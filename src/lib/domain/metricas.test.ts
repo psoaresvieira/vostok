@@ -214,6 +214,20 @@ describe('etiquetasPorEtapa', () => {
     expect(r.linhas).toEqual([])
   })
 
+  it('aplicacao com stageIdNoMomento nulo nao conta em etapa nenhuma', () => {
+    // stage_id_no_momento vira null quando a etapa congelada foi excluida
+    // (0016/0017, on delete set null). etiquetasPorEtapa compara
+    // a.stageIdNoMomento !== etapa.id, e null nunca e igual a um id -- mas
+    // isso precisa de teste, nao de fe. Ranking calculado para CADA etapa
+    // viva: nenhum numerador pode incluir a aplicacao nula.
+    const linhas = [linha({ leadId: 'a', ordemMax: 3 })]
+    const aplicacoes = [aplic({ leadId: 'a', stageIdNoMomento: null })]
+    for (const et of ETAPAS) {
+      const r = etiquetasPorEtapa(linhas, aplicacoes, et)
+      expect(r.linhas).toEqual([])
+    }
+  })
+
   it('lead reaberto e ganho depois nao conta no ranking de Perdido, mesmo com tag congelada la', () => {
     // move_lead_stage nao impede sair de Ganho/Perdido, o kanban desenha
     // qualquer etapa como alvo de drop, e aplicarEtiquetas congela

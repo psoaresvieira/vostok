@@ -427,7 +427,7 @@ export class SupabaseCrmStore implements CrmStore {
       lead_id: string
       tag_id: string
       tag_nome: string
-      stage_id_no_momento: string
+      stage_id_no_momento: string | null
       ordem_no_momento: number
     }[]
     return ok(

@@ -81,7 +81,8 @@ export type AplicacaoEtiqueta = {
   leadId: string
   tagId: string
   tagNome: string
-  stageIdNoMomento: string
+  /** null quando a etapa congelada foi excluida (on delete set null). */
+  stageIdNoMomento: string | null
   ordemNoMomento: number
 }
 
