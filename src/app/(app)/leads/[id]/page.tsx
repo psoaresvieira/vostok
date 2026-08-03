@@ -1,11 +1,13 @@
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { criarStoreDoServidor } from '@/lib/data/supabase'
+import { criarTarefaStoreDoServidor } from '@/lib/data/tarefas'
 import { formatarMoeda, formatarTelefone } from '@/lib/domain/formato'
 import { Timeline } from './timeline'
 import { EditorEtiquetas } from './etiquetas'
 import { FormularioNota } from './nota'
 import { AcoesLead } from './acoes-lead'
+import { PainelTarefas } from './tarefas'
 
 export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -18,18 +20,23 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   // Zero linhas por RLS chega aqui como null: e "nao encontrado", nunca 403.
   if (!lead.valor) notFound()
 
-  const [pipeline, membros, eventos, etiquetas, motivos] = await Promise.all([
+  const [pipeline, membros, eventos, etiquetas, motivos, tarefaStore] = await Promise.all([
     store.pipelinePadrao(),
     store.membros(),
     store.eventosDoLead(id),
     store.etiquetasDaConta(),
     store.motivosPerda(),
+    criarTarefaStoreDoServidor(),
   ])
   if (!pipeline.ok) throw new Error(pipeline.erro)
   if (!membros.ok) throw new Error(membros.erro)
   if (!eventos.ok) throw new Error(eventos.erro)
   if (!etiquetas.ok) throw new Error(etiquetas.erro)
   if (!motivos.ok) throw new Error(motivos.erro)
+  if (!tarefaStore.ok) throw new Error(tarefaStore.erro)
+
+  const tarefas = await tarefaStore.valor.doLead(id)
+  if (!tarefas.ok) throw new Error(tarefas.erro)
 
   const nomeEtapa = new Map(pipeline.valor.etapas.map((e) => [e.id, e.nome]))
   const nomePessoa = new Map(membros.valor.map((m) => [m.id, m.nome]))
@@ -87,6 +94,8 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           etiquetasConhecidas={etiquetas.valor}
           podeTrocarResponsavel={papel !== 'vendedor'}
         />
+
+        <PainelTarefas leadId={lead.valor.id} tarefas={tarefas.valor} agora={new Date()} />
       </section>
 
       <section className="flex flex-col gap-4">

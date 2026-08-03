@@ -461,6 +461,8 @@ export async function excluirTarefa(id: string, leadId: string): Promise<Resulta
 
 Crie `src/app/(app)/leads/[id]/tarefas.test.tsx`, com `// @vitest-environment jsdom` na primeira linha. O componente recebe as tarefas por prop e as ações por prop ou import — monte-o de modo que o teste não precise de servidor.
 
+**Registre `afterEach(cleanup)` explicitamente**, copiando o padrão de `timeline.test.tsx` (Task 1). O `cleanup` automático do `@testing-library/react` só se registra quando `globals: true` está ligado, e este `vitest.config.ts` deliberadamente não liga. Sem o registro manual, o `document` do jsdom persiste entre os `it()` do mesmo arquivo, e a partir do segundo `render()` as consultas passam a achar nó velho ou a estourar "multiple elements found". Este arquivo tem vários `render()` — sem isso, ele falha de forma intermitente.
+
 Casos obrigatórios:
 
 1. **Tarefa vencida ontem aparece marcada como atrasada** e tarefa de semana que vem não. Afirme sobre o texto ou o rótulo acessível, não sobre classe de CSS — classe é forma, e o teste tem que sobreviver a uma troca de estilo.
@@ -544,7 +546,9 @@ git commit -m "feat: painel de tarefas na ficha do lead, com a conclusao na time
 
 - [ ] **Step 1: Escrever o teste de componente**
 
-Crie `src/app/(app)/tarefas/lista.test.tsx`, com `// @vitest-environment jsdom` na primeira linha. `lista.tsx` recebe as tarefas e o `agora` por prop — nunca chame `new Date()` dentro do componente, ou o teste vira refém do relógio.
+Crie `src/app/(app)/tarefas/lista.test.tsx`, com `// @vitest-environment jsdom` na primeira linha e `afterEach(cleanup)` registrado explicitamente — pelo mesmo motivo da Task 5, e aqui também há vários `render()` no arquivo.
+
+`lista.tsx` recebe as tarefas e o `agora` por prop — nunca chame `new Date()` dentro do componente, ou o teste vira refém do relógio.
 
 Casos obrigatórios:
 

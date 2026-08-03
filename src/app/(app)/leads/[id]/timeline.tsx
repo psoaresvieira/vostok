@@ -28,6 +28,8 @@ export function rotuloEvento(
     }
     case 'nota':
       return String(p.texto ?? '(sem texto)')
+    case 'tarefa_concluida':
+      return `Tarefa concluída: ${String(p.titulo ?? '?')}`
     default:
       return evento.tipo
   }
