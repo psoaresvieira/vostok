@@ -559,10 +559,14 @@ declare
   v_leads bigint;
   v_mesmo_tipo bigint;
 begin
-  -- for update: serializa contra outra exclusao/reordenacao da mesma etapa.
-  -- Quem nao enxerga a linha (RLS) recebe "nao existe" — e nao "sem
-  -- permissao", de proposito: nao vaza que o id e real.
-  select * into v_stage from public.stages where id = p_stage_id for update;
+  -- Leitura SEM lock primeiro, de proposito: sob RLS, SELECT ... FOR UPDATE
+  -- exige que a linha passe TAMBEM pela policy de update (stages_admin_write,
+  -- admin-only) — com o lock aqui, o vendedor nunca alcancaria o guard de
+  -- papel logo abaixo e receberia "nao existe" para uma etapa que ele enxerga
+  -- na tela. Quem nao enxerga a linha nem por select (outra conta) recebe
+  -- "nao existe" — e nao "sem permissao", de proposito: nao vaza que o id e
+  -- real.
+  select * into v_stage from public.stages where id = p_stage_id;
   if v_stage.id is null then
     raise exception 'etapa_nao_encontrada';
   end if;
@@ -572,6 +576,14 @@ begin
   -- funcao devolveria sucesso mentindo.
   if public.papel_na_conta(public.conta_do_pipeline(v_stage.pipeline_id)) is distinct from 'admin' then
     raise exception 'sem_permissao';
+  end if;
+
+  -- Agora sim o lock: o chamador provou ser admin, entao a policy de update
+  -- devolve a linha. Serializa contra outra exclusao/reordenacao da mesma
+  -- etapa. A etapa pode ter sumido entre as duas leituras — dai o recheck.
+  select * into v_stage from public.stages where id = p_stage_id for update;
+  if v_stage.id is null then
+    raise exception 'etapa_nao_encontrada';
   end if;
 
   -- Guarda 1: lead dentro. Como o chamador ja provou ser admin, a RLS de
