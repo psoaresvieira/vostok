@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { criarScriptStoreDoServidor, type DadosScript } from '@/lib/data/scripts'
 import { normalizarTags } from '@/lib/domain/script'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
+import { codigoDoErroDaAcao } from './erros'
 
 /** Quantas tags um script aceita. Validacao com erro, nunca truncamento
  * silencioso: engolir a 11a tag em silencio e' a classe de defeito que a spec
@@ -38,7 +39,7 @@ export async function criarScript(d: DadosScript): Promise<Resultado<string>> {
   if (!dados.ok) return falha(dados.erro)
 
   const contexto = await criarScriptStoreDoServidor()
-  if (!contexto.ok) return falha(contexto.erro)
+  if (!contexto.ok) return falha(codigoDoErroDaAcao(contexto.erro))
 
   // Pre-check de papel para a mensagem ser honesta na UI: sem ele o vendedor
   // veria "etapa invalida" (o 42501 do with check e' o mesmo SQLSTATE das duas
@@ -58,7 +59,7 @@ export async function atualizarScript(id: string, d: DadosScript): Promise<Resul
   if (!dados.ok) return falha(dados.erro)
 
   const contexto = await criarScriptStoreDoServidor()
-  if (!contexto.ok) return falha(contexto.erro)
+  if (!contexto.ok) return falha(codigoDoErroDaAcao(contexto.erro))
   if (contexto.valor.papel === 'vendedor') return falha('sem_permissao')
 
   const r = await contexto.valor.scripts.atualizar(id, dados.valor)
@@ -72,7 +73,7 @@ export async function atualizarScript(id: string, d: DadosScript): Promise<Resul
 /** So resolve o store e pre-checa o papel: nao ha campo nenhum para validar. */
 export async function excluirScript(id: string): Promise<Resultado<void>> {
   const contexto = await criarScriptStoreDoServidor()
-  if (!contexto.ok) return falha(contexto.erro)
+  if (!contexto.ok) return falha(codigoDoErroDaAcao(contexto.erro))
   if (contexto.valor.papel === 'vendedor') return falha('sem_permissao')
 
   const r = await contexto.valor.scripts.excluir(id)

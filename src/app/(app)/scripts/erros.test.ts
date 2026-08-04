@@ -46,6 +46,15 @@ describe('mensagemDeErroScript', () => {
   it('codigo desconhecido cai no fallback que devolve o proprio codigo', () => {
     expect(mensagemDeErroScript('codigo_que_nao_existe')).toBe('codigo_que_nao_existe')
   })
+
+  it('propriedade herdada de Object.prototype nao vaza como funcao — devolve o codigo, uma string', () => {
+    // MENSAGENS_ERRO['toString'] acha o toString herdado de Object.prototype
+    // pelo indice cru: sem o guard de hasOwnProperty (o mesmo que
+    // codigoDoErroDoPainel ja usa), o fallback `?? codigo` nunca dispara
+    // porque a funcao herdada nao e' undefined, e a tela receberia uma
+    // Function onde espera string.
+    expect(mensagemDeErroScript('toString')).toBe('toString')
+  })
 })
 
 describe('codigoDoErroDoPainel', () => {
