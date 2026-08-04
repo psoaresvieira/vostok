@@ -27,9 +27,13 @@ type Props = {
   etapa: string | null
   /** As ultimas entregas de webhook da conta — o painel de diagnostico. */
   entregas: Entrega[]
+  /** META_MODO_BETA=1 (page.tsx): liga a nota fixa de onboarding por convite
+   * junto do botao "Conectar Facebook". Reversivel so por env var — nenhum
+   * estado, nenhuma migration. */
+  modoBeta: boolean
 }
 
-export function Integracoes({ fontes, membros, origem, etapa, entregas }: Props) {
+export function Integracoes({ fontes, membros, origem, etapa, entregas, modoBeta }: Props) {
   const router = useRouter()
   const [pendente, iniciar] = useTransition()
 
@@ -255,6 +259,12 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas }: Props)
         >
           Conectar Facebook
         </a>
+        {modoBeta && (
+          <p className="max-w-xs text-xs text-muted-foreground">
+            Durante o beta, a conexão com o Facebook é liberada por convite — fale com a
+            gente para habilitar sua conta.
+          </p>
+        )}
 
         <label className="flex flex-col text-sm">
           Nome do formulário do Google
