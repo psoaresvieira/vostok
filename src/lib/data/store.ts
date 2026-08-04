@@ -55,6 +55,19 @@ export interface CrmStore {
 
   eventosDoLead(leadId: string): Promise<Resultado<EventoLead[]>>
   registrarNota(leadId: string, texto: string): Promise<Resultado<void>>
+  /**
+   * Evento `whatsapp_enviado` da ficha do lead. Vive no store — e nao num
+   * `.from('lead_events')` dentro da Server Action — pela mesma razao de
+   * `SupabaseTarefaStore.concluir`: neste repo a camada de acoes nunca fala
+   * PostgREST direto. O payload e' SNAPSHOT do que o cliente recebeu (nome do
+   * template no Meta e texto ja preenchido), porque o script pode ser editado e
+   * o template re-submetido depois — e a historia do lead nao pode passar a
+   * contar outra versao do que foi dito.
+   */
+  registrarEnvioWhatsApp(
+    leadId: string,
+    d: { template: string; texto: string },
+  ): Promise<Resultado<void>>
 
   metricasDaCoorte(f: FiltroMetricas): Promise<Resultado<LinhaCoorte[]>>
   etiquetasDaCoorte(f: FiltroMetricas): Promise<Resultado<AplicacaoEtiqueta[]>>

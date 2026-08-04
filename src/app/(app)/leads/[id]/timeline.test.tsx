@@ -66,6 +66,32 @@ describe('rotuloEvento', () => {
     expect(resultado).toBe('Tarefa concluída: ?')
   })
 
+  it('caso 8: traduz whatsapp_enviado com o texto do payload — o snapshot do que foi enviado', () => {
+    // O texto e' snapshot pelo mesmo motivo do titulo de tarefa_concluida, com
+    // uma razao a mais: o script pode ser editado (e o template re-submetido)
+    // depois do envio, e a linha do tempo tem que continuar mostrando o que o
+    // cliente REALMENTE recebeu, nao o que o script diz hoje.
+    const e = evento({
+      tipo: 'whatsapp_enviado',
+      payload: {
+        template: 'abordagem_inicial_aaaaaaaa',
+        texto: 'Olá Maria, tudo bem na Loja da Maria?',
+      },
+    })
+
+    const resultado = rotuloEvento(e, new Map(), new Map())
+
+    expect(resultado).toBe('WhatsApp enviado: Olá Maria, tudo bem na Loja da Maria?')
+  })
+
+  it('whatsapp_enviado sem texto no payload cai no fallback, nao em undefined', () => {
+    // lead_events e append-only e o payload e jsonb livre: linha gravada por
+    // outro caminho pode nao ter texto.
+    const e = evento({ tipo: 'whatsapp_enviado', payload: {} })
+
+    expect(rotuloEvento(e, new Map(), new Map())).toBe('WhatsApp enviado: ?')
+  })
+
   it('cai no default para tipo desconhecido', () => {
     // 'tarefa_concluida' ganhou case proprio na Task 5 — trocado por um tipo
     // que continua nao existindo, preservando a intencao original do teste:

@@ -6,7 +6,12 @@ import {
   normalizarTags,
   contextoDoLead,
   linkWhatsApp,
+  traduzirParaPosicional,
+  valoresPosicionais,
+  preencherPosicional,
+  nomeMetaDoTitulo,
   type ContextoScript,
+  type Variavel,
 } from './script'
 import type { Lead } from './tipos'
 
@@ -64,6 +69,20 @@ describe('interpolar', () => {
       empresa: null,
     })
     expect(textoPlano(segs)).toBe('vi que a {{empresa}} está crescendo')
+  })
+
+  it('gramática apertada: espaço horizontal casa, quebra de linha dentro das chaves fica literal', () => {
+    const comEspaco = interpolar('Oi {{ empresa }}', CONTEXTO_COMPLETO)
+    expect(textoPlano(comEspaco)).toBe('Oi Acme')
+
+    const comQuebra = interpolar('Oi {{\n empresa }}', CONTEXTO_COMPLETO)
+    expect(comQuebra.every((s) => s.tipo === 'texto')).toBe(true)
+    expect(textoPlano(comQuebra)).toBe('Oi {{\n empresa }}')
+
+    // O mesmo padrão vale para traduzirParaPosicional: nenhum casamento,
+    // corpo idêntico, mapa vazio.
+    const traduzida = traduzirParaPosicional('Oi {{\n empresa }}')
+    expect(traduzida).toEqual({ ok: true, valor: { corpo: 'Oi {{\n empresa }}', mapa: [] } })
   })
 })
 
@@ -133,5 +152,121 @@ describe('linkWhatsApp', () => {
     expect(linkWhatsApp('+5511912345678', 'oi {{empresa}}')).toBe(
       'https://wa.me/5511912345678?text=oi%20%7B%7Bempresa%7D%7D',
     )
+  })
+})
+
+describe('traduzirParaPosicional', () => {
+  it('variável repetida ganha a mesma posição em todas as ocorrências', () => {
+    const resultado = traduzirParaPosicional(
+      'Oi {{primeiro_nome}}, {{empresa}}… {{primeiro_nome}}',
+    )
+    expect(resultado).toEqual({
+      ok: true,
+      valor: { corpo: 'Oi {{1}}, {{2}}… {{1}}', mapa: ['primeiro_nome', 'empresa'] },
+    })
+  })
+
+  it('nome de forma válida fora do catálogo recusa com o código', () => {
+    const resultado = traduzirParaPosicional('use o cupom {{cupom}}')
+    expect(resultado).toEqual({ ok: false, erro: 'template_variavel_desconhecida' })
+  })
+
+  it('sem variável: corpo idêntico, mapa vazio', () => {
+    const resultado = traduzirParaPosicional('mensagem sem variável nenhuma')
+    expect(resultado).toEqual({
+      ok: true,
+      valor: { corpo: 'mensagem sem variável nenhuma', mapa: [] },
+    })
+  })
+
+  it('placeholder posicional literal ({{1}}, {{01}}, {{ 2 }}) é recusado com código dedicado', () => {
+    expect(traduzirParaPosicional('confirma {{1}} por favor')).toEqual({
+      ok: false,
+      erro: 'template_posicional_reservado',
+    })
+    expect(traduzirParaPosicional('confirma {{01}} por favor')).toEqual({
+      ok: false,
+      erro: 'template_posicional_reservado',
+    })
+    expect(traduzirParaPosicional('confirma {{ 2 }} por favor')).toEqual({
+      ok: false,
+      erro: 'template_posicional_reservado',
+    })
+  })
+})
+
+describe('valoresPosicionais', () => {
+  const mapa: Variavel[] = ['primeiro_nome', 'empresa']
+
+  it('lacuna nula em qualquer posição falha com whatsapp_lacunas', () => {
+    const resultado = valoresPosicionais(mapa, { ...CONTEXTO_COMPLETO, empresa: null })
+    expect(resultado).toEqual({ ok: false, erro: 'whatsapp_lacunas' })
+  })
+
+  it('lacuna só-espaços falha com o mesmo código', () => {
+    const resultado = valoresPosicionais(mapa, { ...CONTEXTO_COMPLETO, empresa: '   ' })
+    expect(resultado).toEqual({ ok: false, erro: 'whatsapp_lacunas' })
+  })
+
+  it('feliz devolve os valores na ordem do mapa', () => {
+    const resultado = valoresPosicionais(mapa, CONTEXTO_COMPLETO)
+    expect(resultado).toEqual({ ok: true, valor: ['Maria', 'Acme'] })
+  })
+})
+
+describe('comutação: preencherPosicional === textoPlano(interpolar(...))', () => {
+  it('conteúdo simples com variável repetida', () => {
+    const conteudo = 'Oi {{primeiro_nome}}, vi a {{empresa}} crescendo, {{primeiro_nome}}!'
+
+    const traduzida = traduzirParaPosicional(conteudo)
+    if (!traduzida.ok) throw new Error('deveria traduzir')
+    const valores = valoresPosicionais(traduzida.valor.mapa, CONTEXTO_COMPLETO)
+    if (!valores.ok) throw new Error('deveria ter valores completos')
+
+    const viaPosicional = preencherPosicional(traduzida.valor.corpo, valores.valor)
+    const viaInterpolacao = textoPlano(interpolar(conteudo, CONTEXTO_COMPLETO))
+    expect(viaPosicional).toBe(viaInterpolacao)
+  })
+
+  it('conteúdo multilinha com variável repetida', () => {
+    const conteudo =
+      'Oi {{primeiro_nome}},\nvi a {{empresa}} crescendo.\nAté breve, {{primeiro_nome}}!'
+
+    const traduzida = traduzirParaPosicional(conteudo)
+    if (!traduzida.ok) throw new Error('deveria traduzir')
+    const valores = valoresPosicionais(traduzida.valor.mapa, CONTEXTO_COMPLETO)
+    if (!valores.ok) throw new Error('deveria ter valores completos')
+
+    const viaPosicional = preencherPosicional(traduzida.valor.corpo, valores.valor)
+    const viaInterpolacao = textoPlano(interpolar(conteudo, CONTEXTO_COMPLETO))
+    expect(viaPosicional).toBe(viaInterpolacao)
+  })
+
+  it('conteúdo com {{N}} literal é recusado na tradução, não diverge silenciosamente', () => {
+    // Sem a recusa em traduzirParaPosicional, este {{1}} sobreviveria como
+    // texto literal na tradução e seria substituído por preencherPosicional
+    // com o valor do slot 1 — divergindo de textoPlano(interpolar(...)), que
+    // trata {{1}} como texto comum (nenhuma variável de nome puramente
+    // numérico existe no catálogo). A recusa impede essa divergência ao
+    // nunca deixar o par chegar no ponto de comparação.
+    const conteudo = 'Oi {{1}}, vi a {{empresa}}'
+    const traduzida = traduzirParaPosicional(conteudo)
+    expect(traduzida).toEqual({ ok: false, erro: 'template_posicional_reservado' })
+  })
+})
+
+describe('preencherPosicional', () => {
+  it('posição fora do intervalo de valores devolve a tag original intocada', () => {
+    expect(preencherPosicional('a {{2}} b', ['x'])).toBe('a {{2}} b')
+  })
+})
+
+describe('nomeMetaDoTitulo', () => {
+  it('pino exato: minúsculas, sem acento, inválidos viram _, colapsado, truncado, sufixo', () => {
+    expect(nomeMetaDoTitulo('Abertura frio — 1ª msg!', 'k3f2')).toBe('abertura_frio_1_msg_k3f2')
+  })
+
+  it('pino: título feito só de caracteres inválidos vira raiz vazia + sufixo', () => {
+    expect(nomeMetaDoTitulo('!!!', 'k3f2')).toBe('_k3f2')
   })
 })

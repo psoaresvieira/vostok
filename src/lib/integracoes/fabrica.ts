@@ -5,8 +5,26 @@ import type { WhatsAppGraph } from './whatsapp'
 import { WhatsAppGraphFalso } from './whatsapp-falso'
 import { WhatsAppGraphReal } from './whatsapp-real'
 
-let falsoCompartilhado: MetaGraphFalso | null = null
-let whatsappFalsoCompartilhado: WhatsAppGraphFalso | null = null
+/**
+ * Os duplos vivem em `globalThis`, e nao em variavel de modulo.
+ *
+ * Achado do E2E do disparo (Plano 11): `next dev` compila POR ROTA, e o mesmo
+ * modulo pode ser avaliado mais de uma vez — uma instancia por bundle. Com
+ * `let` de modulo, /scripts/[id] registrava o template numa instancia da falsa
+ * e /leads/[id] enviava contra OUTRA, recem-criada e vazia; o Graph falso
+ * recusava com `envio_recusado`, e o vermelho nao dizia nada sobre o produto.
+ * `globalThis` e' o unico escopo que os bundles compartilham de verdade.
+ *
+ * O registro fica atras de `usarFalso()` como antes: em producao ninguem chama
+ * estas funcoes.
+ */
+const registroGlobal = globalThis as typeof globalThis & {
+  __crmDuplosDeIntegracao?: { meta?: MetaGraphFalso; whatsapp?: WhatsAppGraphFalso }
+}
+
+function registro(): { meta?: MetaGraphFalso; whatsapp?: WhatsAppGraphFalso } {
+  return (registroGlobal.__crmDuplosDeIntegracao ??= {})
+}
 
 /**
  * Instancia unica do falso no processo. O E2E precisa que a Page "inscrita" num
@@ -14,8 +32,8 @@ let whatsappFalsoCompartilhado: WhatsAppGraphFalso | null = null
  * chamada, `assinadas` nasceria vazia toda vez.
  */
 export function metaFalso(): MetaGraphFalso {
-  if (!falsoCompartilhado) falsoCompartilhado = new MetaGraphFalso()
-  return falsoCompartilhado
+  const r = registro()
+  return (r.meta ??= new MetaGraphFalso())
 }
 
 /**
@@ -44,8 +62,8 @@ export function metaGraph(): MetaGraph {
  * seguinte.
  */
 export function whatsappFalso(): WhatsAppGraphFalso {
-  if (!whatsappFalsoCompartilhado) whatsappFalsoCompartilhado = new WhatsAppGraphFalso()
-  return whatsappFalsoCompartilhado
+  const r = registro()
+  return (r.whatsapp ??= new WhatsAppGraphFalso())
 }
 
 /**

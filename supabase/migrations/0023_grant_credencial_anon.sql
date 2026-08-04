@@ -1,0 +1,16 @@
+-- Fecha a assimetria de grants entre as duas RPCs do disparo.
+--
+-- Quem chama `credencial_whatsapp` em producao e o cliente ANONIMO + segredo
+-- (criarDisparoServico, lib/data/templates.ts), exatamente como
+-- `atualizar_status_template` — que ja recebeu `grant ... to anon` explicito na
+-- 0022. A 0019 so concedeu a `authenticated`, e a chamada anonima funciona hoje
+-- por acidente: o default ACL desta imagem do Postgres deixa EXECUTE para
+-- PUBLIC em toda funcao nova. Basta um `revoke execute ... from public` de
+-- endurecimento (a classe de mudanca que este repo ja fez uma vez, na 0021)
+-- para o disparo inteiro parar com `permission denied` — e a falha apareceria
+-- como "conecte um numero de WhatsApp", apontando para o lugar errado.
+--
+-- A autorizacao de verdade continua sendo o segredo, conferido DENTRO da
+-- funcao por `segredo_confere`: sem ele a chamada levanta `segredo_invalido`
+-- antes de ler qualquer linha de whatsapp_connections.
+grant execute on function public.credencial_whatsapp(text, uuid) to anon;

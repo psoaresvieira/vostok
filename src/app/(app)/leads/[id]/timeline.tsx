@@ -30,6 +30,12 @@ export function rotuloEvento(
       return String(p.texto ?? '(sem texto)')
     case 'tarefa_concluida':
       return `Tarefa concluída: ${String(p.titulo ?? '?')}`
+    // O TEXTO do payload, e nunca o conteudo do script de hoje: o script pode
+    // ser editado e o template re-submetido depois do envio, e a historia do
+    // lead tem que continuar mostrando o que o cliente REALMENTE recebeu. Mesmo
+    // motivo do titulo em tarefa_concluida — snapshot, nao referencia.
+    case 'whatsapp_enviado':
+      return `WhatsApp enviado: ${String(p.texto ?? '?')}`
     default:
       return evento.tipo
   }

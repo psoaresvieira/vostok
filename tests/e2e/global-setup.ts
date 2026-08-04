@@ -1,5 +1,6 @@
 import { Client } from 'pg'
 import { exigirHostLocal } from '../integration/helpers/guarda-host'
+import { NUMERO_FALSO_PADRAO } from '@/lib/integracoes/whatsapp-falso'
 
 /**
  * Achado do review final de branch: `npm run test:e2e` falhava na segunda
@@ -39,6 +40,20 @@ const PAGE_IDS_FALSAS = ['100000000000001', '100000000000002', '100000000000003'
  */
 export const PREFIXO_FONTE_GOOGLE_E2E = 'Ingestão E2E '
 
+/**
+ * O numero que `disparo-whatsapp.spec.ts` conecta em /config — a CONSTANTE do
+ * duplo, importada, e nunca o literal repetido: uma copia aqui sobreviveria
+ * calada a uma troca do par padrao, e a limpeza passaria a apagar um numero que
+ * ninguem mais usa. O sintoma so apareceria na SEGUNDA rodada da suite, na
+ * conexao, com "numero ja conectado a outra conta" — longe da mudanca que o
+ * causou.
+ *
+ * Mesmo motivo das Pages falsas acima: `whatsapp_connections_numero_idx` e
+ * unico GLOBAL (0019:33), entao a segunda rodada bateria na conta que a rodada
+ * ANTERIOR criou — nada a ver com a mudanca de quem estiver rodando.
+ */
+const PHONE_NUMBER_ID_FALSO = NUMERO_FALSO_PADRAO.phoneNumberId
+
 export default async function globalSetup(): Promise<void> {
   const client = new Client({ connectionString: CONN })
   await client.connect()
@@ -53,6 +68,9 @@ export default async function globalSetup(): Promise<void> {
       `delete from public.lead_sources where provedor = 'google' and nome like $1`,
       [`${PREFIXO_FONTE_GOOGLE_E2E}%`],
     )
+    await client.query(`delete from public.whatsapp_connections where phone_number_id = $1`, [
+      PHONE_NUMBER_ID_FALSO,
+    ])
   } finally {
     await client.end()
   }
