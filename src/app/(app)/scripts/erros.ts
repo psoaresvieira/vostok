@@ -24,3 +24,33 @@ const MENSAGENS_ERRO: Record<string, string> = {
 export function mensagemDeErroScript(codigo: string): string {
   return MENSAGENS_ERRO[codigo] ?? codigo
 }
+
+/** Codigo generico de leitura, o mesmo que o SupabaseScriptStore devolve. */
+const ERRO_AO_CARREGAR_SCRIPTS = 'erro_ao_carregar_scripts'
+
+/**
+ * Normaliza para o generico de leitura qualquer codigo que o mapa acima nao
+ * conheca, para o painel de scripts da ficha do lead.
+ *
+ * Existe porque a falha pode vir de DOIS lugares com vocabularios diferentes. A
+ * CONSULTA (`paraEtapa`) so devolve codigo do store, sempre mapeado. Mas a
+ * CONSTRUCAO do store (`criarScriptStoreDoServidor`) falha por caminhos que nao
+ * falam de script nenhum: `resolverContaAtiva` devolve `falha(error.message)` —
+ * a mensagem CRUA do Postgres/PostgREST — e `falha('sem_conta')`. Nenhum dos
+ * dois esta no mapa, e `mensagemDeErroScript` ecoa o codigo que nao conhece:
+ * sem esta normalizacao, texto de banco de dados apareceria na ficha do lead.
+ *
+ * Lista de permissao, e nao lista de proibicao: cobre tambem o codigo novo que
+ * um caminho futuro invente sem passar por aqui. O preco e' perder a distincao
+ * de causas que o usuario nao poderia acionar de qualquer forma — a mesma
+ * troca que `codigoDoErroAoGravarScript` (lib/data/scripts.ts) ja faz.
+ */
+export function codigoDoErroDoPainel(codigo: string): string {
+  // `hasOwnProperty.call`, e nunca `codigo in MENSAGENS_ERRO`: o `in` percorre
+  // a cadeia de prototipos, entao 'constructor', 'toString' e 'valueOf'
+  // passariam por chaves conhecidas — e o objeto literal acima tem
+  // Object.prototype na cadeia.
+  return Object.prototype.hasOwnProperty.call(MENSAGENS_ERRO, codigo)
+    ? codigo
+    : ERRO_AO_CARREGAR_SCRIPTS
+}

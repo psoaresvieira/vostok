@@ -6,6 +6,7 @@ import { criarScriptStoreDoServidor, type Script } from '@/lib/data/scripts'
 import { falha } from '@/lib/domain/resultado'
 import { formatarMoeda, formatarTelefone } from '@/lib/domain/formato'
 import { contextoDoLead } from '@/lib/domain/script'
+import { codigoDoErroDoPainel } from '@/app/(app)/scripts/erros'
 import { Timeline } from './timeline'
 import { EditorEtiquetas } from './etiquetas'
 import { FormularioNota } from './nota'
@@ -49,7 +50,14 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
     tarefaStore.valor.doLead(id),
     scriptStore.ok
       ? scriptStore.valor.scripts.paraEtapa(lead.valor.stageId)
-      : Promise.resolve(falha<Script[]>(scriptStore.erro)),
+      : // `scriptStore.erro` NAO pode ir cru para a tela: a construcao do store
+        // falha por caminhos fora do vocabulario de scripts —
+        // `resolverContaAtiva` devolve `falha(error.message)`, a mensagem crua
+        // do Postgres, e `sem_conta`. `mensagemDeErroScript` ecoa o codigo que
+        // nao conhece, entao seria texto de banco de dados na ficha do lead.
+        // O erro da CONSULTA, esse sim, ja e' sempre codigo do store e desce
+        // como esta.
+        Promise.resolve(falha<Script[]>(codigoDoErroDoPainel(scriptStore.erro))),
   ])
   if (!tarefas.ok) throw new Error(tarefas.erro)
 

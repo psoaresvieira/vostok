@@ -4,6 +4,7 @@ import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/re
 import { PainelScripts } from './scripts'
 import type { Script } from '@/lib/data/scripts'
 import { linkWhatsApp, type ContextoScript } from '@/lib/domain/script'
+import { codigoDoErroDoPainel } from '@/app/(app)/scripts/erros'
 
 // Mesmo motivo de tarefas.test.tsx e editor.test.tsx: o cleanup automatico do
 // @testing-library/react so se registra com globals: true, e este vitest.config
@@ -168,5 +169,34 @@ describe('PainelScripts', () => {
     expect(screen.queryByText('Nenhum script para esta etapa.')).toBeNull()
     // E nunca o codigo cru na tela.
     expect(screen.queryByText('erro_ao_carregar_scripts')).toBeNull()
+  })
+
+  it('erro de CONSTRUCAO do store, fora do vocabulario de scripts, nunca vaza texto de Postgres na ficha', () => {
+    // O modo de falha que este caso tranca: `criarScriptStoreDoServidor` falha
+    // ANTES de existir store, e o codigo que ela devolve vem de
+    // `resolverContaAtiva`, que faz `falha(error.message)` — a mensagem CRUA do
+    // Postgres. `mensagemDeErroScript` ecoa o codigo que nao conhece, entao a
+    // ficha do lead mostraria "new row violates row-level security policy for
+    // table ..." ao lado do nome do cliente. A decisao mora em
+    // `codigoDoErroDoPainel`, e page.tsx aplica ela ao ramo de construcao; aqui
+    // a composicao inteira e' exercitada de ponta a ponta.
+    const cru = 'new row violates row-level security policy for table "memberships"'
+
+    render(
+      <PainelScripts
+        scripts={[]}
+        contexto={CONTEXTO}
+        telefoneE164={TELEFONE}
+        erro={codigoDoErroDoPainel(cru)}
+      />,
+    )
+
+    expect(
+      screen.getByText('Não foi possível carregar os scripts. Tente de novo.'),
+    ).toBeTruthy()
+    expect(screen.queryByText(cru)).toBeNull()
+    // Nem em pedaco: o texto do Postgres nao pode sobrar em canto nenhum da
+    // arvore renderizada.
+    expect(document.body.textContent).not.toContain('row-level security')
   })
 })

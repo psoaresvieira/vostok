@@ -131,8 +131,15 @@ test.describe('scripts na ficha do lead', () => {
       // a decisao e' do vendedor (spec §4.4). Se o botao estivesse bloqueado,
       // o clique abaixo falharia.
       await paginaAdmin.getByRole('button', { name: 'Copiar' }).click()
-      await expect(paginaAdmin.getByText('Copiado ✓')).toBeVisible()
 
+      // A leitura da area de transferencia vem PRIMEIRO e sozinha. O "Copiado ✓"
+      // se apaga sozinho em 2.5s (DURACAO_COPIADO_MS), entao afirma-lo aqui
+      // seria uma corrida contra o relogio de parede: numa rodada lenta o
+      // elemento ja teria sumido antes do primeiro poll e o vermelho nao diria
+      // nada sobre o produto. O feedback transitorio esta coberto de forma
+      // deterministica em scripts.test.tsx, onde nao ha relogio disputando com
+      // a asercao; o que so um navegador de verdade prova — que a Clipboard API
+      // recebeu o texto certo — e o que fica aqui.
       const copiado = await paginaAdmin.evaluate(() => navigator.clipboard.readText())
       expect(copiado).toBe(
         `Olá ${primeiroNome}, sobre a {{empresa}} — você está em ${ETAPA_DO_LEAD}.`,
