@@ -318,12 +318,12 @@ describe('0001 — identidade e tenancy', () => {
   beforeEach(limparBanco)
 
   it('cria profile automaticamente ao criar auth.users', async () => {
-    const userId = await criarUsuario('ana@se7e.com')
+    const userId = await criarUsuario('ana@exemplo.com')
     const rows = await comoServico(async (c) =>
       (await c.query('select id, email from public.profiles where id = $1', [userId])).rows,
     )
     expect(rows).toHaveLength(1)
-    expect(rows[0].email).toBe('ana@se7e.com')
+    expect(rows[0].email).toBe('ana@exemplo.com')
   })
 
   it('usuario da conta A nao le a conta B', async () => {
@@ -692,7 +692,7 @@ describe('0002 — pipeline e criacao de conta', () => {
     const ana = await criarUsuario('ana@a.com')
 
     const accountId = await comoUsuario(ana, async (c) =>
-      (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['SE7E'])).rows[0].id,
+      (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['Empresa Exemplo'])).rows[0].id,
     )
 
     const dados = await comoServico(async (c) => ({
@@ -769,7 +769,7 @@ describe('0002 — pipeline e criacao de conta', () => {
     const ana = await criarUsuario('ana@a.com')
     const vendedor = await criarUsuario('v@a.com')
     const accountId = await comoUsuario(ana, async (c) =>
-      (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['SE7E'])).rows[0].id,
+      (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['Empresa Exemplo'])).rows[0].id,
     )
     await comoServico((c) =>
       c.query(
@@ -989,7 +989,7 @@ export async function montarCenario(): Promise<Cenario> {
   const vendedorBId = await criarUsuario('vb@a.com')
 
   const accountId = await comoUsuario(adminId, async (c) =>
-    (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['SE7E'])).rows[0].id,
+    (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['Empresa Exemplo'])).rows[0].id,
   )
 
   await comoServico((c) =>
@@ -1727,7 +1727,7 @@ describe('normalizarTelefone', () => {
 
 describe('normalizarEmail', () => {
   it('baixa a caixa e apara espacos', () => {
-    expect(normalizarEmail('  Ana.Silva@SE7E.com ')).toBe('ana.silva@se7e.com')
+    expect(normalizarEmail('  Ana.Silva@Exemplo.com ')).toBe('ana.silva@exemplo.com')
   })
 
   it('devolve null para vazio ou invalido', () => {
@@ -1887,10 +1887,10 @@ describe('leadSchema', () => {
     const r = leadSchema.parse({
       nome: 'Ana',
       telefone: '(83) 99999-1234',
-      email: ' Ana@SE7E.com ',
+      email: ' Ana@Exemplo.com ',
     })
     expect(r.telefoneE164).toBe('+5583999991234')
-    expect(r.emailNorm).toBe('ana@se7e.com')
+    expect(r.emailNorm).toBe('ana@exemplo.com')
   })
 
   it('rejeita valor negativo', () => {
@@ -2090,7 +2090,7 @@ describe('InMemoryCrmStore', () => {
 
   beforeEach(() => {
     store = new InMemoryCrmStore()
-    store.semear('SE7E', 'user-1')
+    store.semear('Empresa Exemplo', 'user-1')
   })
 
   it('semeia conta com pipeline padrao de 7 etapas', async () => {
@@ -3194,7 +3194,7 @@ import { credenciaisSchema, cadastroSchema } from './esquemas'
 
 describe('credenciaisSchema', () => {
   it('aceita email e senha validos', () => {
-    const r = credenciaisSchema.safeParse({ email: 'ana@se7e.com', senha: 'segredo123' })
+    const r = credenciaisSchema.safeParse({ email: 'ana@exemplo.com', senha: 'segredo123' })
     expect(r.success).toBe(true)
   })
 
@@ -3204,13 +3204,13 @@ describe('credenciaisSchema', () => {
   })
 
   it('rejeita senha curta', () => {
-    const r = credenciaisSchema.safeParse({ email: 'ana@se7e.com', senha: '123' })
+    const r = credenciaisSchema.safeParse({ email: 'ana@exemplo.com', senha: '123' })
     expect(r.success).toBe(false)
   })
 
   it('normaliza o email para minusculas', () => {
-    const r = credenciaisSchema.parse({ email: '  Ana@SE7E.com ', senha: 'segredo123' })
-    expect(r.email).toBe('ana@se7e.com')
+    const r = credenciaisSchema.parse({ email: '  Ana@Exemplo.com ', senha: 'segredo123' })
+    expect(r.email).toBe('ana@exemplo.com')
   })
 })
 
@@ -3218,16 +3218,16 @@ describe('cadastroSchema', () => {
   it('exige nome da pessoa e nome da conta', () => {
     expect(
       cadastroSchema.safeParse({
-        email: 'ana@se7e.com',
+        email: 'ana@exemplo.com',
         senha: 'segredo123',
         nome: 'Ana',
-        nomeConta: 'SE7E',
+        nomeConta: 'Empresa Exemplo',
       }).success,
     ).toBe(true)
 
     expect(
       cadastroSchema.safeParse({
-        email: 'ana@se7e.com',
+        email: 'ana@exemplo.com',
         senha: 'segredo123',
         nome: 'Ana',
         nomeConta: '  ',
@@ -3603,7 +3603,7 @@ export default function FunilPage() {
 npm run dev
 ```
 
-Abrir `http://localhost:3000/signup`, criar conta com nome da empresa "SE7E". Esperado: redireciona para `/funil` mostrando o cabeçalho com "SE7E".
+Abrir `http://localhost:3000/signup`, criar conta com nome da empresa "Empresa Exemplo". Esperado: redireciona para `/funil` mostrando o cabeçalho com "Empresa Exemplo".
 
 Depois confirmar o seed:
 
@@ -3611,7 +3611,7 @@ Depois confirmar o seed:
 psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -c "select a.nome, count(s.id) as etapas from public.accounts a join public.pipelines p on p.account_id = a.id join public.stages s on s.pipeline_id = p.id group by a.nome"
 ```
 
-Expected: uma linha com `SE7E | 7`.
+Expected: uma linha com `Empresa Exemplo | 7`.
 
 - [ ] **Step 10: Rodar a suíte inteira**
 

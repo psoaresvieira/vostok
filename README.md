@@ -1,4 +1,6 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Vostok
+
+CRM multi-tenant para negócios que rodam tráfego pago: lead do Meta e do Google Ads cai direto no funil por webhook nativo, com scripts de venda interpolados na ficha do lead e disparo de WhatsApp pelo Cloud API. Next.js 15 (App Router) + Supabase (Auth/Postgres/RLS/Realtime) + Vercel.
 
 ## Antes de expor em produção
 

@@ -178,7 +178,7 @@ async function conectarWhatsApp(c: Cenario) {
         'phone-a-1',
         'waba-a-1',
         '+55 11 90000-0001',
-        'SE7E Trafego',
+        'Exemplo Trafego',
         TOKEN,
       ],
     )

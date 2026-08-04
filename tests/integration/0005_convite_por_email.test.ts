@@ -77,7 +77,7 @@ describe('0005 — convite vinculado ao email', () => {
   it('quem tem o token mas outro email nao entra na conta', async () => {
     // 'admin' de proposito: e o papel que a tela de configuracao oferece e o
     // que torna o vazamento do token uma escalada de privilegio.
-    const token = await convidar('convidado@se7e.com', 'admin')
+    const token = await convidar('convidado@exemplo.com', 'admin')
     const intruso = await criarUsuario('intruso@fora.com')
     const cliente = await clienteDoUsuario(intruso, 'intruso@fora.com')
 
@@ -90,10 +90,10 @@ describe('0005 — convite vinculado ao email', () => {
   })
 
   it('o convidado entra na conta do convite com o papel do convite', async () => {
-    const token = await convidar('convidado@se7e.com', 'admin')
-    const convidado = await criarUsuario('convidado@se7e.com')
+    const token = await convidar('convidado@exemplo.com', 'admin')
+    const convidado = await criarUsuario('convidado@exemplo.com')
     // maiusculas de proposito: a comparacao e case-insensitive dos dois lados
-    const cliente = await clienteDoUsuario(convidado, 'Convidado@SE7E.com')
+    const cliente = await clienteDoUsuario(convidado, 'Convidado@Exemplo.com')
 
     const { data, error } = await cliente.rpc('accept_invite', { p_token: token })
     expect(error).toBeNull()

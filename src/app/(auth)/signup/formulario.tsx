@@ -15,6 +15,9 @@ export function FormularioCadastro({ convite }: { convite: string | null }) {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 p-6">
+      <p className="font-display text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+        Vostok
+      </p>
       <h1 className="text-2xl font-semibold">Criar conta</h1>
       {convite && (
         <p className="text-sm text-muted-foreground">

@@ -16,8 +16,8 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "CRM",
-  description: "CRM para negocios que rodam trafego pago",
+  title: "Vostok",
+  description: "Vostok — CRM para negocios que rodam trafego pago",
 };
 
 export default function RootLayout({

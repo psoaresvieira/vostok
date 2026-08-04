@@ -17,7 +17,7 @@ const DADOS = {
   phoneNumberId: '1234567890',
   wabaId: 'waba-abc',
   numeroExibicao: '+55 11 90000-0000',
-  nomeVerificado: 'SE7E Marketing',
+  nomeVerificado: 'Exemplo Marketing',
   token: 'EAAG-token-do-whatsapp',
 }
 

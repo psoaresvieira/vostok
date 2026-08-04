@@ -49,7 +49,7 @@ async function conectarA(c: Cenario, overrides: Partial<Record<string, string>> 
     phoneNumberId: overrides.phoneNumberId ?? 'phone-a-1',
     wabaId: overrides.wabaId ?? 'waba-a-1',
     numeroExibicao: overrides.numeroExibicao ?? '+55 11 90000-0001',
-    nomeVerificado: overrides.nomeVerificado ?? 'SE7E Trafego',
+    nomeVerificado: overrides.nomeVerificado ?? 'Exemplo Trafego',
     token: overrides.token ?? TOKEN,
   }
   return comoUsuario(c.adminId, async (cli) => {
@@ -90,7 +90,7 @@ describe('0019 — conexao do WhatsApp: tabelas, credencial sem grant e as tres 
       return r.rows[0]
     })
     expect(linha.numero_exibicao).toBe('+55 11 90000-0001')
-    expect(linha.nome_verificado).toBe('SE7E Trafego')
+    expect(linha.nome_verificado).toBe('Exemplo Trafego')
 
     const credencial = await comoServico(async (cli) => {
       const r = await cli.query(

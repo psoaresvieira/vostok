@@ -251,7 +251,7 @@ describe('acoes-fontes — posseDaPagina roda antes de gravar (Task 10)', () => 
     expect(metaFalso().posseConferida).toEqual(['100000000000001'])
     expect(fonteStoreMock.conectarMeta).toHaveBeenCalledWith(
       '100000000000001',
-      'SE7E Marketing',
+      'Exemplo Marketing',
       'token-da-pagina-1',
       null,
     )
@@ -279,7 +279,7 @@ describe('acoes-fontes — posseDaPagina roda antes de gravar (Task 10)', () => 
     expect(metaFalso().posseConferida).toEqual(['100000000000001'])
     expect(fonteStoreMock.reivindicarMeta).toHaveBeenCalledWith(
       '100000000000001',
-      'SE7E Marketing',
+      'Exemplo Marketing',
       'token-da-pagina-1',
       null,
     )

@@ -50,7 +50,7 @@ test('a notificacao acende o sino do responsavel e nao o do admin', async ({
     const paginaAdmin = await contextoAdmin.newPage()
     await criarConta(paginaAdmin)
 
-    const emailVendedor = `vendedor-${carimbo()}@se7e.com`
+    const emailVendedor = `vendedor-${carimbo()}@exemplo.com`
     const link = await convidarVendedor(paginaAdmin, emailVendedor)
 
     const paginaVendedor = await contextoVendedor.newPage()

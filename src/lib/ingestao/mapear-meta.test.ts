@@ -16,13 +16,13 @@ describe('mapearLeadDoMeta', () => {
       { name: 'full_name', values: ['Ana Silva'] },
       { name: 'email', values: ['ana@example.com'] },
       { name: 'phone_number', values: ['+5511999998888'] },
-      { name: 'company_name', values: ['SE7E Marketing'] },
+      { name: 'company_name', values: ['Exemplo Marketing'] },
     ])
     const dados = mapearLeadDoMeta(lead, SEM_ORIGEM)
     expect(dados.nome).toBe('Ana Silva')
     expect(dados.email).toBe('ana@example.com')
     expect(dados.telefone).toBe('+5511999998888')
-    expect(dados.empresa).toBe('SE7E Marketing')
+    expect(dados.empresa).toBe('Exemplo Marketing')
   })
 
   it('junta first_name e last_name com espaco quando full_name nao vem', () => {

@@ -4,7 +4,7 @@ import { mensagemDeErro } from './erros'
 
 describe('credenciaisSchema', () => {
   it('aceita email e senha validos', () => {
-    const r = credenciaisSchema.safeParse({ email: 'ana@se7e.com', senha: 'segredo123' })
+    const r = credenciaisSchema.safeParse({ email: 'ana@exemplo.com', senha: 'segredo123' })
     expect(r.success).toBe(true)
   })
 
@@ -14,13 +14,13 @@ describe('credenciaisSchema', () => {
   })
 
   it('rejeita senha curta', () => {
-    const r = credenciaisSchema.safeParse({ email: 'ana@se7e.com', senha: '123' })
+    const r = credenciaisSchema.safeParse({ email: 'ana@exemplo.com', senha: '123' })
     expect(r.success).toBe(false)
   })
 
   it('normaliza o email para minusculas', () => {
-    const r = credenciaisSchema.parse({ email: '  Ana@SE7E.com ', senha: 'segredo123' })
-    expect(r.email).toBe('ana@se7e.com')
+    const r = credenciaisSchema.parse({ email: '  Ana@Exemplo.com ', senha: 'segredo123' })
+    expect(r.email).toBe('ana@exemplo.com')
   })
 })
 
@@ -28,16 +28,16 @@ describe('cadastroSchema', () => {
   it('exige nome da pessoa e nome da conta', () => {
     expect(
       cadastroSchema.safeParse({
-        email: 'ana@se7e.com',
+        email: 'ana@exemplo.com',
         senha: 'segredo123',
         nome: 'Ana',
-        nomeConta: 'SE7E',
+        nomeConta: 'Empresa Exemplo',
       }).success,
     ).toBe(true)
 
     expect(
       cadastroSchema.safeParse({
-        email: 'ana@se7e.com',
+        email: 'ana@exemplo.com',
         senha: 'segredo123',
         nome: 'Ana',
         nomeConta: '  ',
@@ -49,7 +49,7 @@ describe('cadastroSchema', () => {
 describe('cadastroPorConviteSchema', () => {
   it('aceita cadastro sem nome de empresa quando ha token', () => {
     const r = cadastroPorConviteSchema.safeParse({
-      email: 'ana@se7e.com',
+      email: 'ana@exemplo.com',
       senha: 'segredo123',
       nome: 'Ana',
       convite: 'abc123',
@@ -60,7 +60,7 @@ describe('cadastroPorConviteSchema', () => {
   it('rejeita token vazio: sem token nao ha convite a resgatar', () => {
     expect(
       cadastroPorConviteSchema.safeParse({
-        email: 'ana@se7e.com',
+        email: 'ana@exemplo.com',
         senha: 'segredo123',
         nome: 'Ana',
         convite: '   ',
@@ -70,7 +70,7 @@ describe('cadastroPorConviteSchema', () => {
 
   it('nao exige nomeConta, mesmo se vier junto', () => {
     const r = cadastroPorConviteSchema.parse({
-      email: 'ana@se7e.com',
+      email: 'ana@exemplo.com',
       senha: 'segredo123',
       nome: 'Ana',
       convite: 'abc123',

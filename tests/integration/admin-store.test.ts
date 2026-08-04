@@ -287,12 +287,12 @@ describe('SupabaseAdminStore', () => {
       c.adminId,
       c.pipelineId,
     )
-    const criado = await admin.convidar('novo@se7e.com', 'vendedor')
+    const criado = await admin.convidar('novo@exemplo.com', 'vendedor')
     if (!criado.ok) throw new Error(criado.erro)
 
     const pendentes = await admin.convitesPendentes()
     if (!pendentes.ok) throw new Error(pendentes.erro)
-    expect(pendentes.valor.map((p) => p.email)).toEqual(['novo@se7e.com'])
+    expect(pendentes.valor.map((p) => p.email)).toEqual(['novo@exemplo.com'])
     // a listagem vai inteira para um componente client: o token nao pode estar
     // nela, so `convidar` o devolve.
     expect(Object.keys(pendentes.valor[0]).sort()).toEqual(['email', 'expiraEm', 'id', 'papel'])

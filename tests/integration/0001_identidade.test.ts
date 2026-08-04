@@ -21,12 +21,12 @@ describe('0001 — identidade e tenancy', () => {
   beforeEach(limparBanco)
 
   it('cria profile automaticamente ao criar auth.users', async () => {
-    const userId = await criarUsuario('ana@se7e.com')
+    const userId = await criarUsuario('ana@exemplo.com')
     const rows = await comoServico(async (c) =>
       (await c.query('select id, email from public.profiles where id = $1', [userId])).rows,
     )
     expect(rows).toHaveLength(1)
-    expect(rows[0].email).toBe('ana@se7e.com')
+    expect(rows[0].email).toBe('ana@exemplo.com')
   })
 
   it('usuario da conta A nao le a conta B', async () => {

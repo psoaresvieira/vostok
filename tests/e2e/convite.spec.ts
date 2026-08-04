@@ -48,7 +48,7 @@ test('convidado se cadastra pelo link e cai na conta de quem convidou', async ({
     // lead na conta — vazio por RLS, nao por conta nova e sem dados.
     await criarLead(paginaAdmin, 'Lead do Admin')
 
-    const emailVendedor = `vendedor-${carimbo()}@se7e.com`
+    const emailVendedor = `vendedor-${carimbo()}@exemplo.com`
     const link = await convidar(paginaAdmin, emailVendedor)
 
     // Segunda sessao: abre o link sem estar logado.
@@ -103,7 +103,7 @@ test('convidado que se cadastra com outro email ve a mensagem, sem quebrar', asy
     const paginaAdmin = await contextoAdmin.newPage()
     await criarConta(paginaAdmin)
 
-    const emailConvidado = `convidado-${carimbo()}@se7e.com`
+    const emailConvidado = `convidado-${carimbo()}@exemplo.com`
     const link = await convidar(paginaAdmin, emailConvidado)
 
     const paginaOutro = await contextoOutro.newPage()
@@ -112,7 +112,7 @@ test('convidado que se cadastra com outro email ve a mensagem, sem quebrar', asy
     await paginaOutro.getByPlaceholder('seu nome', { exact: true }).fill('Outro E2E')
     await paginaOutro
       .getByPlaceholder('email', { exact: true })
-      .fill(`intruso-${carimbo()}@se7e.com`)
+      .fill(`intruso-${carimbo()}@exemplo.com`)
     await paginaOutro.getByPlaceholder('senha (min. 8 caracteres)', { exact: true }).fill(SENHA)
     await paginaOutro.getByRole('button', { name: 'Criar conta' }).click()
 

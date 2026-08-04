@@ -11,7 +11,7 @@ describe('InMemoryCrmStore', () => {
 
   beforeEach(() => {
     store = new InMemoryCrmStore()
-    store.semear('SE7E', 'user-1')
+    store.semear('Empresa Exemplo', 'user-1')
   })
 
   it('semeia conta com pipeline padrao de 7 etapas', async () => {

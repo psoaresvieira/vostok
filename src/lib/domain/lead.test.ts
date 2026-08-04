@@ -16,10 +16,10 @@ describe('leadSchema', () => {
     const r = leadSchema.parse({
       nome: 'Ana',
       telefone: '(83) 99999-1234',
-      email: ' Ana@SE7E.com ',
+      email: ' Ana@Exemplo.com ',
     })
     expect(r.telefoneE164).toBe('+5583999991234')
-    expect(r.emailNorm).toBe('ana@se7e.com')
+    expect(r.emailNorm).toBe('ana@exemplo.com')
   })
 
   it('rejeita valor negativo', () => {
