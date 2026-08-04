@@ -51,6 +51,21 @@ returning id;
 
 Depois do update a próxima varredura do cron (ou uma chamada manual à rota de reprocessamento) pega essas linhas normalmente — `entregas_pendentes` não distingue uma linha reaberta à mão de uma que nunca falhou. **Sempre escope por `account_id`, `erro` e janela de tempo** antes de rodar: a tabela é compartilhada por todos os tenants, e um `update` sem `where` reabriria entregas de outras contas e de incidentes já resolvidos.
 
+## Onboarding beta do Meta (operador)
+
+Antes do App Review do WhatsApp/Facebook passar, todo cliente que precisa testar a conexão com o Meta (Page do Facebook ou número do WhatsApp Cloud API) só consegue se for cadastrado como tester no app do Meta — o OAuth recusa qualquer conta fora dessa lista com um erro cru do próprio Facebook. O runbook abaixo é a saída manual até o App Review sair.
+
+1. **Adicionar o tester.** No [painel do Meta for Developers](https://developers.facebook.com/apps/), abra o app do CRM → **Funções do app** (App roles) → **Testadores** (Testers) → adicione o email ou o usuário do Facebook da pessoa do cliente que vai testar.
+2. **O que o cliente precisa aceitar.** A pessoa recebe um convite pendente em `developers.facebook.com` (canto superior direito, sino de notificações, ou diretamente em Configurações → Funções). Ela precisa **aceitar esse convite logada com a própria conta do Facebook** antes de tentar conectar pelo CRM — sem aceitar, o OAuth do Facebook recusa mesmo com o email já cadastrado como tester.
+3. **O que conferir na primeira conexão.**
+   - Depois do fluxo "Conectar Facebook", a Page do cliente aparece na lista de páginas oferecidas (`/config?meta=escolher`) — se não aparecer, o tester provavelmente não é administrador dessa Page especificamente, não só do app.
+   - Depois de escolher a Page, um lead de teste enviado por um formulário Meta real chega em `/funil` — é a prova de ponta a ponta de que a assinatura de leadgen (`assinarLeadgen`) funcionou, não só o OAuth.
+   - Para o WhatsApp: depois de colar token, `phone_number_id` e `waba_id` no bloco de Integrações, o card passa a mostrar o número e o nome verificado que o **Meta devolveu** (não o que foi digitado) — se o card não aparecer, o token ou o número provavelmente não pertencem à mesma WABA que o tester administra.
+4. **O token do WhatsApp tem que ser permanente, não o de 24h.** A página "Configuração da API" (WhatsApp → Introdução, no painel do app) mostra, de cara, um token **temporário que expira em 24 horas** — serve só para um teste rápido de `curl`, nunca para colar no CRM: a conexão para de funcionar no dia seguinte, sem aviso nenhum na tela até a próxima tentativa de envio. Para o token que vai ficar valendo, gere um **permanente de System User**: no painel da empresa (`business.facebook.com`) → **Configurações do negócio** (Business Settings) → **Usuários** → **Usuários do sistema** (System Users) → crie ou escolha um usuário de sistema → **Gerar novo token** → selecione o app do CRM, marque o ativo do WhatsApp Business e a permissão `whatsapp_business_messaging` → gere sem prazo de expiração. Esse é o token que vai no formulário de conexão.
+5. **A nota da tela.** `META_MODO_BETA=1` liga um aviso fixo junto do botão "Conectar Facebook" (`Durante o beta, a conexão com o Facebook é liberada por convite — fale com a gente para habilitar sua conta.`) — é só texto, sem estado nem migration: **desligue a variável (vazio ou ausente) assim que o App Review passar**, e a nota some sozinha no próximo deploy.
+
+O Embedded Signup (autoatendimento real do WhatsApp — popup do Meta que cria a WABA e devolve o token sem o cliente precisar copiar nada à mão) fica como caminho **futuro e não desenhado**: depende do onboarding de Tech Provider do Meta, cujos detalhes mudam até o App Review sair. O MVP é colar credencial mesmo.
+
 ## Getting Started
 
 First, run the development server:

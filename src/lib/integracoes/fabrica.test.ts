@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { usarFalso, metaGraph, metaFalso } from './fabrica'
+import { usarFalso, metaGraph, metaFalso, whatsappGraph, whatsappFalso } from './fabrica'
 import { MetaGraphReal } from './meta-real'
+import { WhatsAppGraphReal } from './whatsapp-real'
 
 /**
  * usarFalso() e o unico predicado de "estamos em teste", e a fabrica de
@@ -68,5 +69,36 @@ describe('metaGraph', () => {
 describe('metaFalso', () => {
   it('e singleton no processo — o E2E depende disso para a Page assinada num request continuar assinada no seguinte', () => {
     expect(metaFalso()).toBe(metaFalso())
+  })
+})
+
+/**
+ * Mesma exposicao que metaGraph()/metaFalso() tinham antes das duas
+ * describes acima existirem: whatsappGraph()/whatsappFalso() sao a mesma
+ * fabrica, com o mesmo risco de silenciosamente inverter a escolha (sempre
+ * falso, ou nunca) sem nenhum teste de usarFalso() perceber, porque nenhum
+ * deles olha o que whatsappGraph() devolve.
+ */
+describe('whatsappGraph', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('devolve a instancia compartilhada do falso quando usarFalso() e true', () => {
+    vi.stubEnv('META_FAKE', '1')
+    vi.stubEnv('NODE_ENV', 'test')
+    expect(whatsappGraph()).toBe(whatsappFalso())
+  })
+
+  it('devolve WhatsAppGraphReal em producao, mesmo com META_FAKE=1', () => {
+    vi.stubEnv('META_FAKE', '1')
+    vi.stubEnv('NODE_ENV', 'production')
+    expect(whatsappGraph()).toBeInstanceOf(WhatsAppGraphReal)
+  })
+})
+
+describe('whatsappFalso', () => {
+  it('e singleton no processo — o mesmo motivo de metaFalso(): estado tem que sobreviver entre requests', () => {
+    expect(whatsappFalso()).toBe(whatsappFalso())
   })
 })
