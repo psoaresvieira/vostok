@@ -132,18 +132,27 @@ test.describe('scripts na ficha do lead', () => {
       // o clique abaixo falharia.
       await paginaAdmin.getByRole('button', { name: 'Copiar' }).click()
 
-      // A leitura da area de transferencia vem PRIMEIRO e sozinha. O "Copiado ✓"
-      // se apaga sozinho em 2.5s (DURACAO_COPIADO_MS), entao afirma-lo aqui
-      // seria uma corrida contra o relogio de parede: numa rodada lenta o
-      // elemento ja teria sumido antes do primeiro poll e o vermelho nao diria
-      // nada sobre o produto. O feedback transitorio esta coberto de forma
-      // deterministica em scripts.test.tsx, onde nao ha relogio disputando com
-      // a asercao; o que so um navegador de verdade prova — que a Clipboard API
-      // recebeu o texto certo — e o que fica aqui.
+      const esperado = `Olá ${primeiroNome}, sobre a {{empresa}} — você está em ${ETAPA_DO_LEAD}.`
+
+      // `expect.poll`, e nao um `evaluate` solto: `writeText` e' assincrono e o
+      // clique acima nao espera por ele, entao uma leitura unica logo depois
+      // pode chegar ANTES da escrita — leria o conteudo velho da area de
+      // transferencia e piscaria vermelho sem nada a ver com o produto. O poll
+      // e' a barreira de sincronizacao E a asercao ao mesmo tempo, com
+      // igualdade EXATA, que e' o que tranca o texto vindo do dominio.
+      //
+      // Nao ha asercao do "Copiado ✓" aqui de proposito: ele se apaga sozinho
+      // em 2.5s (DURACAO_COPIADO_MS) e afirma-lo seria outra corrida, essa
+      // contra o relogio de parede. O feedback transitorio esta coberto de
+      // forma deterministica em scripts.test.tsx; o que so um navegador de
+      // verdade prova — que a Clipboard API recebeu o texto certo — fica aqui.
+      await expect
+        .poll(() => paginaAdmin.evaluate(() => navigator.clipboard.readText()))
+        .toBe(esperado)
+
+      // Com o poll ja estabilizado, uma leitura a mais (agora sem corrida) para
+      // as asercoes que olham esse mesmo texto por outro angulo.
       const copiado = await paginaAdmin.evaluate(() => navigator.clipboard.readText())
-      expect(copiado).toBe(
-        `Olá ${primeiroNome}, sobre a {{empresa}} — você está em ${ETAPA_DO_LEAD}.`,
-      )
       // A asercao que so um navegador de verdade prova: o rotulo visualmente
       // escondido do <mark> ("empresa sem valor") esta no textContent da previa
       // e NAO pode estar no que o vendedor vai colar no WhatsApp do lead. Um
