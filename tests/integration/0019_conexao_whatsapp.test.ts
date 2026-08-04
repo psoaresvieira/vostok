@@ -318,8 +318,11 @@ describe('0019 — conexao do WhatsApp: tabelas, credencial sem grant e as tres 
     expect(nenhumaLinha).toBe('0')
   })
 
-  // 7. Isolamento no desconectar: mesma matriz do desconectar_fonte (0008).
-  it('desconectar_whatsapp: admin de outra conta e vendedor da propria conta levam sem_permissao com a linha intacta; id inexistente leva whatsapp_nao_encontrado', async () => {
+  // 7. Isolamento no desconectar (mesma matriz do desconectar_fonte, 0008) e
+  // o caminho feliz: sem esta segunda parte, uma RPC sem delete nenhum
+  // passaria na suite inteira, ja que a matriz de recusa nao exercita o
+  // delete de verdade.
+  it('desconectar_whatsapp: admin de outra conta e vendedor da propria conta levam sem_permissao com a linha intacta; id inexistente leva whatsapp_nao_encontrado; admin da propria conta apaga conexao e credencial', async () => {
     const connectionId = await conectarA(c)
     const outra = await outraContaComAdmin('Conta B', 'b2-0019@b.com')
 
@@ -351,6 +354,24 @@ describe('0019 — conexao do WhatsApp: tabelas, credencial sem grant e as tres 
         ]),
       ),
     ).rejects.toThrow(/whatsapp_nao_encontrado/)
+
+    // Caminho feliz: o admin da propria conta desconecta de verdade.
+    await comoUsuario(c.adminId, (cli) =>
+      cli.query('select public.desconectar_whatsapp($1, $2)', [SEGREDO, connectionId]),
+    )
+    const restou = await comoServico(async (cli) => {
+      const conexao = await cli.query('select id from public.whatsapp_connections where id = $1', [
+        connectionId,
+      ])
+      // whatsapp_credentials nao tem grant nenhum: so o servico enxerga.
+      const credencial = await cli.query(
+        'select connection_id from public.whatsapp_credentials where connection_id = $1',
+        [connectionId],
+      )
+      return { conexao: conexao.rows, credencial: credencial.rows }
+    })
+    expect(restou.conexao).toHaveLength(0)
+    expect(restou.credencial).toHaveLength(0)
   })
 
   // 8. credencial_whatsapp e o contrato do servidor: segredo certo e SEM
@@ -378,14 +399,22 @@ describe('0019 — conexao do WhatsApp: tabelas, credencial sem grant e as tres 
     ).rejects.toThrow(/whatsapp_nao_encontrado/)
   })
 
-  // 9. A credencial e inalcancavel por sessao: permission denied, nao zero
-  // linhas. Insert direto na tabela de conexoes tambem falha — o grant e so
-  // de select.
-  it('whatsapp_credentials e inalcancavel por sessao (permission denied), e insert direto em whatsapp_connections tambem falha', async () => {
+  // 9. A credencial e inalcancavel por sessao — leitura, escrita e TRUNCATE.
+  // insert direto na tabela de conexoes tambem falha (grant e so de select),
+  // e TRUNCATE nela idem, mesmo sendo comando que RLS nao restringe: o
+  // revoke explicito da migration e o que fecha isso (o default ACL desta
+  // imagem concede TRUNCATE a authenticated em toda tabela nova). E o
+  // recorte da policy: vendedorA nao ve linha nenhuma em whatsapp_connections
+  // — uma policy `using (true)` deixaria este pedaco vermelho.
+  it('whatsapp_credentials e whatsapp_connections sao inalcancaveis por sessao em select/insert/truncate, e a policy de select corta por papel', async () => {
     await conectarA(c)
 
     await expect(
       comoUsuario(c.adminId, (cli) => cli.query('select * from public.whatsapp_credentials')),
+    ).rejects.toThrow(/permission denied/i)
+
+    await expect(
+      comoUsuario(c.adminId, (cli) => cli.query('truncate public.whatsapp_credentials')),
     ).rejects.toThrow(/permission denied/i)
 
     await expect(
@@ -398,6 +427,16 @@ describe('0019 — conexao do WhatsApp: tabelas, credencial sem grant e as tres 
         ),
       ),
     ).rejects.toThrow(/permission denied/i)
+
+    await expect(
+      comoUsuario(c.adminId, (cli) => cli.query('truncate public.whatsapp_connections')),
+    ).rejects.toThrow(/permission denied/i)
+
+    const vistoPeloVendedor = await comoUsuario(c.vendedorAId, async (cli) => {
+      const r = await cli.query('select * from public.whatsapp_connections')
+      return r.rows
+    })
+    expect(vistoPeloVendedor).toHaveLength(0)
   })
 
   // 10. definer e o desenho (Global Constraints): sem grant nas tabelas,

@@ -46,7 +46,17 @@ create table public.whatsapp_credentials (
 -- Nas credenciais, NENHUM grant, e RLS ligada sem policy — cinto e
 -- suspensorio: um grant acidental numa migration futura nao pode abrir a
 -- tabela.
+--
+-- Os REVOKES abaixo nao sao redundantes: o default ACL desta imagem concede
+-- Dxtm a anon/authenticated em toda tabela nova, e o D e TRUNCATE — que a RLS
+-- NAO restringe. Inalcancavel pelo PostgREST (que so fala select/insert/
+-- update/delete/rpc), mas o comentario acima promete cinto e suspensorio, e
+-- sem o revoke a promessa e falsa. As tabelas antigas com a mesma exposicao
+-- (source_credentials, ingestion_config) ficam para uma migration propria —
+-- item de backlog, nao desta.
+revoke all on public.whatsapp_credentials from anon, authenticated;
 grant select on public.whatsapp_connections to authenticated;
+revoke truncate on public.whatsapp_connections from anon, authenticated;
 
 alter table public.whatsapp_connections enable row level security;
 alter table public.whatsapp_credentials enable row level security;
