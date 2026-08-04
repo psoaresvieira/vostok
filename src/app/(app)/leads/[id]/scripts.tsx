@@ -54,6 +54,14 @@ function ItemScript({
   const [erroEnvio, setErroEnvio] = useState<string | null>(null)
   const timeoutCopiado = useRef<ReturnType<typeof setTimeout> | null>(null)
   const timeoutEnviado = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /**
+   * Trava do envio em curso. Ref, e NAO o `enviando` do estado: dois cliques no
+   * mesmo frame leem o mesmo valor de closure (`false` nos dois) e o
+   * `disabled={enviando}` do DOM so vale depois do re-render — ou seja, o guard
+   * por estado deixa passar os dois, e aqui isso custa DUAS mensagens enviadas
+   * e cobradas pelo Meta. A ref muda no mesmo tick do primeiro clique.
+   */
+  const envioEmCurso = useRef(false)
 
   useEffect(() => {
     return () => {
@@ -120,13 +128,22 @@ function ItemScript({
   }
 
   async function confirmarEnvio() {
-    if (enviando) return
+    // Trava sincrona ANTES de qualquer await — ver o comentario de
+    // `envioEmCurso`. `setEnviando` continua existindo para a UI (o botao
+    // desabilitado e o "aguarde" visual), mas quem impede a segunda mensagem
+    // e' a ref.
+    if (envioEmCurso.current) return
+    envioEmCurso.current = true
     setEnviando(true)
     setErroEnvio(null)
     // A action recebe SO os dois ids: quem resolve o template, o corpo e os
     // valores e' o servidor, na conta ativa. Nada do que esta pintado nesta
     // tela viaja para o Graph.
     const r = await chamarAcao(enviar(leadId, script.id))
+    // Solta a trava no fim da chamada, com sucesso ou falha: uma recusa
+    // (`envio_recusado`, lacuna que apareceu no meio) tem que poder ser
+    // retentada depois de o usuario corrigir o que for.
+    envioEmCurso.current = false
     setEnviando(false)
     setConfirmando(false)
     if (!r.ok) {
@@ -202,10 +219,15 @@ function ItemScript({
       )}
 
       {/* Texto visivel, e nao so' o `title` do botao: title nao aparece em
-          toque nem para quem navega o texto com leitor de tela. */}
+          toque nem para quem navega o texto com leitor de tela. A MESMA string
+          do title (e da action, e de /scripts/[id]), lida do mapa: duas
+          redacoes do mesmo fato na mesma tela fazem o leitor procurar a
+          diferenca que nao existe. A frase pede uma acao que o vendedor nao
+          executa — quem re-submete e' admin/gestor —, e continua sendo a
+          instrucao certa: e' o que ele precisa pedir para voltar a enviar. */}
       {podeOferecerEnvio && desatualizado && (
         <p className="text-xs text-warning">
-          O script mudou desde a submissão — re-submeta o template para enviar.
+          {mensagemDeErroScript('template_desatualizado')}
         </p>
       )}
 

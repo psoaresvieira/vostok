@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { act, render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { PainelScripts } from './scripts'
 import type { Script } from '@/lib/data/scripts'
 import type { TemplateWhatsApp } from '@/lib/data/templates'
@@ -416,6 +416,52 @@ describe('PainelScripts — disparo de WhatsApp', () => {
     expect(await screen.findByText('Enviado ✓')).toBeTruthy()
     // O nome acessivel do botao nao muda depois do uso.
     expect(screen.getByRole('button', { name: 'Enviar WhatsApp' })).toBeTruthy()
+  })
+
+  it('caso 9: dois cliques no mesmo frame mandam UMA mensagem', async () => {
+    // O modo de falha que este caso tranca custa dinheiro e constrange o
+    // cliente: dois cliques rapidos em "Confirmar envio" acontecem antes do
+    // re-render, entao o `disabled` do DOM ainda nao valia e um guard lido do
+    // ESTADO (`if (enviando) return`) leria `false` nas duas closures — duas
+    // mensagens iguais entregues, duas cobradas pelo Meta. So uma trava
+    // sincrona (ref) fecha essa janela.
+    let liberar: (r: { ok: true; valor: undefined }) => void = () => {}
+    const emCurso = new Promise<{ ok: true; valor: undefined }>((res) => {
+      liberar = res
+    })
+    const enviar = vi.fn(() => emCurso)
+
+    render(
+      <PainelScripts
+        leadId="lead-1"
+        scripts={[script()]}
+        contexto={CONTEXTO_COMPLETO}
+        telefoneE164={TELEFONE}
+        templates={[template()]}
+        enviar={enviar}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar WhatsApp' }))
+    const confirmar = screen.getByRole('button', { name: 'Confirmar envio' })
+
+    // Os dois cliques DENTRO do mesmo act(), e com .click() nativo em vez de
+    // fireEvent: cada fireEvent abre o seu proprio act e FLUSHA o estado entre
+    // um e outro, o que faz o `disabled={enviando}` ja valer no segundo — o
+    // teste passaria sem provar nada, inclusive com o guard antigo lido do
+    // estado (verificado). Num navegador de verdade os dois cliques rapidos
+    // chegam antes do re-render, e e' isso que este bloco reproduz.
+    await act(async () => {
+      confirmar.click()
+      confirmar.click()
+    })
+
+    expect(enviar).toHaveBeenCalledTimes(1)
+
+    // A chamada em curso termina e o feedback aparece uma vez so.
+    liberar({ ok: true, valor: undefined })
+    expect(await screen.findByText('Enviado ✓')).toBeTruthy()
+    expect(enviar).toHaveBeenCalledTimes(1)
   })
 
   it('falha da action vira mensagem traduzida, nunca o codigo cru', async () => {
