@@ -105,6 +105,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </span>
             )}
           </a>
+          {/* Visivel aos tres papeis: a biblioteca de scripts e leitura de
+              todo membro. O que o vendedor nao ve e o "Novo script" dentro da
+              tela, e /scripts/novo responde notFound() para ele.
+
+              O disable abaixo e falso positivo do @next/next, nao licenca para
+              fugir de <Link>: a regra normaliza o href para '/scripts/' (com
+              barra) e compara com o regex da rota dinamica irma,
+              '^/scripts/((?!.+?\..+?).*?)$', cujo `.*?` casa string vazia — ou
+              seja, ela acusa /scripts por causa de /scripts/[id]. As entradas
+              vizinhas (Funil, Metricas, Tarefas) sao <a> pela mesma convencao e
+              so escapam porque nao tem rota [id] ao lado. Trocar so esta por
+              <Link> deixaria uma entrada do header navegando por client-side e
+              as outras nao. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a href="/scripts" className="text-sm underline">
+            Scripts
+          </a>
           {r.valor.papel === 'admin' && (
             <a href="/config" className="text-sm underline">
               Configuração
