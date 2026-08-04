@@ -119,6 +119,28 @@ describe('Etapas', () => {
     ).toBeTruthy()
   })
 
+  it('recusa etapa_tem_leads com resumo defasado (leadsNaEtapa: 0) mostra a mensagem generica, nunca "0 lead"', async () => {
+    // Corrida: o dialogo abriu com o resumo mostrando 0 leads na etapa, um
+    // lead entrou depois disso, e a RPC recusa a exclusao porque o banco ja
+    // enxerga o lead novo. Compor a frase com o resumo defasado renderizaria
+    // "Mova os 0 leads desta etapa antes de exclui-la." — contradiz a propria
+    // recusa. So compoe o numero quando ele e maior que zero; caso contrario
+    // cai no texto generico de config/erros.ts.
+    const e = etapa({ id: 'e-9', nome: 'Qualificação' })
+    const resumo: ResumoEtapa[] = [{ etapaId: 'e-9', leadsNaEtapa: 0, leadsPassaram: 4 }]
+    const { fn: excluir } = stubRegistrando<[string], void>(falha('etapa_tem_leads'))
+
+    render(<Etapas etapas={[e]} resumo={resumo} excluir={excluir} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
+
+    expect(
+      await screen.findByText('Há leads nesta etapa. Mova-os antes de excluí-la.'),
+    ).toBeTruthy()
+    expect(screen.queryByText(/0 lead/)).toBeNull()
+  })
+
   it('recusa ultima_etapa_do_tipo mostra o tipo da etapa', async () => {
     const e = etapa({ id: 'e-4', nome: 'Fechado', tipo: 'ganho' })
     const resumo: ResumoEtapa[] = [{ etapaId: 'e-4', leadsNaEtapa: 0, leadsPassaram: 8 }]

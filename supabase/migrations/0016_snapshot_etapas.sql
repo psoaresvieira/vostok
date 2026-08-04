@@ -108,6 +108,17 @@ create trigger lead_tags_snapshot
 -- corrompido de proposito; (2) vira a ferramenta de reparo se um dia uma linha
 -- nascer errada. SECURITY DEFINER porque repara contas de todo mundo; por isso
 -- mesmo, execute e revogado de quem nao e operador.
+--
+-- AVISO: rodar esta funcao de novo depois de renomear ou reordenar etapas
+-- NAO e uma operacao neutra. Ela re-congela toda linha de historico que ainda
+-- tem FK viva (stage_origem/stage_destino/stage_id_no_momento) com o
+-- nome/ordem/tipo ATUAL da etapa — ou seja, reescreve o passado para o
+-- presente, que e exatamente a guarda silenciosa nº 5 que este snapshot
+-- existe para fechar. Correto como backfill one-shot desta migration (o
+-- select logo abaixo) e como reparo de linha genuinamente corrompida (FK
+-- valida mas snapshot nulo ou inconsistente). Nao e um comando de manutencao
+-- de rotina pos-0016: uma linha ja congelada corretamente que passa por aqui
+-- de novo perde o valor historico que tinha.
 create or replace function public.backfill_snapshot_etapas()
 returns void
 language sql

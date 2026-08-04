@@ -111,12 +111,17 @@ export function Etapas({
     if (!r.ok) {
       // O codigo do erro manda; o numero do resumo so ilustra quando ele
       // bate com o que a etapa tem agora. Sem resumo (busca falhou ou nao
-      // ha linha para esta etapa), cai no texto generico de config/erros.ts,
-      // que ja diz a mesma coisa sem numero.
+      // ha linha para esta etapa) ou com leadsNaEtapa zerado (resumo
+      // defasado — um lead entrou na etapa depois do dialogo abrir, a RPC
+      // ja enxerga e recusa, mas o resumo carregado antes ainda mostra 0),
+      // cai no texto generico de config/erros.ts: compor "Mova os 0 leads..."
+      // seria uma frase que contradiz a propria recusa.
       if (r.erro === 'etapa_tem_leads') {
         const res = resumoPorEtapa.get(alvo.id)
         reportarErro(
-          res ? mensagemMoverLeads(res.leadsNaEtapa) : mensagemDeErro('etapa_tem_leads'),
+          res && res.leadsNaEtapa > 0
+            ? mensagemMoverLeads(res.leadsNaEtapa)
+            : mensagemDeErro('etapa_tem_leads'),
         )
       } else if (r.erro === 'ultima_etapa_do_tipo') {
         reportarErro(`Esta é a última etapa do tipo ${alvo.tipo}.`)
@@ -211,7 +216,7 @@ export function Etapas({
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={confirmarExclusao}
+              onClick={() => void confirmarExclusao()}
               disabled={excluindo}
               aria-label={`Confirmar exclusão de ${etapaParaExcluir.nome}`}
               className="rounded bg-destructive px-3 py-1 text-primary-foreground disabled:opacity-50"
