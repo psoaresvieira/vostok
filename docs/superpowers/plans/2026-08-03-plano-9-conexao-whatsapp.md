@@ -54,9 +54,9 @@ Crie `tests/integration/0019_conexao_whatsapp.test.ts`, na forma de `0012_posse_
 4. **`whatsapp_ja_conectado`:** conta A já conectada tenta um **segundo número** → recusa, e a conexão original está intacta (mesmo `phone_number_id` de antes, token de antes na credencial).
 5. **`numero_ja_conectado`:** conta B tenta o **mesmo número** da conta A → recusa, linha da conta A intacta. Os casos 4 e 5 juntos provam que a tradução distingue os dois índices únicos — fica vermelho se o `exception` traduzir os dois para o mesmo código.
 6. **`whatsapp_campos_vazios`:** token só de espaços → recusa, nada gravado. (Um campo basta; o `if` é um só.)
-7. **Isolamento no desconectar:** admin da conta B chama `desconectar_whatsapp` com o id da conexão da conta A → `sem_permissao`, linha intacta. Vendedor da própria conta A → `sem_permissao`. Id inexistente → `whatsapp_nao_encontrado`. (Mesma matriz do `desconectar_fonte`.)
+7. **Desconectar: o caminho feliz e a matriz de recusa.** Primeiro as recusas: admin da conta B com o id da conexão da conta A → `sem_permissao`, linha intacta; vendedor da própria conta A → `sem_permissao`; id inexistente → `whatsapp_nao_encontrado`. (Mesma matriz do `desconectar_fonte`.) **E então o caminho feliz, que não pode faltar:** o admin da conta A desconecta, a linha some de `whatsapp_connections` **e a credencial some junto** (releia as duas tabelas pelo serviço — o cascade é o que mata o token, e sem esta asserção uma RPC sem `delete` nenhum passaria na suíte inteira).
 8. **`credencial_whatsapp` é o contrato do servidor:** com o segredo certo e **sem sessão nenhuma** (`comoServico`), devolve `token`, `phone_number_id` e `waba_id` da conta A. Sem conexão (conta B) → `whatsapp_nao_encontrado`. A ausência do check de sessão aqui é deliberada — quem chama é o servidor do disparo, e o segredo é a identidade dele.
-9. **A credencial é inalcançável por sessão.** Como `adminId` (via `comoUsuario`): `select * from public.whatsapp_credentials` falha com **permission denied** — erro de privilégio, não zero linhas. Fica vermelho se um grant acidental abrir a tabela. (`insert` direto na tabela de conexões como admin também tem que falhar com permission denied: o grant é só de `select`.)
+9. **A credencial é inalcançável por sessão — leitura, escrita e TRUNCATE.** Como `adminId` (via `comoUsuario`): `select * from public.whatsapp_credentials` falha com **permission denied** — erro de privilégio, não zero linhas; `truncate public.whatsapp_credentials` **também** falha com permission denied (o default ACL desta imagem dá `Dxtm` a `authenticated` em toda tabela nova — o `D` é TRUNCATE, e RLS não restringe TRUNCATE; sem o `revoke` explícito da migration, este caso fica vermelho). `insert` direto na tabela de conexões como admin falha com permission denied (grant é só de `select`), e `truncate public.whatsapp_connections` idem. **E o recorte da policy:** como `vendedorAId`, `select * from whatsapp_connections` devolve **zero linhas** — uma policy `using (true)` faria este pedaço ficar vermelho.
 10. **`prosecdef = true` nas três.** `select proname, prosecdef from pg_proc where proname in ('conectar_whatsapp', 'desconectar_whatsapp', 'credencial_whatsapp')` — três linhas, todas `true`. Aqui `definer` é o desenho (Global Constraints); o teste impede que alguém "corrija" para `invoker` lendo o Plano 8 e trave tudo, porque sem grant nas tabelas `invoker` não alcança nada.
 
 - [ ] **Step 2: Rodar e ver o vermelho**
@@ -120,7 +120,17 @@ create table public.whatsapp_credentials (
 -- Nas credenciais, NENHUM grant, e RLS ligada sem policy — cinto e
 -- suspensorio: um grant acidental numa migration futura nao pode abrir a
 -- tabela.
+--
+-- Os REVOKES abaixo nao sao redundantes: o default ACL desta imagem concede
+-- Dxtm a anon/authenticated em toda tabela nova, e o D e TRUNCATE — que a RLS
+-- NAO restringe. Inalcancavel pelo PostgREST (que so fala select/insert/
+-- update/delete/rpc), mas o comentario acima promete cinto e suspensorio, e
+-- sem o revoke a promessa e falsa. As tabelas antigas com a mesma exposicao
+-- (source_credentials, ingestion_config) ficam para uma migration propria —
+-- item de backlog, nao desta.
+revoke all on public.whatsapp_credentials from anon, authenticated;
 grant select on public.whatsapp_connections to authenticated;
+revoke truncate on public.whatsapp_connections from anon, authenticated;
 
 alter table public.whatsapp_connections enable row level security;
 alter table public.whatsapp_credentials enable row level security;
