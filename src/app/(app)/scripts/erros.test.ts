@@ -38,6 +38,7 @@ const CODIGOS_TEMPLATE = [
   'template_nao_encontrado',
   'template_nao_aprovado',
   'template_desatualizado',
+  'lead_nao_encontrado',
   'whatsapp_sem_telefone',
   'whatsapp_lacunas',
   'envio_recusado',

@@ -15,6 +15,26 @@ type TemplateFalso = {
 }
 
 /**
+ * Credencial que a falsa aceita SEM semeadura, no mesmo espirito de
+ * PAGINAS_PADRAO em meta-falso.ts: o E2E conecta o WhatsApp pela TELA de
+ * /config, dentro do processo do `next dev`, e nao tem como alcancar o duplo
+ * para semear `tokensAceitos`/`numeros` antes do clique. Sem um par padrao,
+ * `dadosDoNumero` recusaria e nenhum percurso ponta a ponta de template ou
+ * disparo seria possivel.
+ *
+ * Valores com `-falso-` no meio de proposito: se um dia aparecerem num painel
+ * do Meta de verdade, a origem e' obvia. Os testes de unidade continuam
+ * semeando os seus proprios tokens — este par nao substitui nenhum deles.
+ */
+export const TOKEN_FALSO_PADRAO = 'token-falso-padrao'
+export const NUMERO_FALSO_PADRAO = {
+  phoneNumberId: 'phone-number-id-falso',
+  wabaId: 'waba-id-falso',
+  numeroExibicao: '+55 11 90000-0000',
+  nomeVerificado: 'Empresa Falsa',
+}
+
+/**
  * Test double do WhatsAppGraph, na forma de MetaGraphFalso: mapa de dados
  * cadastrados por phoneNumberId, conjunto de tokens aceitos, e registro de
  * chamadas para os testes afirmarem sobre o estado do duplo — nunca spy.
@@ -69,6 +89,22 @@ export class WhatsAppGraphFalso implements WhatsAppGraph {
     valores: string[]
   }[] = []
 
+  constructor() {
+    this.semearPadrao()
+  }
+
+  /** O par padrao do E2E — ver TOKEN_FALSO_PADRAO. Fica fora do corpo do
+   * construtor para `reiniciar()` restaurar o MESMO estado inicial: um
+   * reiniciar que apagasse o padrao deixaria a falsa num estado que o
+   * construtor nunca produz. */
+  private semearPadrao(): void {
+    this.tokensAceitos.add(TOKEN_FALSO_PADRAO)
+    this.numeros.set(NUMERO_FALSO_PADRAO.phoneNumberId, {
+      numeroExibicao: NUMERO_FALSO_PADRAO.numeroExibicao,
+      nomeVerificado: NUMERO_FALSO_PADRAO.nomeVerificado,
+    })
+  }
+
   reiniciar(): void {
     this.numeros.clear()
     this.tokensAceitos.clear()
@@ -79,6 +115,7 @@ export class WhatsAppGraphFalso implements WhatsAppGraph {
     this.apagados.length = 0
     this.apagaresQueFalham.clear()
     this.enviados.length = 0
+    this.semearPadrao()
   }
 
   async dadosDoNumero(token: string, phoneNumberId: string): Promise<Resultado<DadosDoNumero>> {

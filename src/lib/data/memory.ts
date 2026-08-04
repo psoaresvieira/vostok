@@ -307,6 +307,23 @@ export class InMemoryCrmStore implements CrmStore {
     return ok(undefined)
   }
 
+  async registrarEnvioWhatsApp(
+    leadId: string,
+    d: { template: string; texto: string },
+  ): Promise<Resultado<void>> {
+    if (!this.leads.some((l) => l.id === leadId)) return falha('lead_nao_encontrado')
+    this.eventos.push({
+      id: randomUUID(),
+      leadId,
+      tipo: 'whatsapp_enviado',
+      // Snapshot do que o cliente recebeu, como no Supabase store.
+      payload: { template: d.template, texto: d.texto },
+      atorId: this.usuarioAtual,
+      criadoEm: new Date(),
+    })
+    return ok(undefined)
+  }
+
   async metricasDaCoorte(f: FiltroMetricas): Promise<Resultado<LinhaCoorte[]>> {
     const ordemDe = new Map(this.etapas.map((e) => [e.id, e]))
     const linhas = this.leads

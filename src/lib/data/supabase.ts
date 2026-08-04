@@ -375,6 +375,31 @@ export class SupabaseCrmStore implements CrmStore {
     return ok(undefined)
   }
 
+  /**
+   * Cliente de SESSAO, como todo o resto deste store: quem envia e' um membro
+   * logado, e a policy `lead_events_insert` (pode_ver_lead_id) e' exatamente a
+   * guarda que se quer aqui — o vendedor registra o envio no lead dele, e em
+   * mais nenhum. Nunca o cliente anon+segredo do disparo: aquele existe so para
+   * a credencial e o status do template, que nenhuma sessao alcanca.
+   *
+   * Codigo generico na falha, nunca `error.message`: a action que chama isto ja
+   * ENVIOU a mensagem, e traduz qualquer falha daqui para
+   * `whatsapp_enviado_sem_evento` — a unica frase honesta nesse estado.
+   */
+  async registrarEnvioWhatsApp(
+    leadId: string,
+    d: { template: string; texto: string },
+  ): Promise<Resultado<void>> {
+    const { error } = await this.cliente.from('lead_events').insert({
+      lead_id: leadId,
+      tipo: 'whatsapp_enviado',
+      payload: { template: d.template, texto: d.texto },
+      ator_id: this.usuarioId,
+    })
+    if (error) return falha('erro_ao_salvar_evento')
+    return ok(undefined)
+  }
+
   async metricasDaCoorte(f: FiltroMetricas): Promise<Resultado<LinhaCoorte[]>> {
     const { data, error } = await this.cliente.rpc('metricas_coorte', {
       p_pipeline_id: f.pipelineId,

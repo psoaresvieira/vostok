@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { PainelScripts } from './scripts'
 import type { Script } from '@/lib/data/scripts'
+import type { TemplateWhatsApp } from '@/lib/data/templates'
 import { linkWhatsApp, type ContextoScript } from '@/lib/domain/script'
 import { codigoDoErroDoPainel } from '@/app/(app)/scripts/erros'
 
@@ -57,7 +58,12 @@ function espionarClipboard(): string[] {
 describe('PainelScripts', () => {
   it('Caso 1: previa interpolada com a lacuna pintada e o contador de pendencias', () => {
     render(
-      <PainelScripts scripts={[script()]} contexto={CONTEXTO} telefoneE164={TELEFONE} />,
+      <PainelScripts
+        leadId="lead-1"
+        scripts={[script()]}
+        contexto={CONTEXTO}
+        telefoneE164={TELEFONE}
+      />,
     )
 
     // Pelo texto exposto, e nao por aria-label nem por classe: o papel ARIA de
@@ -86,7 +92,12 @@ describe('PainelScripts', () => {
   it('Caso 2: Copiar escreve o texto plano do dominio, com a lacuna literal e sem o rotulo escondido', async () => {
     const escritos = espionarClipboard()
     render(
-      <PainelScripts scripts={[script()]} contexto={CONTEXTO} telefoneE164={TELEFONE} />,
+      <PainelScripts
+        leadId="lead-1"
+        scripts={[script()]}
+        contexto={CONTEXTO}
+        telefoneE164={TELEFONE}
+      />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Copiar' }))
@@ -115,7 +126,12 @@ describe('PainelScripts', () => {
 
   it('Caso 3: com telefone o WhatsApp e um link wa.me com o mesmo texto; sem telefone e botao desabilitado', () => {
     render(
-      <PainelScripts scripts={[script()]} contexto={CONTEXTO} telefoneE164={TELEFONE} />,
+      <PainelScripts
+        leadId="lead-1"
+        scripts={[script()]}
+        contexto={CONTEXTO}
+        telefoneE164={TELEFONE}
+      />,
     )
 
     const link = screen.getByRole('link', { name: 'WhatsApp' }) as HTMLAnchorElement
@@ -131,7 +147,9 @@ describe('PainelScripts', () => {
 
     cleanup()
 
-    render(<PainelScripts scripts={[script()]} contexto={CONTEXTO} telefoneE164={null} />)
+    render(
+      <PainelScripts leadId="lead-1" scripts={[script()]} contexto={CONTEXTO} telefoneE164={null} />,
+    )
 
     // Positiva primeiro: o controle existe e explica por que nao da.
     const botao = screen.getByRole('button', { name: 'WhatsApp' }) as HTMLButtonElement
@@ -142,7 +160,7 @@ describe('PainelScripts', () => {
   })
 
   it('Caso 4: estado vazio com o link para a biblioteca', () => {
-    render(<PainelScripts scripts={[]} contexto={CONTEXTO} telefoneE164={TELEFONE} />)
+    render(<PainelScripts leadId="lead-1" scripts={[]} contexto={CONTEXTO} telefoneE164={TELEFONE} />)
 
     expect(screen.getByText('Nenhum script para esta etapa.')).toBeTruthy()
     const link = screen.getByRole('link', { name: /scripts/i }) as HTMLAnchorElement
@@ -154,6 +172,7 @@ describe('PainelScripts', () => {
   it('falha de carga vira aviso traduzido no lugar do estado vazio, nunca um "nenhum script" mentiroso', () => {
     render(
       <PainelScripts
+        leadId="lead-1"
         scripts={[]}
         contexto={CONTEXTO}
         telefoneE164={TELEFONE}
@@ -184,6 +203,7 @@ describe('PainelScripts', () => {
 
     render(
       <PainelScripts
+        leadId="lead-1"
         scripts={[]}
         contexto={CONTEXTO}
         telefoneE164={TELEFONE}
@@ -198,5 +218,226 @@ describe('PainelScripts', () => {
     // Nem em pedaco: o texto do Postgres nao pode sobrar em canto nenhum da
     // arvore renderizada.
     expect(document.body.textContent).not.toContain('row-level security')
+  })
+})
+
+/** Contexto SEM lacuna: e' o unico em que o envio pode ser oferecido. */
+const CONTEXTO_COMPLETO: ContextoScript = { ...CONTEXTO, empresa: 'Loja da Maria' }
+
+/** O snapshot que `traduzirParaPosicional` produz do conteudo de `script()`. */
+const CORPO_POSICIONAL = 'Olá {{1}}, sobre a {{2}} — falo com {{3}}.'
+
+function template(overrides: Partial<TemplateWhatsApp> = {}): TemplateWhatsApp {
+  return {
+    id: 'template-1',
+    scriptId: 'script-1',
+    nomeMeta: 'abordagem_inicial_aaaaaaaa',
+    idioma: 'pt_BR',
+    categoria: 'marketing',
+    corpoPosicional: CORPO_POSICIONAL,
+    mapa: ['primeiro_nome', 'empresa', 'responsavel'],
+    status: 'approved',
+    motivoRejeicao: null,
+    statusConsultadoEm: null,
+    criadoEm: new Date('2026-01-01T00:00:00Z'),
+    ...overrides,
+  }
+}
+
+function enviarOk() {
+  return vi.fn(async () => ({ ok: true as const, valor: undefined }))
+}
+
+describe('PainelScripts — disparo de WhatsApp', () => {
+  it('caso 4: "Enviar WhatsApp" so aparece com template approved, telefone e snapshot batendo', () => {
+    // Positivo primeiro: o estado completo oferece o envio, e habilitado.
+    render(
+      <PainelScripts
+        leadId="lead-1"
+        scripts={[script()]}
+        contexto={CONTEXTO_COMPLETO}
+        telefoneE164={TELEFONE}
+        templates={[template()]}
+        enviar={enviarOk()}
+      />,
+    )
+    const botao = screen.getByRole('button', { name: 'Enviar WhatsApp' }) as HTMLButtonElement
+    expect(botao.disabled).toBe(false)
+
+    // Sem template nenhum: nada a enviar, nem botao.
+    cleanup()
+    render(
+      <PainelScripts
+        leadId="lead-1"
+        scripts={[script()]}
+        contexto={CONTEXTO_COMPLETO}
+        telefoneE164={TELEFONE}
+        templates={[]}
+        enviar={enviarOk()}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Enviar WhatsApp' })).toBeNull()
+
+    // Template em analise (ou qualquer status que nao seja approved): idem. O
+    // Meta so aceita envio de template aprovado, e um botao que existe para
+    // dar erro e' pior do que botao nenhum.
+    for (const status of ['pending', 'rejected', 'paused']) {
+      cleanup()
+      render(
+        <PainelScripts
+          leadId="lead-1"
+          scripts={[script()]}
+          contexto={CONTEXTO_COMPLETO}
+          telefoneE164={TELEFONE}
+          templates={[template({ status })]}
+          enviar={enviarOk()}
+        />,
+      )
+      expect(screen.queryByRole('button', { name: 'Enviar WhatsApp' }), status).toBeNull()
+    }
+
+    // Sem telefone o botao NEM APARECE: o wa.me ao lado ja explica esse estado
+    // com o seu proprio botao desabilitado, e dois controles mortos lado a lado
+    // dizendo a mesma coisa e' ruido.
+    cleanup()
+    render(
+      <PainelScripts
+        leadId="lead-1"
+        scripts={[script()]}
+        contexto={CONTEXTO_COMPLETO}
+        telefoneE164={null}
+        templates={[template()]}
+        enviar={enviarOk()}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Enviar WhatsApp' })).toBeNull()
+
+    // Template de OUTRO script nao vale para este: a indexacao e' por scriptId.
+    cleanup()
+    render(
+      <PainelScripts
+        leadId="lead-1"
+        scripts={[script()]}
+        contexto={CONTEXTO_COMPLETO}
+        telefoneE164={TELEFONE}
+        templates={[template({ scriptId: 'outro-script' })]}
+        enviar={enviarOk()}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Enviar WhatsApp' })).toBeNull()
+  })
+
+  it('caso 5: lacuna bloqueia o envio dizendo por que — e o clique nao chama a action', () => {
+    const enviar = enviarOk()
+    render(
+      <PainelScripts
+        leadId="lead-1"
+        scripts={[script()]}
+        contexto={CONTEXTO}
+        telefoneE164={TELEFONE}
+        templates={[template()]}
+        enviar={enviar}
+      />,
+    )
+
+    const botao = screen.getByRole('button', { name: 'Enviar WhatsApp' }) as HTMLButtonElement
+    expect(botao.disabled).toBe(true)
+    // O motivo e' a MESMA frase que a action devolveria ('whatsapp_lacunas'):
+    // a tela nao inventa vocabulario proprio para o mesmo fato.
+    expect(botao.getAttribute('title')).toBe('Faltam dados do lead para preencher o template.')
+    // E o contador que ja existia continua sendo o aviso visivel.
+    expect(screen.getByText('1 variável sem valor')).toBeTruthy()
+
+    fireEvent.click(botao)
+    expect(enviar).not.toHaveBeenCalled()
+    // Nem confirmacao: um dialogo que so pode ser cancelado seria pior.
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('caso 6: script editado depois da aprovacao bloqueia e manda re-submeter', () => {
+    const enviar = enviarOk()
+    render(
+      <PainelScripts
+        leadId="lead-1"
+        scripts={[script()]}
+        contexto={CONTEXTO_COMPLETO}
+        telefoneE164={TELEFONE}
+        // Snapshot de um conteudo que nao e' mais o do script: e' exatamente o
+        // que acontece quando alguem edita o script depois da aprovacao.
+        templates={[template({ corpoPosicional: 'Olá {{1}}, texto antigo.', mapa: ['primeiro_nome'] })]}
+        enviar={enviar}
+      />,
+    )
+
+    const botao = screen.getByRole('button', { name: 'Enviar WhatsApp' }) as HTMLButtonElement
+    expect(botao.disabled).toBe(true)
+    expect(botao.getAttribute('title')).toBe(
+      'O script mudou depois da aprovação. Re-submeta o template para enviar.',
+    )
+    // Texto visivel, e nao so' o title: title nao aparece em toque nem em
+    // leitor de tela navegando por texto.
+    expect(screen.getByText(/re-submeta/i)).toBeTruthy()
+
+    fireEvent.click(botao)
+    expect(enviar).not.toHaveBeenCalled()
+  })
+
+  it('caso 7: confirmacao inline — cancelar nao chama; confirmar chama com (leadId, scriptId)', async () => {
+    const enviar = enviarOk()
+    render(
+      <PainelScripts
+        leadId="lead-1"
+        scripts={[script()]}
+        contexto={CONTEXTO_COMPLETO}
+        telefoneE164={TELEFONE}
+        templates={[template()]}
+        enviar={enviar}
+      />,
+    )
+
+    // Primeiro clique NAO envia: e' mensagem de verdade para o cliente.
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar WhatsApp' }))
+    expect(enviar).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Enviar WhatsApp' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar envio' }))
+    expect(enviar).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar WhatsApp' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar envio' }))
+
+    await waitFor(() => expect(enviar).toHaveBeenCalledTimes(1))
+    // O id do lead e o do script, e nada vindo da tela sobre TEMPLATE: quem
+    // resolve o template e' o servidor, na conta ativa.
+    expect(enviar).toHaveBeenCalledWith('lead-1', 'script-1')
+
+    // Feedback transitorio, padrao do "Copiado ✓".
+    expect(await screen.findByText('Enviado ✓')).toBeTruthy()
+    // O nome acessivel do botao nao muda depois do uso.
+    expect(screen.getByRole('button', { name: 'Enviar WhatsApp' })).toBeTruthy()
+  })
+
+  it('falha da action vira mensagem traduzida, nunca o codigo cru', async () => {
+    const enviar = vi.fn(async () => ({ ok: false as const, erro: 'envio_recusado' }))
+    render(
+      <PainelScripts
+        leadId="lead-1"
+        scripts={[script()]}
+        contexto={CONTEXTO_COMPLETO}
+        telefoneE164={TELEFONE}
+        templates={[template()]}
+        enviar={enviar}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar WhatsApp' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar envio' }))
+
+    expect(
+      await screen.findByText('O Meta recusou o envio. Confira o template e tente de novo.'),
+    ).toBeTruthy()
+    expect(screen.queryByText('envio_recusado')).toBeNull()
+    expect(screen.queryByText('Enviado ✓')).toBeNull()
   })
 })

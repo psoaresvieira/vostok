@@ -39,6 +39,19 @@ const PAGE_IDS_FALSAS = ['100000000000001', '100000000000002', '100000000000003'
  */
 export const PREFIXO_FONTE_GOOGLE_E2E = 'Ingestão E2E '
 
+/**
+ * O numero que `disparo-whatsapp.spec.ts` conecta em /config — o par padrao do
+ * WhatsAppGraphFalso (NUMERO_FALSO_PADRAO.phoneNumberId em
+ * src/lib/integracoes/whatsapp-falso.ts; literal aqui porque este arquivo roda
+ * fora do bundle da app).
+ *
+ * Mesmo motivo das Pages falsas acima: `whatsapp_connections_numero_idx` e
+ * unico GLOBAL (0019:33), entao a segunda rodada bateria em
+ * `whatsapp_numero_em_uso` e o teste falharia por causa da conta que a rodada
+ * ANTERIOR criou — nada a ver com a mudanca de quem estiver rodando.
+ */
+const PHONE_NUMBER_ID_FALSO = 'phone-number-id-falso'
+
 export default async function globalSetup(): Promise<void> {
   const client = new Client({ connectionString: CONN })
   await client.connect()
@@ -53,6 +66,9 @@ export default async function globalSetup(): Promise<void> {
       `delete from public.lead_sources where provedor = 'google' and nome like $1`,
       [`${PREFIXO_FONTE_GOOGLE_E2E}%`],
     )
+    await client.query(`delete from public.whatsapp_connections where phone_number_id = $1`, [
+      PHONE_NUMBER_ID_FALSO,
+    ])
   } finally {
     await client.end()
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { WhatsAppGraphFalso } from './whatsapp-falso'
+import { NUMERO_FALSO_PADRAO, TOKEN_FALSO_PADRAO, WhatsAppGraphFalso } from './whatsapp-falso'
 
 describe('WhatsAppGraphFalso', () => {
   it('devolve os dados de um numero cadastrado e registra a consulta', async () => {
@@ -17,6 +17,22 @@ describe('WhatsAppGraphFalso', () => {
       nomeVerificado: 'Empresa X',
     })
     expect(g.consultados).toEqual([{ token: 'token-valido', phoneNumberId: '1234567890' }])
+  })
+
+  it('o par padrao vale sem semeadura, e sobrevive ao reiniciar()', async () => {
+    // O E2E conecta o WhatsApp pela tela de /config, dentro do processo do
+    // `next dev`, e nao tem como semear o duplo antes do clique. Este caso e' o
+    // contrato disso: se o par padrao sumir, disparo-whatsapp.spec.ts para de
+    // conseguir conectar e o vermelho aparece longe daqui.
+    const g = new WhatsAppGraphFalso()
+    g.reiniciar()
+
+    const r = await g.dadosDoNumero(TOKEN_FALSO_PADRAO, NUMERO_FALSO_PADRAO.phoneNumberId)
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor).toEqual({
+      numeroExibicao: NUMERO_FALSO_PADRAO.numeroExibicao,
+      nomeVerificado: NUMERO_FALSO_PADRAO.nomeVerificado,
+    })
   })
 
   it('recusa token nao cadastrado com token_whatsapp_invalido e ainda assim registra a consulta', async () => {

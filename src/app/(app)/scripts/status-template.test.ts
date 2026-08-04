@@ -121,6 +121,51 @@ describe('templateComStatusFresco', () => {
     expect(r?.statusConsultadoEm).toBeInstanceOf(Date)
   })
 
+  it('consulta recente NAO gasta round-trip: o intervalo minimo vale por template', async () => {
+    // A ficha do lead (Task 6) renderiza N scripts, e cada pending dispararia
+    // uma consulta ao Graph mais uma escrita pela RPC A CADA RENDER — inclusive
+    // no F5 que o usuario da' um segundo depois. O carimbo gravado e' o que
+    // corta isso: dentro do intervalo minimo devolve o gravado, sem tocar o
+    // Graph e sem escrever.
+    templates.doScript.mockResolvedValue({
+      ok: true,
+      valor: template({ statusConsultadoEm: new Date(Date.now() - 5_000) }),
+    })
+    graph.templates.set('abordagem_inicial_aaaaaaaa', {
+      status: 'approved',
+      motivo: null,
+      corpo: 'Olá {{1}}',
+      categoria: 'marketing',
+    })
+
+    const r = await chamar(graph)
+
+    expect(r?.status).toBe('pending')
+    expect(graph.templatesConsultados).toEqual([])
+    expect(servico.atualizarStatus).not.toHaveBeenCalled()
+  })
+
+  it('consulta velha volta a valer: passado o intervalo, o Graph e consultado de novo', async () => {
+    // Contraprova do caso acima — sem ela, um throttle que nunca mais
+    // consultasse passaria igual.
+    templates.doScript.mockResolvedValue({
+      ok: true,
+      valor: template({ statusConsultadoEm: new Date(Date.now() - 10 * 60_000) }),
+    })
+    graph.templates.set('abordagem_inicial_aaaaaaaa', {
+      status: 'approved',
+      motivo: null,
+      corpo: 'Olá {{1}}',
+      categoria: 'marketing',
+    })
+
+    const r = await chamar(graph)
+
+    expect(graph.templatesConsultados).toHaveLength(1)
+    expect(servico.atualizarStatus).toHaveBeenCalledTimes(1)
+    expect(r?.status).toBe('approved')
+  })
+
   it('Graph fora do ar degrada para o gravado, sem escrever nada', async () => {
     templates.doScript.mockResolvedValue({ ok: true, valor: template() })
     // Nome nao semeado em `graph.templates`: a falsa devolve falha.

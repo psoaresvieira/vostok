@@ -3,31 +3,14 @@ import { notFound, redirect } from 'next/navigation'
 import { criarScriptStoreDoServidor } from '@/lib/data/scripts'
 import { criarStoreDoServidor } from '@/lib/data/supabase'
 import { criarDisparoServico, criarTemplateStoreDoServidor } from '@/lib/data/templates'
-import { traduzirParaPosicional } from '@/lib/domain/script'
 import { Editor } from '../editor'
+// A MESMA funcao que o painel da ficha do lead usa para desabilitar o botao de
+// enviar e que `enviarWhatsApp` usa para recusar. Uma copia local aqui era o
+// comeco de tres implementacoes discordando sobre o unico fato que decide se o
+// cliente recebe a mensagem certa.
+import { estaDesatualizado } from '../desatualizado'
 import { templateComStatusFresco, type CredencialDisparo } from '../status-template'
 import { TemplateWhatsApp } from '../template-whatsapp'
-
-/**
- * Compara a traducao do conteudo ATUAL com o snapshot da submissao — corpo E
- * mapa, nunca so o corpo: dois scripts podem produzir o mesmo corpo posicional
- * com mapas diferentes ('Olá {{1}}' vale tanto para {{primeiro_nome}} quanto
- * para {{empresa}}), e ai o envio preencheria o slot com o valor errado.
- *
- * Conteudo que nem traduz (variavel desconhecida escrita depois da submissao)
- * conta como desatualizado: o que existe hoje no script comprovadamente nao e'
- * o que o Meta aprovou.
- */
-function estaDesatualizado(
-  conteudo: string,
-  snapshot: { corpoPosicional: string; mapa: string[] },
-): boolean {
-  const traducao = traduzirParaPosicional(conteudo)
-  if (!traducao.ok) return true
-  if (traducao.valor.corpo !== snapshot.corpoPosicional) return true
-  if (traducao.valor.mapa.length !== snapshot.mapa.length) return true
-  return traducao.valor.mapa.some((v, i) => v !== snapshot.mapa[i])
-}
 
 export default async function ScriptPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

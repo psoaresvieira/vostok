@@ -11,6 +11,28 @@ export type CredencialDisparo = { token: string; wabaId: string }
 const FINAIS = new Set(['approved', 'rejected'])
 
 /**
+ * O status ja e' definitivo? Exportado para quem monta LISTA de templates (a
+ * ficha do lead renderiza N scripts) poder decidir, antes de qualquer IO, se
+ * ainda ha o que consultar — e assim nem pedir a credencial quando todos os
+ * templates da tela ja estao em estado final.
+ */
+export function statusEhFinal(status: string): boolean {
+  return FINAIS.has(status)
+}
+
+/**
+ * Intervalo minimo entre duas consultas ao Meta pelo MESMO template.
+ *
+ * A ficha do lead renderiza N scripts, e cada template nao-final dispararia uma
+ * consulta ao Graph mais uma escrita pela RPC a cada render — inclusive no F5
+ * que o usuario da' um segundo depois, e em cada uma das abas que ele deixou
+ * abertas. Analise do Meta leva minutos ou horas; um minuto de folga nao atrasa
+ * nada que o usuario perceba e transforma "N x cada render" em "N x por
+ * minuto".
+ */
+const INTERVALO_MINIMO_CONSULTA_MS = 60_000
+
+/**
  * Le o template de um script e, quando o status ainda pode mudar, atualiza-o
  * contra o Meta ANTES de a pagina renderizar — e persiste o resultado.
  *
@@ -45,6 +67,16 @@ export async function templateComStatusFresco(
   // Sem conexao de WhatsApp nao ha o que consultar: a tela ja aponta para
   // /config, e o status gravado e' o melhor que existe.
   if (!credencial) return template
+
+  // Consultado ha pouco: devolve o gravado, sem round-trip e sem escrita. O
+  // carimbo e' o do BANCO (`now()` da RPC), entao a folga vale para todos os
+  // renders de todas as abas e nao so' para os deste processo. Carimbo no
+  // futuro (relogio do banco adiantado) tambem cai aqui — e' "fresco demais",
+  // que e' o lado seguro: o proximo minuto corrige.
+  const consultadoEm = template.statusConsultadoEm
+  if (consultadoEm && Date.now() - consultadoEm.getTime() < INTERVALO_MINIMO_CONSULTA_MS) {
+    return template
+  }
 
   const fresco = await graph.statusDoTemplate(
     credencial.token,
