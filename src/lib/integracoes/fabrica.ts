@@ -1,8 +1,12 @@
 import type { MetaGraph } from './meta'
 import { MetaGraphFalso } from './meta-falso'
 import { MetaGraphReal } from './meta-real'
+import type { WhatsAppGraph } from './whatsapp'
+import { WhatsAppGraphFalso } from './whatsapp-falso'
+import { WhatsAppGraphReal } from './whatsapp-real'
 
 let falsoCompartilhado: MetaGraphFalso | null = null
+let whatsappFalsoCompartilhado: WhatsAppGraphFalso | null = null
 
 /**
  * Instancia unica do falso no processo. O E2E precisa que a Page "inscrita" num
@@ -32,4 +36,23 @@ export function usarFalso(): boolean {
 export function metaGraph(): MetaGraph {
   if (usarFalso()) return metaFalso()
   return new MetaGraphReal(process.env.META_APP_ID ?? '', process.env.META_APP_SECRET ?? '')
+}
+
+/**
+ * Mesmo padrao de metaFalso(): instancia unica do falso no processo, porque
+ * o E2E precisa que um numero cadastrado num request continue cadastrado no
+ * seguinte.
+ */
+export function whatsappFalso(): WhatsAppGraphFalso {
+  if (!whatsappFalsoCompartilhado) whatsappFalsoCompartilhado = new WhatsAppGraphFalso()
+  return whatsappFalsoCompartilhado
+}
+
+/**
+ * Mesmo usarFalso() de metaGraph() — a invariante de que a falsa nunca sobe
+ * em producao vale para este canal tambem.
+ */
+export function whatsappGraph(): WhatsAppGraph {
+  if (usarFalso()) return whatsappFalso()
+  return new WhatsAppGraphReal()
 }
