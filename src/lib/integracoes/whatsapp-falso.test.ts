@@ -98,6 +98,45 @@ describe('WhatsAppGraphFalso — submeterTemplate e statusDoTemplate', () => {
   })
 })
 
+describe('WhatsAppGraphFalso — apagarTemplate', () => {
+  it('caminho feliz registra a chamada e remove o template do mapa', async () => {
+    const g = new WhatsAppGraphFalso()
+    g.templates.set('boas_vindas', {
+      status: 'approved',
+      motivo: null,
+      corpo: 'x',
+      categoria: 'marketing',
+    })
+
+    const r = await g.apagarTemplate('token', 'waba-1', 'boas_vindas')
+    expect(r.ok).toBe(true)
+    expect(g.apagados).toEqual([{ token: 'token', wabaId: 'waba-1', nome: 'boas_vindas' }])
+    expect(g.templates.has('boas_vindas')).toBe(false)
+  })
+
+  it('nome em apagaresQueFalham devolve whatsapp_indisponivel e ainda assim registra a chamada', async () => {
+    // Knob de falha exigido pela Task 5: o teste mandatorio de erro na
+    // remocao precisa de um jeito de forcar isso sem tocar rede.
+    const g = new WhatsAppGraphFalso()
+    g.templates.set('boas_vindas', {
+      status: 'approved',
+      motivo: null,
+      corpo: 'x',
+      categoria: 'marketing',
+    })
+    g.apagaresQueFalham.add('boas_vindas')
+
+    const r = await g.apagarTemplate('token', 'waba-1', 'boas_vindas')
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('whatsapp_indisponivel')
+    // A falha nao remove o template — o Graph real tambem nao apagaria nada
+    // numa chamada que ele proprio recusou.
+    expect(g.templates.has('boas_vindas')).toBe(true)
+    expect(g.apagados).toEqual([{ token: 'token', wabaId: 'waba-1', nome: 'boas_vindas' }])
+  })
+})
+
 describe('WhatsAppGraphFalso — enviarTemplate', () => {
   it('caminho feliz registra token, phoneNumberId, e164Destino, nome e valores', async () => {
     const g = new WhatsAppGraphFalso()
@@ -124,6 +163,30 @@ describe('WhatsAppGraphFalso — enviarTemplate', () => {
         valores: ['Fulano'],
       },
     ])
+  })
+
+  it('mutar o array de valores depois da chamada nao reescreve o registro', async () => {
+    // O registro guarda copia, nao a mesma referencia do array recebido —
+    // sem isso, o chamador poderia mutar `valores` apos a chamada e
+    // corromper uma asercao feita mais tarde no teste, silenciosamente.
+    const g = new WhatsAppGraphFalso()
+    g.templates.set('boas_vindas', {
+      status: 'approved',
+      motivo: null,
+      corpo: 'Ola {{1}}',
+      categoria: 'marketing',
+    })
+    const valores = ['Fulano']
+
+    const r = await g.enviarTemplate('token-valido', 'phone-1', '5511999999999', {
+      nome: 'boas_vindas',
+      idioma: 'pt_BR',
+      valores,
+    })
+    if (!r.ok) throw new Error(r.erro)
+    valores.push('Beltrano')
+
+    expect(g.enviados[0].valores).toEqual(['Fulano'])
   })
 
   it('recusa envio de template inexistente ou nao aprovado com envio_recusado', async () => {

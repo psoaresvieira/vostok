@@ -24,7 +24,7 @@ type RespostaErro = { error?: { message?: string; code?: number } }
 
 type RespostaSubmissao = { id?: string; status?: string } & RespostaErro
 type RespostaStatus = {
-  data?: { status?: string; rejected_reason?: string }[]
+  data?: { name?: string; status?: string; rejected_reason?: string }[]
 } & RespostaErro
 type RespostaApagar = { success?: boolean } & RespostaErro
 type RespostaEnvio = { messages?: { id?: string }[] } & RespostaErro
@@ -115,11 +115,17 @@ export class WhatsAppGraphReal implements WhatsAppGraph {
       return falha('whatsapp_indisponivel')
     }
     const dados = (await r.json().catch(() => ({}))) as RespostaSubmissao
-    // 4xx com corpo de erro (ou sem "error" mas tambem sem os campos
-    // esperados): o Graph recusou o template submetido.
-    if (!r.ok || dados.error || !dados.id || !dados.status) {
+    // 4xx com corpo de erro: o Graph recusou o template submetido.
+    if (!r.ok || dados.error) {
       console.error('whatsapp graph recusou submissao', r.status, dados.error?.code, dados.error?.message)
       return falha('template_recusado_pelo_meta')
+    }
+    // 200 sem "error" mas em formato inesperado (falta id/status) e possivel
+    // — o Graph tambem falha assim, nao so recusando. Isso nao e uma recusa
+    // de submissao (mesma guarda de dadosDoNumero acima).
+    if (!dados.id || !dados.status) {
+      console.error('whatsapp graph formato inesperado na submissao', r.status)
+      return falha('whatsapp_indisponivel')
     }
     return ok({ idMeta: dados.id, status: dados.status.toLowerCase() })
   }
@@ -131,7 +137,7 @@ export class WhatsAppGraphReal implements WhatsAppGraph {
   ): Promise<Resultado<StatusTemplate>> {
     const url = new URL(`${BASE}/${wabaId}/message_templates`)
     url.searchParams.set('name', nome)
-    url.searchParams.set('fields', 'status,rejected_reason')
+    url.searchParams.set('fields', 'name,status,rejected_reason')
     url.searchParams.set('access_token', token)
 
     const busca = await buscar(url)
@@ -150,7 +156,12 @@ export class WhatsAppGraphReal implements WhatsAppGraph {
       console.error('whatsapp graph recusou consulta de status', r.status, dados.error?.code, dados.error?.message)
       return falha('whatsapp_indisponivel')
     }
-    const item = dados.data[0]
+    // O filtro `name=` do Graph e por prefixo/match amplo, nao exato — o
+    // mesmo cuidado de posseDaPagina em meta-real.ts (que compara o id
+    // devolvido em vez de confiar so no que foi pedido). Sem este `find`,
+    // uma resposta cuja primeira linha e de outro template levaria
+    // silenciosamente o status errado para a tela.
+    const item = dados.data.find((t) => t.name === nome)
     if (!item) return falha('template_nao_encontrado')
 
     // O Graph devolve rejected_reason: 'NONE' quando o template nao foi
@@ -218,10 +229,19 @@ export class WhatsAppGraphReal implements WhatsAppGraph {
       return falha('whatsapp_indisponivel')
     }
     const dados = (await r.json().catch(() => ({}))) as RespostaEnvio
-    const idMensagem = dados.messages?.[0]?.id
-    if (!r.ok || dados.error || !idMensagem) {
+    // 4xx com corpo de erro: o Graph recusou o envio (ex.: template nao
+    // aprovado).
+    if (!r.ok || dados.error) {
       console.error('whatsapp graph recusou envio', r.status, dados.error?.code, dados.error?.message)
       return falha('envio_recusado')
+    }
+    const idMensagem = dados.messages?.[0]?.id
+    // 200 sem "error" mas sem o id da mensagem e formato inesperado, nao
+    // recusa — e crucial nao rotular isso de "recusado": a mensagem pode ja
+    // ter sido enviada do lado do Meta, e um reenvio duplicaria o disparo.
+    if (!idMensagem) {
+      console.error('whatsapp graph formato inesperado no envio', r.status)
+      return falha('whatsapp_indisponivel')
     }
     return ok({ idMensagem })
   }

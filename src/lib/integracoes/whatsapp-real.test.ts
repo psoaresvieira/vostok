@@ -95,6 +95,7 @@ describe('WhatsAppGraphReal — submeterTemplate, statusDoTemplate, apagarTempla
     const url = new URL(chamadaUrl)
     expect(url.pathname).toContain('waba-1')
     expect(url.pathname).toContain('message_templates')
+    expect(url.searchParams.get('access_token')).toBe('token-valido')
     expect(init.method).toBe('POST')
     const corpo = JSON.parse(init.body as string)
     expect(corpo).toEqual({
@@ -109,7 +110,9 @@ describe('WhatsAppGraphReal — submeterTemplate, statusDoTemplate, apagarTempla
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ data: [{ status: 'REJECTED', rejected_reason: 'INVALID_FORMAT' }] }),
+      json: async () => ({
+        data: [{ name: 'boas_vindas', status: 'REJECTED', rejected_reason: 'INVALID_FORMAT' }],
+      }),
     })
     global.fetch = fetchMock
     const g = new WhatsAppGraphReal()
@@ -122,8 +125,30 @@ describe('WhatsAppGraphReal — submeterTemplate, statusDoTemplate, apagarTempla
     const url = new URL(fetchMock.mock.calls[0][0] as string | URL)
     expect(url.pathname).toContain('waba-1')
     expect(url.pathname).toContain('message_templates')
+    expect(url.searchParams.get('access_token')).toBe('token-valido')
     expect(decodeURIComponent(url.search)).toContain('name=boas_vindas')
-    expect(decodeURIComponent(url.search)).toContain('fields=status,rejected_reason')
+    expect(decodeURIComponent(url.search)).toContain('fields=name,status,rejected_reason')
+  })
+
+  it('statusDoTemplate acha o template certo por nome quando a primeira linha da resposta e de outro template', async () => {
+    // O filtro `name=` do Graph nao garante que a unica (ou primeira) linha
+    // devolvida seja exatamente o template pedido. Sem comparar `name`,
+    // pegar `data[0]` cegamente devolveria o status de outro template.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: [
+          { name: 'outro_template', status: 'REJECTED', rejected_reason: 'INVALID_FORMAT' },
+          { name: 'boas_vindas', status: 'APPROVED', rejected_reason: 'NONE' },
+        ],
+      }),
+    })
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.statusDoTemplate('token-valido', 'waba-1', 'boas_vindas')
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor).toEqual({ status: 'approved', motivo: null })
   })
 
   it('apagarTemplate faz DELETE em /{waba_id}/message_templates com name na query', async () => {
@@ -143,6 +168,7 @@ describe('WhatsAppGraphReal — submeterTemplate, statusDoTemplate, apagarTempla
     const url = new URL(chamadaUrl)
     expect(url.pathname).toContain('waba-1')
     expect(url.pathname).toContain('message_templates')
+    expect(url.searchParams.get('access_token')).toBe('token-valido')
     expect(decodeURIComponent(url.search)).toContain('name=boas_vindas')
     expect(init.method).toBe('DELETE')
   })
@@ -170,6 +196,7 @@ describe('WhatsAppGraphReal — submeterTemplate, statusDoTemplate, apagarTempla
     const url = new URL(chamadaUrl)
     expect(url.pathname).toContain('phone-1')
     expect(url.pathname).toContain('messages')
+    expect(url.searchParams.get('access_token')).toBe('token-valido')
     expect(init.method).toBe('POST')
     const corpo = JSON.parse(init.body as string)
     expect(corpo).toEqual({
@@ -252,5 +279,50 @@ describe('WhatsAppGraphReal — traducao de erro por metodo', () => {
     expect(r.ok).toBe(false)
     if (r.ok) throw new Error('deveria ter falhado')
     expect(r.erro).toBe('template_nao_encontrado')
+  })
+
+  it('submeterTemplate: 200 sem "error" mas faltando id/status vira whatsapp_indisponivel, nao template_recusado_pelo_meta', async () => {
+    // Formato inesperado != recusa: o Graph aceitou a chamada (r.ok, sem
+    // corpo de erro) mas devolveu algo que o codigo nao reconhece. Rotular
+    // isso de "recusado" seria enganoso — o problema e o formato, nao o
+    // conteudo do template.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    })
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.submeterTemplate('token', 'waba-1', {
+      nome: 'x',
+      idioma: 'pt_BR',
+      categoria: 'marketing',
+      corpo: 'oi',
+    })
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('whatsapp_indisponivel')
+  })
+
+  it('enviarTemplate: 200 sem "error" mas faltando messages[0].id vira whatsapp_indisponivel, nao envio_recusado', async () => {
+    // Mesmo raciocinio do caso acima, e ainda mais critico aqui: rotular
+    // formato inesperado de "recusado" convidaria um reenvio automatico, e a
+    // mensagem original pode ja ter sido enviada do lado do Meta —
+    // duplicando o disparo.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ messages: [] }),
+    })
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.enviarTemplate('token', 'phone-1', '5511999999999', {
+      nome: 'x',
+      idioma: 'pt_BR',
+      valores: [],
+    })
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('whatsapp_indisponivel')
   })
 })

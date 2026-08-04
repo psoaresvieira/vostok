@@ -53,6 +53,13 @@ export class WhatsAppGraphFalso implements WhatsAppGraph {
   readonly templatesConsultados: { token: string; wabaId: string; nome: string }[] = []
   /** Toda chamada a `apagarTemplate`, com todos os argumentos. */
   readonly apagados: { token: string; wabaId: string; nome: string }[] = []
+  /**
+   * Nomes de template para os quais `apagarTemplate` deve falhar com
+   * `whatsapp_indisponivel` — knob de falha exigido pela Task 5 (o teste
+   * mandatorio de falha na remocao precisa de um jeito de configurar isso
+   * sem tocar rede).
+   */
+  readonly apagaresQueFalham: Set<string> = new Set()
   /** Toda chamada a `enviarTemplate`, inclusive as recusadas. */
   readonly enviados: {
     token: string
@@ -70,6 +77,7 @@ export class WhatsAppGraphFalso implements WhatsAppGraph {
     this.submetidos.length = 0
     this.templatesConsultados.length = 0
     this.apagados.length = 0
+    this.apagaresQueFalham.clear()
     this.enviados.length = 0
   }
 
@@ -118,6 +126,7 @@ export class WhatsAppGraphFalso implements WhatsAppGraph {
 
   async apagarTemplate(token: string, wabaId: string, nome: string): Promise<Resultado<void>> {
     this.apagados.push({ token, wabaId, nome })
+    if (this.apagaresQueFalham.has(nome)) return falha('whatsapp_indisponivel')
     this.templates.delete(nome)
     return ok(undefined)
   }
@@ -133,7 +142,10 @@ export class WhatsAppGraphFalso implements WhatsAppGraph {
       phoneNumberId,
       e164Destino,
       nome: d.nome,
-      valores: d.valores,
+      // Copia, nao a mesma referencia: sem isso, o chamador poderia mutar
+      // `d.valores` depois da chamada e reescrever o registro por baixo dos
+      // panos, corrompendo uma asercao feita mais tarde no teste.
+      valores: [...d.valores],
     })
     // Reproduz a ultima guarda do Graph: recusa template inexistente ou nao
     // aprovado, sem distinguir os dois casos (o Graph tambem nao distingue
