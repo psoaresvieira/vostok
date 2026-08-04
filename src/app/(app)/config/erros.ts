@@ -33,6 +33,13 @@ const MENSAGENS_ERRO: Record<string, string> = {
   // resolve — e configuracao de ambiente.
   segredo_invalido: 'A ingestão não está configurada neste ambiente. Fale com o suporte.',
   ingestao_nao_configurada: 'A ingestão não está configurada neste ambiente. Fale com o suporte.',
+  // WhatsApp (Task 3, sub-projeto 5): os seis codigos normativos do brief.
+  whatsapp_ja_conectado: 'Esta conta já tem um número conectado. Desconecte-o para trocar.',
+  numero_ja_conectado: 'Esse número já está conectado a outra conta do CRM.',
+  whatsapp_campos_vazios: 'Preencha o token, o ID do número e o ID da WABA.',
+  token_whatsapp_invalido: 'O Meta recusou esse token para esse número. Confira os dois no painel.',
+  whatsapp_indisponivel: 'O Meta não respondeu. Tente de novo em alguns minutos.',
+  whatsapp_nao_encontrado: 'Essa conexão não existe mais. Recarregue a página.',
 }
 
 export function mensagemDeErro(codigo: string): string {
