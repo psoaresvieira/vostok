@@ -144,14 +144,33 @@ export function linkWhatsApp(telefoneE164: string, texto: string): string {
   return `https://wa.me/${digitos}?text=${encodeURIComponent(texto)}`
 }
 
+// PADRAO_TAG so casa nome comecando com [a-z_], entao '{{1}}'/'{{01}}'/
+// '{{ 2 }}' nunca casam ali — caem no trecho literal do loop abaixo, como
+// qualquer outro texto do usuario. Sem a checagem contra este padrao,
+// esse literal sobrevive intocado ate preencherPosicional, que NAO
+// distingue placeholder emitido pela propria traducao de texto que o
+// usuario digitou por acaso igual a um: '{{1}}' vira alvo de substituicao
+// pelo valor do slot 1, e se o numero coincidir com uma posicao real do
+// mapa (ou ficar orfao, sem slot correspondente) o corpo que o Meta
+// registrou diverge do que o envio manda — o proprio Meta tambem
+// renderizaria esse literal como parametro do lado dele. Por isso
+// traduzirParaPosicional recusa na fonte, com um codigo dedicado (nao
+// 'template_variavel_desconhecida': o usuario precisa saber que a forma
+// '{{N}}' e reservada, nao que errou o nome de uma variavel).
+const PADRAO_POSICIONAL_LITERAL = /\{\{[ \t]*\d+[ \t]*\}\}/
+
 /**
  * Mesmo PADRAO_TAG de interpolar — e por isso que a comutacao com
  * textoPlano(interpolar(...)) vale byte a byte: o que casa e o que fica
  * literal (grafia invalida, quebra de linha dentro das chaves) e
- * identico nos dois caminhos. Variavel de nome valido mas fora do
- * catalogo aborta a traducao inteira (nao ha "corpo parcial"), porque um
- * template com variavel desconhecida nao pode virar um envio silencioso
- * faltando pedaco.
+ * identico nos dois caminhos, DESDE que a traducao nao aceite um literal
+ * '{{N}}' que colidiria com um placeholder emitido por ela mesma (ver
+ * PADRAO_POSICIONAL_LITERAL abaixo) — a recusa e o que fecha essa lacuna
+ * entre os dois caminhos, nao uma garantia automatica da regex
+ * compartilhada. Variavel de nome valido mas fora do catalogo aborta a
+ * traducao inteira (nao ha "corpo parcial"), porque um template com
+ * variavel desconhecida nao pode virar um envio silencioso faltando
+ * pedaco.
  *
  * Cada variavel DISTINTA ganha a posicao da sua primeira ocorrencia
  * (mapa[0] é '{{1}}'); repeticoes da mesma variavel reusam o mesmo
@@ -171,7 +190,9 @@ export function traduzirParaPosicional(
 
   PADRAO_TAG.lastIndex = 0
   while ((casamento = PADRAO_TAG.exec(conteudo)) !== null) {
-    corpo += conteudo.slice(cursor, casamento.index)
+    const literal = conteudo.slice(cursor, casamento.index)
+    if (PADRAO_POSICIONAL_LITERAL.test(literal)) return falha('template_posicional_reservado')
+    corpo += literal
 
     const nome = casamento[1]
     if (!CATALOGO.has(nome)) return falha('template_variavel_desconhecida')
@@ -187,7 +208,9 @@ export function traduzirParaPosicional(
 
     cursor = casamento.index + casamento[0].length
   }
-  corpo += conteudo.slice(cursor)
+  const cauda = conteudo.slice(cursor)
+  if (PADRAO_POSICIONAL_LITERAL.test(cauda)) return falha('template_posicional_reservado')
+  corpo += cauda
 
   return ok({ corpo, mapa })
 }

@@ -178,6 +178,21 @@ describe('traduzirParaPosicional', () => {
       valor: { corpo: 'mensagem sem variável nenhuma', mapa: [] },
     })
   })
+
+  it('placeholder posicional literal ({{1}}, {{01}}, {{ 2 }}) é recusado com código dedicado', () => {
+    expect(traduzirParaPosicional('confirma {{1}} por favor')).toEqual({
+      ok: false,
+      erro: 'template_posicional_reservado',
+    })
+    expect(traduzirParaPosicional('confirma {{01}} por favor')).toEqual({
+      ok: false,
+      erro: 'template_posicional_reservado',
+    })
+    expect(traduzirParaPosicional('confirma {{ 2 }} por favor')).toEqual({
+      ok: false,
+      erro: 'template_posicional_reservado',
+    })
+  })
 })
 
 describe('valoresPosicionais', () => {
@@ -226,10 +241,32 @@ describe('comutação: preencherPosicional === textoPlano(interpolar(...))', () 
     const viaInterpolacao = textoPlano(interpolar(conteudo, CONTEXTO_COMPLETO))
     expect(viaPosicional).toBe(viaInterpolacao)
   })
+
+  it('conteúdo com {{N}} literal é recusado na tradução, não diverge silenciosamente', () => {
+    // Sem a recusa em traduzirParaPosicional, este {{1}} sobreviveria como
+    // texto literal na tradução e seria substituído por preencherPosicional
+    // com o valor do slot 1 — divergindo de textoPlano(interpolar(...)), que
+    // trata {{1}} como texto comum (nenhuma variável de nome puramente
+    // numérico existe no catálogo). A recusa impede essa divergência ao
+    // nunca deixar o par chegar no ponto de comparação.
+    const conteudo = 'Oi {{1}}, vi a {{empresa}}'
+    const traduzida = traduzirParaPosicional(conteudo)
+    expect(traduzida).toEqual({ ok: false, erro: 'template_posicional_reservado' })
+  })
+})
+
+describe('preencherPosicional', () => {
+  it('posição fora do intervalo de valores devolve a tag original intocada', () => {
+    expect(preencherPosicional('a {{2}} b', ['x'])).toBe('a {{2}} b')
+  })
 })
 
 describe('nomeMetaDoTitulo', () => {
   it('pino exato: minúsculas, sem acento, inválidos viram _, colapsado, truncado, sufixo', () => {
     expect(nomeMetaDoTitulo('Abertura frio — 1ª msg!', 'k3f2')).toBe('abertura_frio_1_msg_k3f2')
+  })
+
+  it('pino: título feito só de caracteres inválidos vira raiz vazia + sufixo', () => {
+    expect(nomeMetaDoTitulo('!!!', 'k3f2')).toBe('_k3f2')
   })
 })
