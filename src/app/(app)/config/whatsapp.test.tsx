@@ -69,8 +69,30 @@ describe('WhatsApp', () => {
     ])
   })
 
+  it('sucesso ao conectar limpa os tres campos', async () => {
+    const { fn: conectar } = stubRegistrando<
+      [{ token: string; phoneNumberId: string; wabaId: string }],
+      void
+    >(ok(undefined))
+
+    render(<WhatsApp conexao={null} conectar={conectar} />)
+
+    const campoToken = screen.getByLabelText('Token') as HTMLInputElement
+    const campoNumero = screen.getByLabelText('ID do número') as HTMLInputElement
+    const campoWaba = screen.getByLabelText('ID da WABA') as HTMLInputElement
+
+    fireEvent.change(campoToken, { target: { value: 'token-abc' } })
+    fireEvent.change(campoNumero, { target: { value: '111' } })
+    fireEvent.change(campoWaba, { target: { value: 'waba' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Conectar' }))
+
+    await waitFor(() => expect(campoToken.value).toBe(''))
+    expect(campoNumero.value).toBe('')
+    expect(campoWaba.value).toBe('')
+  })
+
   it('conectado mostra numero, nome verificado e waba — e nao existe nenhum input', () => {
-    render(
+    const { container } = render(
       <WhatsApp
         conexao={conexao({
           numeroExibicao: '+55 11 98888-7777',
@@ -86,7 +108,15 @@ describe('WhatsApp', () => {
     // O token nunca volta do servidor (ConexaoWhatsApp nao tem esse campo) —
     // esta asercao trava que a tela tambem nao inventa um campo pra ele, nem
     // deixa nenhum outro input a mostra no estado conectado.
-    expect(screen.queryAllByRole('textbox')).toHaveLength(0)
+    //
+    // queryAllByRole('textbox') NAO pega <input type="password"> — o campo
+    // Token do estado desconectado e password, sem role textbox no jsdom
+    // deste repo (provado no achado do review desta task). Reintroduzir o
+    // input do token no ramo conectado passaria por essa consulta em
+    // silencio. A checagem real e por elemento <input> cru no container, mais
+    // a ausencia de rotulo acessivel "Token" especificamente.
+    expect(container.querySelectorAll('input')).toHaveLength(0)
+    expect(screen.queryByLabelText(/token/i)).toBeNull()
   })
 
   it('desconectar pede confirmacao: cancelar nao chama, confirmar chama com o id certo', () => {
@@ -106,6 +136,34 @@ describe('WhatsApp', () => {
     fireEvent.click(screen.getByRole('button', { name: /desconectar/i }))
     fireEvent.click(screen.getByRole('button', { name: /cancelar/i }))
     expect(cancelando.chamadas).toHaveLength(0)
+  })
+
+  it('confirmar desconexao fica desabilitado durante a acao em voo; clique duplo nao dispara duas chamadas', async () => {
+    // Mesmo desenho do caso equivalente em etapas.test.tsx: o stub so resolve
+    // quando o teste manda (`liberar`), o que deixa a chamada "em voo" tempo
+    // suficiente para o segundo clique acontecer enquanto o botao deveria
+    // estar desabilitado.
+    const c = conexao({ id: 'conn-8' })
+    const chamadas: string[] = []
+    let liberar: (r: Resultado<void>) => void = () => {}
+    const desconectar = (id: string): Promise<Resultado<void>> => {
+      chamadas.push(id)
+      return new Promise((resolve) => {
+        liberar = resolve
+      })
+    }
+
+    render(<WhatsApp conexao={c} desconectar={desconectar} />)
+    fireEvent.click(screen.getByRole('button', { name: /desconectar/i }))
+    const confirmar = screen.getByRole('button', { name: /confirmar/i }) as HTMLButtonElement
+
+    fireEvent.click(confirmar)
+    expect(confirmar.disabled).toBe(true)
+    fireEvent.click(confirmar)
+    expect(chamadas).toEqual(['conn-8'])
+
+    liberar(ok(undefined))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
   it('recusa traduzida: o texto exibido e a mensagem do mapa, nao o codigo', async () => {

@@ -70,7 +70,7 @@ export function WhatsApp({
 
   return (
     <section className="flex flex-col gap-3 rounded border p-4">
-      <h3 className="font-medium">WhatsApp</h3>
+      <h2 className="font-medium">WhatsApp</h2>
 
       {conexao ? (
         <div className="flex flex-col gap-2 text-sm">
@@ -87,7 +87,13 @@ export function WhatsApp({
           {!confirmando ? (
             <button
               type="button"
-              onClick={() => setConfirmando(true)}
+              onClick={() => {
+                // Mesma disciplina de reportarErro em etapas.tsx: um erro de
+                // uma tentativa de desconexao anterior nao pode sobreviver a
+                // abertura de um dialogo novo, como se fizesse parte dele.
+                setErro(null)
+                setConfirmando(true)
+              }}
               className="w-fit rounded border px-3 py-1 text-sm"
             >
               Desconectar
@@ -111,7 +117,10 @@ export function WhatsApp({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setConfirmando(false)}
+                  onClick={() => {
+                    setErro(null)
+                    setConfirmando(false)
+                  }}
                   aria-label="Cancelar desconexão"
                 >
                   Cancelar
@@ -123,12 +132,14 @@ export function WhatsApp({
       ) : (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-muted-foreground">
-            Encontre esses valores no painel do Meta → WhatsApp → Configuração da API.
+            Encontre esses valores no painel do Meta → WhatsApp → Configuração da API — use um
+            token permanente de System User, não o de 24h (ver README).
           </p>
           <label className="flex flex-col text-sm">
             Token
             <input
               type="password"
+              autoComplete="off"
               value={token}
               onChange={(e) => setToken(e.target.value)}
               className="rounded border px-2 py-1"
