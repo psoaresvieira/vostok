@@ -18,8 +18,8 @@ export type ContaCriada = { email: string; empresa: string }
 
 export async function criarConta(page: Page): Promise<ContaCriada> {
   const id = carimbo()
-  const empresa = `SE7E ${id}`
-  const email = `e2e-${id}@se7e.com`
+  const empresa = `Empresa ${id}`
+  const email = `e2e-${id}@exemplo.com`
 
   await page.goto('/signup')
   await page.getByPlaceholder('seu nome', { exact: true }).fill('Pedro E2E')

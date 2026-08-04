@@ -12,10 +12,10 @@ test('admin conecta uma Page do Meta e gera a URL do Google', async ({ page }) =
   await page.getByRole('link', { name: 'Conectar Facebook' }).click()
   await expect(page).toHaveURL(/\/config\?meta=escolher/)
 
-  await page.getByRole('button', { name: 'SE7E Marketing' }).click()
+  await page.getByRole('button', { name: 'Exemplo Marketing' }).click()
 
   // A fonte aparece na lista, com o selo do provedor.
-  const fonte = page.locator('li').filter({ hasText: 'SE7E Marketing' })
+  const fonte = page.locator('li').filter({ hasText: 'Exemplo Marketing' })
   await expect(fonte).toBeVisible()
   await expect(fonte.getByText('meta')).toBeVisible()
 
@@ -32,7 +32,7 @@ test('admin conecta uma Page do Meta e gera a URL do Google', async ({ page }) =
   await respostaResponsavel
   await page.reload()
   await expect(
-    page.locator('li').filter({ hasText: 'SE7E Marketing' }).getByRole('combobox'),
+    page.locator('li').filter({ hasText: 'Exemplo Marketing' }).getByRole('combobox'),
   ).toHaveValue(/.+/)
 
   // Google: a URL e a chave aparecem uma vez.
@@ -58,13 +58,13 @@ test('desconectar remove a fonte da lista', async ({ page }) => {
   await page.goto('/config')
 
   await page.getByRole('link', { name: 'Conectar Facebook' }).click()
-  await page.getByRole('button', { name: 'SE7E Imóveis' }).click()
+  await page.getByRole('button', { name: 'Exemplo Imóveis' }).click()
 
-  const fonte = page.locator('li').filter({ hasText: 'SE7E Imóveis' })
+  const fonte = page.locator('li').filter({ hasText: 'Exemplo Imóveis' })
   await expect(fonte).toBeVisible()
 
   await fonte.getByRole('button', { name: 'Desconectar' }).click()
-  await expect(page.locator('li').filter({ hasText: 'SE7E Imóveis' })).toHaveCount(0)
+  await expect(page.locator('li').filter({ hasText: 'Exemplo Imóveis' })).toHaveCount(0)
 })
 
 // Gate obrigatorio: o bug que este teste trava ja aconteceu (achado do review
@@ -77,9 +77,9 @@ test('desconectar remove a fonte da lista', async ({ page }) => {
 // com o Meta expirou" por cima de uma fonte que tinha conectado perfeitamente.
 // O conserto foi trocar por router.replace('/config').
 //
-// Terceira Page (SE7E Consultoria) de proposito: o indice de lead_sources e
-// global e o banco local nao e limpo entre rodadas de E2E — reusar "SE7E
-// Marketing" ou "SE7E Imoveis", ja conectadas pelos dois testes acima,
+// Terceira Page (Exemplo Consultoria) de proposito: o indice de lead_sources e
+// global e o banco local nao e limpo entre rodadas de E2E — reusar "Exemplo
+// Marketing" ou "Exemplo Imoveis", ja conectadas pelos dois testes acima,
 // estouraria page_ja_conectada por um motivo que nao tem nada a ver com o que
 // este teste verifica.
 test('reload depois de conectar uma Page nao mostra "conexao expirou"', async ({ page }) => {
@@ -88,7 +88,7 @@ test('reload depois de conectar uma Page nao mostra "conexao expirou"', async ({
 
   await page.getByRole('link', { name: 'Conectar Facebook' }).click()
   await expect(page).toHaveURL(/\/config\?meta=escolher/)
-  const botaoDaPagina = page.getByRole('button', { name: 'SE7E Consultoria' })
+  const botaoDaPagina = page.getByRole('button', { name: 'Exemplo Consultoria' })
   await expect(botaoDaPagina).toBeVisible()
 
   await botaoDaPagina.click()
@@ -106,7 +106,7 @@ test('reload depois de conectar uma Page nao mostra "conexao expirou"', async ({
   // nao. Quem mantiver essa asserção nao deve esperar dela protecao contra
   // remover o revalidatePath — so contra a tela exigir um reload manual para
   // mostrar a fonte recem-conectada.
-  const fonte = page.locator('li').filter({ hasText: 'SE7E Consultoria' })
+  const fonte = page.locator('li').filter({ hasText: 'Exemplo Consultoria' })
   await expect(fonte).toBeVisible()
   await expect(fonte.getByText('meta')).toBeVisible()
 
@@ -145,5 +145,5 @@ test('reload depois de conectar uma Page nao mostra "conexao expirou"', async ({
   // presente — o que de fato aconteceu ao testar isto isoladamente (4/4
   // rodadas verdes com a regressao no lugar, antes deste ajuste).
   await expect(page.getByText('A conexão com o Meta expirou')).toHaveCount(0)
-  await expect(page.locator('li').filter({ hasText: 'SE7E Consultoria' })).toBeVisible()
+  await expect(page.locator('li').filter({ hasText: 'Exemplo Consultoria' })).toBeVisible()
 })

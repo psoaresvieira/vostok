@@ -569,7 +569,7 @@ git commit -m "feat: bloco WhatsApp na tela de integracoes e nota beta do Meta"
 
 O da spec §10, na íntegra: um admin abre `/config`, cola token, `phone_number_id` e `waba_id`, e o card passa a mostrar o número e o nome verificado que o Meta devolveu. Cola um token errado e nada é gravado, com mensagem clara. Uma segunda conta tenta o mesmo número e é recusada dizendo por quê. Nenhuma sessão — nem de admin — alcança o token pelo PostgREST. Com `META_MODO_BETA` ligada, a nota aparece; desligada, some. E o sub-projeto 5 lê a credencial por `credencial_whatsapp` sem migration nova.
 
-A verificação contra o Graph **real** (token de um número da SE7E) fica registrada como pendência de credencial na §9 do `progresso.md`, junto com as outras — não bloqueia o merge.
+A verificação contra o Graph **real** (token de um número real da operação) fica registrada como pendência de credencial na §9 do `progresso.md`, junto com as outras — não bloqueia o merge.
 
 Suíte verde no resultado do merge, depois de `npx supabase db reset`. Todo teste novo com RED demonstrado.
 

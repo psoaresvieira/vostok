@@ -124,7 +124,7 @@ test.describe('ciclo de vida de uma tarefa, da ficha do lead ao badge', () => {
       const paginaAdmin = await contextoAdmin.newPage()
       await criarConta(paginaAdmin)
 
-      const emailA = `vendedor-a-${carimbo()}@se7e.com`
+      const emailA = `vendedor-a-${carimbo()}@exemplo.com`
       const linkA = await convidarVendedor(paginaAdmin, emailA)
       const paginaA = await contextoVendedorA.newPage()
       await aceitarConvite(paginaA, linkA, 'Vendedor A E2E', emailA)
@@ -201,7 +201,7 @@ test.describe('ciclo de vida de uma tarefa, da ficha do lead ao badge', () => {
 
       // --- Segundo vendedor da mesma conta: nao ve nenhuma das tarefas
       // acima em /tarefas. ---
-      const emailB = `vendedor-b-${carimbo()}@se7e.com`
+      const emailB = `vendedor-b-${carimbo()}@exemplo.com`
       const linkB = await convidarVendedor(paginaAdmin, emailB)
       const paginaB = await contextoVendedorB.newPage()
       await aceitarConvite(paginaB, linkB, 'Vendedor B E2E', emailB)

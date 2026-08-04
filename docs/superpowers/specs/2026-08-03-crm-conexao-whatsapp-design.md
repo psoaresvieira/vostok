@@ -86,7 +86,7 @@ O README ganha o runbook do operador: adicionar o usuário do cliente como teste
 
 **Componente:** o bloco nos dois estados; recusa com mensagem traduzida; a nota beta aparecendo só com a env ligada.
 
-**Verificação manual, bloqueada em credencial real** (entra na §9 do progresso junto com as outras): `conectar_whatsapp` contra o Graph real com um número da SE7E — o teste automatizado prova que chamamos o endpoint certo, não que o Meta responde como presumimos.
+**Verificação manual, bloqueada em credencial real** (entra na §9 do progresso junto com as outras): `conectar_whatsapp` contra o Graph real com um número real da operação — o teste automatizado prova que chamamos o endpoint certo, não que o Meta responde como presumimos.
 
 Todo teste novo com RED demonstrado. Nenhuma contagem de teste neste documento.
 
@@ -99,4 +99,4 @@ Todo teste novo com RED demonstrado. Nenhuma contagem de teste neste documento.
 
 ## 10. Critério de aceite
 
-Um admin abre `/config`, cola token, `phone_number_id` e `waba_id` de um número da SE7E, e o card passa a mostrar o número e o nome verificado que o **Meta** devolveu. Cola um token errado e nada é gravado, com mensagem clara. Uma segunda conta do CRM tenta conectar o mesmo número e é recusada dizendo por quê. Um vendedor não vê o bloco, e nenhuma sessão — nem de admin — alcança o token pelo PostgREST. Com `META_MODO_BETA` ligada, a nota do beta aparece junto ao botão do Facebook; desligada, some. E o sub-projeto 5, quando chegar, lê a credencial por `credencial_whatsapp` sem precisar de nenhuma migration nova.
+Um admin abre `/config`, cola token, `phone_number_id` e `waba_id` de um número real da operação, e o card passa a mostrar o número e o nome verificado que o **Meta** devolveu. Cola um token errado e nada é gravado, com mensagem clara. Uma segunda conta do CRM tenta conectar o mesmo número e é recusada dizendo por quê. Um vendedor não vê o bloco, e nenhuma sessão — nem de admin — alcança o token pelo PostgREST. Com `META_MODO_BETA` ligada, a nota do beta aparece junto ao botão do Facebook; desligada, some. E o sub-projeto 5, quando chegar, lê a credencial por `credencial_whatsapp` sem precisar de nenhuma migration nova.

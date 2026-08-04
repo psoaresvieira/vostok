@@ -167,7 +167,7 @@ test.describe('scripts na ficha do lead', () => {
       )
 
       // --- Passo 4: o vendedor le a biblioteca, mas nao escreve ---
-      const emailVendedor = `vendedor-${carimbo()}@se7e.com`
+      const emailVendedor = `vendedor-${carimbo()}@exemplo.com`
       const link = await convidarVendedor(paginaAdmin, emailVendedor)
       const paginaVendedor = await contextoVendedor.newPage()
       await aceitarConvite(paginaVendedor, link, 'Vendedor Script E2E', emailVendedor)

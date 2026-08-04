@@ -204,7 +204,7 @@ test.describe('disparo de WhatsApp da ficha do lead', () => {
       )
 
       // --- Passo 8: vendedor dispara, mas nao submete ---
-      const emailVendedor = `vendedor-${carimbo()}@se7e.com`
+      const emailVendedor = `vendedor-${carimbo()}@exemplo.com`
       const link = await convidarVendedor(paginaAdmin, emailVendedor)
       const paginaVendedor = await contextoVendedor.newPage()
       await aceitarConvite(paginaVendedor, link, 'Vendedor Disparo E2E', emailVendedor)

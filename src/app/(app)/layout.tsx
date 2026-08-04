@@ -78,6 +78,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between border-b px-6 py-3">
         <div className="flex items-center gap-4">
+          <span className="font-display text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+            Vostok
+          </span>
           <span className="font-semibold">{r.valor.conta.nome}</span>
           <a href="/funil" className="text-sm underline">
             Funil

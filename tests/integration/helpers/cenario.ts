@@ -19,7 +19,7 @@ export async function montarCenario(): Promise<Cenario> {
   const vendedorBId = await criarUsuario('vb@a.com')
 
   const accountId = await comoUsuario(adminId, async (c) =>
-    (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['SE7E'])).rows[0].id,
+    (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['Empresa Exemplo'])).rows[0].id,
   )
 
   await comoServico((c) =>

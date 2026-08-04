@@ -8,7 +8,7 @@ describe('0002 — pipeline e criacao de conta', () => {
     const ana = await criarUsuario('ana@a.com')
 
     const accountId = await comoUsuario(ana, async (c) =>
-      (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['SE7E'])).rows[0].id,
+      (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['Empresa Exemplo'])).rows[0].id,
     )
 
     const dados = await comoServico(async (c) => ({
@@ -85,7 +85,7 @@ describe('0002 — pipeline e criacao de conta', () => {
     const ana = await criarUsuario('ana@a.com')
     const vendedor = await criarUsuario('v@a.com')
     const accountId = await comoUsuario(ana, async (c) =>
-      (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['SE7E'])).rows[0].id,
+      (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['Empresa Exemplo'])).rows[0].id,
     )
     await comoServico((c) =>
       c.query(

@@ -82,7 +82,7 @@ describe('0012 — posse da Page: segredo de ingestao nas RPCs de conexao, reivi
     const sourceId = await comoUsuario(c.adminId, async (cli) => {
       const r = await cli.query<{ id: string }>(
         'select public.conectar_fonte_meta($1, $2, $3, $4, $5, $6) as id',
-        [SEGREDO, c.accountId, 'page-3', 'Page da SE7E', TOKEN, c.vendedorAId],
+        [SEGREDO, c.accountId, 'page-3', 'Page de Exemplo', TOKEN, c.vendedorAId],
       )
       return r.rows[0].id
     })

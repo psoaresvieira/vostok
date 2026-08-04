@@ -27,7 +27,7 @@ A ordem segue o risco: (1) é pré-requisito de tudo; (2) precede (3) porque mé
 |---|---|---|
 | Alvo do produto | SaaS multi-tenant desde o dia 1 | Evita remodelagem de banco quando a venda acontecer |
 | Stack de dados/auth | Supabase (Auth + Postgres + RLS + Realtime) | RLS põe o isolamento no banco; Realtime já resolve a notificação in-app do sub-projeto 2; stack já conhecida do `gestor-trafego` |
-| Card do funil | O Lead é o card (modelo Kommo) | Igual à operação atual da SE7E; schema mais simples; `stage_history` já aponta para `lead_id` na spec de produto |
+| Card do funil | O Lead é o card (modelo Kommo) | Igual à operação atual do cliente de referência; schema mais simples; `stage_history` já aponta para `lead_id` na spec de produto |
 | Meta Lead Ads | App e Business Verification já existem | Driver real é o padrão em produção; interface de driver mantida só para os testes não baterem na Graph API |
 | Mobile | Desktop neste ciclo, mobile no próximo | Kanban desktop é a tela que vende o produto em demonstração |
 

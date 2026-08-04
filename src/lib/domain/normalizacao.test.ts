@@ -29,7 +29,7 @@ describe('normalizarTelefone', () => {
 
 describe('normalizarEmail', () => {
   it('baixa a caixa e apara espacos', () => {
-    expect(normalizarEmail('  Ana.Silva@SE7E.com ')).toBe('ana.silva@se7e.com')
+    expect(normalizarEmail('  Ana.Silva@Exemplo.com ')).toBe('ana.silva@exemplo.com')
   })
 
   it('devolve null para vazio ou invalido', () => {

@@ -49,7 +49,7 @@ describe('0008 — fontes conectadas', () => {
     const sourceId = await comoUsuario(c.adminId, async (cli) => {
       const r = await cli.query<{ id: string }>(
         'select public.conectar_fonte_meta($1, $2, $3, $4, $5, $6) as id',
-        [SEGREDO, c.accountId, '1234567890', 'Page da SE7E', TOKEN, c.vendedorAId],
+        [SEGREDO, c.accountId, '1234567890', 'Page de Exemplo', TOKEN, c.vendedorAId],
       )
       return r.rows[0].id
     })

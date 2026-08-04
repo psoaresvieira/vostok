@@ -1147,7 +1147,7 @@ describe('0008 — fontes conectadas', () => {
     const sourceId = await comoUsuario(c.adminId, async (cli) => {
       const r = await cli.query<{ id: string }>(
         'select public.conectar_fonte_meta($1, $2, $3, $4, $5) as id',
-        [c.accountId, '1234567890', 'Page da SE7E', TOKEN, c.vendedorAId],
+        [c.accountId, '1234567890', 'Page de Exemplo', TOKEN, c.vendedorAId],
       )
       return r.rows[0].id
     })
@@ -1901,8 +1901,8 @@ import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import type { MetaGraph, PaginaDoMeta } from './meta'
 
 const PAGINAS_PADRAO: PaginaDoMeta[] = [
-  { id: '100000000000001', nome: 'SE7E Marketing', token: 'token-da-pagina-1' },
-  { id: '100000000000002', nome: 'SE7E Imóveis', token: 'token-da-pagina-2' },
+  { id: '100000000000001', nome: 'Exemplo Marketing', token: 'token-da-pagina-1' },
+  { id: '100000000000002', nome: 'Exemplo Imóveis', token: 'token-da-pagina-2' },
 ]
 
 /**
@@ -3020,7 +3020,7 @@ Com o stack local rodando (`npx supabase start`) e `.env.local` copiado de `.env
 Run: `npm run dev`
 
 1. Crie uma conta em `/signup`, vá em `/config`.
-2. Clique em **Conectar Facebook**. Como `META_FAKE=1`, você volta direto para `/config?meta=escolher` e a lista mostra "SE7E Marketing" e "SE7E Imóveis".
+2. Clique em **Conectar Facebook**. Como `META_FAKE=1`, você volta direto para `/config?meta=escolher` e a lista mostra "Exemplo Marketing" e "Exemplo Imóveis".
 3. Clique numa delas. A fonte aparece na lista com o selo `meta`.
 4. Escolha um responsável no select. Recarregue: a escolha persistiu.
 5. Digite um nome e clique em **Gerar URL do Google**. A caixa âmbar mostra a URL e a chave.
@@ -3088,10 +3088,10 @@ test('admin conecta uma Page do Meta e gera a URL do Google', async ({ page }) =
   await page.getByRole('link', { name: 'Conectar Facebook' }).click()
   await expect(page).toHaveURL(/\/config\?meta=escolher/)
 
-  await page.getByRole('button', { name: 'SE7E Marketing' }).click()
+  await page.getByRole('button', { name: 'Exemplo Marketing' }).click()
 
   // A fonte aparece na lista, com o selo do provedor.
-  const fonte = page.locator('li').filter({ hasText: 'SE7E Marketing' })
+  const fonte = page.locator('li').filter({ hasText: 'Exemplo Marketing' })
   await expect(fonte).toBeVisible()
   await expect(fonte.getByText('meta')).toBeVisible()
 
@@ -3099,7 +3099,7 @@ test('admin conecta uma Page do Meta e gera a URL do Google', async ({ page }) =
   await fonte.getByRole('combobox').selectOption({ label: 'Pedro E2E' })
   await page.reload()
   await expect(
-    page.locator('li').filter({ hasText: 'SE7E Marketing' }).getByRole('combobox'),
+    page.locator('li').filter({ hasText: 'Exemplo Marketing' }).getByRole('combobox'),
   ).toHaveValue(/.+/)
 
   // Google: a URL e a chave aparecem uma vez.
@@ -3121,13 +3121,13 @@ test('desconectar remove a fonte da lista', async ({ page }) => {
   await page.goto('/config')
 
   await page.getByRole('link', { name: 'Conectar Facebook' }).click()
-  await page.getByRole('button', { name: 'SE7E Imóveis' }).click()
+  await page.getByRole('button', { name: 'Exemplo Imóveis' }).click()
 
-  const fonte = page.locator('li').filter({ hasText: 'SE7E Imóveis' })
+  const fonte = page.locator('li').filter({ hasText: 'Exemplo Imóveis' })
   await expect(fonte).toBeVisible()
 
   await fonte.getByRole('button', { name: 'Desconectar' }).click()
-  await expect(page.locator('li').filter({ hasText: 'SE7E Imóveis' })).toHaveCount(0)
+  await expect(page.locator('li').filter({ hasText: 'Exemplo Imóveis' })).toHaveCount(0)
 })
 ```
 
@@ -3147,7 +3147,7 @@ reais e banco.
 **Antes de escrever: este teste precisa de uma TERCEIRA Page.** Vale aqui o mesmo
 aviso do Step 3 abaixo — o índice de `lead_sources` é global e o banco local não
 é limpo entre rodadas de E2E, então dois testes conectando a mesma Page fazem o
-segundo estourar `page_ja_conectada`. "SE7E Marketing" e "SE7E Imóveis" já estão
+segundo estourar `page_ja_conectada`. "Exemplo Marketing" e "Exemplo Imóveis" já estão
 tomadas pelos outros dois testes. Acrescente uma terceira a `PAGINAS_PADRAO` em
 `src/lib/integracoes/meta-falso.ts`, seguindo o padrão de id existente, e use
 **ela** nos passos abaixo.
@@ -3189,7 +3189,7 @@ Expected: PASS, 6 testes (4 que já existiam + 2 novos).
 
 Se `admin conecta uma Page do Meta` falhar em `/config?meta=escolher` com a lista vazia, o cookie do token não sobreviveu ao redirect — confira `sameSite: 'lax'` e `path: '/'` no `retorno/route.ts`. Não troque o teste por um que aceite lista vazia.
 
-**Atenção à segunda Page:** o segundo teste conecta "SE7E Imóveis" e não "SE7E Marketing" de propósito. O índice de `lead_sources` é **global**, e o banco local não é limpo entre rodadas de E2E — dois testes conectando a mesma Page fariam o segundo estourar `page_ja_conectada`. Se você acrescentar mais um teste que conecta Page, ele precisa de uma terceira Page em `PAGINAS_PADRAO`.
+**Atenção à segunda Page:** o segundo teste conecta "Exemplo Imóveis" e não "Exemplo Marketing" de propósito. O índice de `lead_sources` é **global**, e o banco local não é limpo entre rodadas de E2E — dois testes conectando a mesma Page fariam o segundo estourar `page_ja_conectada`. Se você acrescentar mais um teste que conecta Page, ele precisa de uma terceira Page em `PAGINAS_PADRAO`.
 
 - [ ] **Step 4: Rodar tudo**
 

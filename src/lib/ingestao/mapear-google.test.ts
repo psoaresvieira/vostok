@@ -8,14 +8,14 @@ describe('mapearLeadDoGoogle', () => {
         { column_id: 'FULL_NAME', string_value: 'Ana Silva', column_name: 'Nome completo' },
         { column_id: 'EMAIL', string_value: 'ana@example.com', column_name: 'E-mail' },
         { column_id: 'PHONE_NUMBER', string_value: '+5511999998888', column_name: 'Telefone' },
-        { column_id: 'COMPANY_NAME', string_value: 'SE7E Marketing', column_name: 'Empresa' },
+        { column_id: 'COMPANY_NAME', string_value: 'Exemplo Marketing', column_name: 'Empresa' },
       ],
     }
     const dados = mapearLeadDoGoogle(payload)
     expect(dados.nome).toBe('Ana Silva')
     expect(dados.email).toBe('ana@example.com')
     expect(dados.telefone).toBe('+5511999998888')
-    expect(dados.empresa).toBe('SE7E Marketing')
+    expect(dados.empresa).toBe('Exemplo Marketing')
   })
 
   it('junta FIRST_NAME e LAST_NAME com espaco quando FULL_NAME nao vem', () => {

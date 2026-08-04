@@ -1793,12 +1793,12 @@ describe('SupabaseAdminStore', () => {
       c.adminId,
       c.pipelineId,
     )
-    const criado = await admin.convidar('novo@se7e.com', 'vendedor')
+    const criado = await admin.convidar('novo@exemplo.com', 'vendedor')
     if (!criado.ok) throw new Error(criado.erro)
 
     const pendentes = await admin.convitesPendentes()
     if (!pendentes.ok) throw new Error(pendentes.erro)
-    expect(pendentes.valor.map((p) => p.email)).toEqual(['novo@se7e.com'])
+    expect(pendentes.valor.map((p) => p.email)).toEqual(['novo@exemplo.com'])
 
     const revogado = await admin.revogarConvite(pendentes.valor[0].id)
     expect(revogado.ok).toBe(true)
@@ -2503,7 +2503,7 @@ Modify `src/app/(app)/layout.tsx` — trocar o `<header>` por:
 npm run dev
 ```
 
-Em `/config`: renomear "Fechamento" para "Negociação final" e conferir que a coluna muda em `/funil`; desativar o motivo "Preço" e conferir que ele some do modal de perda; convidar `teste@se7e.com` como vendedor e copiar o link gerado. Abrir o link numa janela anônima, criar conta e conferir que cai em `/funil` com o nome da conta "SE7E" no topo e sem o link de Configuração.
+Em `/config`: renomear "Fechamento" para "Negociação final" e conferir que a coluna muda em `/funil`; desativar o motivo "Preço" e conferir que ele some do modal de perda; convidar `teste@exemplo.com` como vendedor e copiar o link gerado. Abrir o link numa janela anônima, criar conta e conferir que cai em `/funil` com o nome da conta "Empresa Exemplo" no topo e sem o link de Configuração.
 
 - [ ] **Step 10: Commit**
 
@@ -2568,13 +2568,13 @@ import { test, expect } from '@playwright/test'
 
 // Email unico por execucao: o banco local nao e limpo entre rodadas de E2E.
 const carimbo = Date.now()
-const EMAIL = `e2e-${carimbo}@se7e.com`
+const EMAIL = `e2e-${carimbo}@exemplo.com`
 const SENHA = 'segredo123'
 
 test('do signup ate a perda com motivo, com a timeline contando a historia', async ({ page }) => {
   await page.goto('/signup')
   await page.getByPlaceholder('seu nome').fill('Pedro E2E')
-  await page.getByPlaceholder('nome da empresa').fill(`SE7E ${carimbo}`)
+  await page.getByPlaceholder('nome da empresa').fill(`Empresa ${carimbo}`)
   await page.getByPlaceholder('email').fill(EMAIL)
   await page.getByPlaceholder('senha (min. 8 caracteres)').fill(SENHA)
   await page.getByRole('button', { name: 'Criar conta' }).click()
