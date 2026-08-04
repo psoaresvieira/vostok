@@ -5,10 +5,22 @@ import { criarStoreDoServidor } from '@/lib/data/supabase'
 import { mensagemDeErroScript } from './erros'
 import { ListaDeScripts } from './lista'
 
+/**
+ * Uma chave repetida na URL (`?busca=a&busca=b`) chega como string[], nao como
+ * string — o tipo `Record<string, string | undefined>` que o resto do repo usa
+ * mente sobre isso. Um array descendo ate `padraoIlike` estoura dentro de um
+ * server component que esta tela inteira foi escrita para nunca deixar
+ * estourar. Nao ha leitura util de "buscar duas coisas ao mesmo tempo": o
+ * segundo valor e' descartado junto com o primeiro e o filtro fica vazio.
+ */
+function paramDeTexto(v: string | string[] | undefined): string {
+  return typeof v === 'string' ? v : ''
+}
+
 export default async function ScriptsPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | undefined>>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const params = await searchParams
 
@@ -33,9 +45,9 @@ export default async function ScriptsPage({
   // '' = sem filtro nos tres, e e' o valor que o proprio <form method="get">
   // devolve quando o campo fica em branco — nao ha estado ambiguo entre
   // "ausente" e "vazio" como no `responsavel` de /tarefas.
-  const busca = params.busca ?? ''
-  const tag = params.tag ?? ''
-  const etapa = params.etapa ?? ''
+  const busca = paramDeTexto(params.busca)
+  const tag = paramDeTexto(params.tag)
+  const etapa = paramDeTexto(params.etapa)
 
   const [lista, tagsDaConta] = await Promise.all([
     scripts.listar({ busca: busca || null, tag: tag || null, stageId: etapa || null }),

@@ -74,6 +74,14 @@ export function Editor({
   // textarea so muda no render seguinte, e o caret voltaria para o fim.
   const [caret, setCaret] = useState<number | null>(null)
   const refConteudo = useRef<HTMLTextAreaElement>(null)
+  // Um <textarea> que nunca foi tocado reporta selectionStart 0, e 0 nao e'
+  // distinguivel de "o usuario pos o cursor no comeco". Sem esta marca, clicar
+  // numa variavel ao abrir um script existente enfiava {{nome}} ANTES da
+  // primeira letra do texto ja escrito. Vira true no foco E no onChange —
+  // digitar sem foco nao existe, e no jsdom um fireEvent.change chega sem
+  // evento de foco nenhum. Ref e nao state: so e' lida dentro do handler, e um
+  // re-render por foco nao serve a ninguem.
+  const cursorConfiavel = useRef(false)
 
   useEffect(() => {
     if (caret === null) return
@@ -97,8 +105,12 @@ export function Editor({
   function inserirVariavel(nome: string) {
     const el = refConteudo.current
     const tag = `{{${nome}}}`
-    const inicio = el?.selectionStart ?? conteudo.length
-    const fim = el?.selectionEnd ?? conteudo.length
+    // Enquanto o campo nunca foi focado, o fim do texto e' o unico palpite
+    // honesto: o usuario nao escolheu posicao nenhuma. Depois do primeiro foco
+    // (inclusive o que o efeito acima devolve), vale o cursor de verdade.
+    const temCursor = cursorConfiavel.current && el !== null
+    const inicio = temCursor ? el.selectionStart : conteudo.length
+    const fim = temCursor ? el.selectionEnd : conteudo.length
     setConteudo(conteudo.slice(0, inicio) + tag + conteudo.slice(fim))
     setCaret(inicio + tag.length)
   }
@@ -221,7 +233,13 @@ export function Editor({
             id="script-conteudo"
             ref={refConteudo}
             value={conteudo}
-            onChange={(e) => setConteudo(e.target.value)}
+            onFocus={() => {
+              cursorConfiavel.current = true
+            }}
+            onChange={(e) => {
+              cursorConfiavel.current = true
+              setConteudo(e.target.value)
+            }}
             rows={16}
             className="rounded border border-border px-2 py-1 font-mono text-sm"
           />
@@ -321,26 +339,31 @@ export function Editor({
                 // A tag literal continua no texto, nunca substituida por vazio:
                 // uma lacuna invisivel viraria uma mensagem com buraco enviada
                 // a um lead de verdade.
-                <mark
-                  key={i}
-                  aria-label={`${seg.nome} sem valor`}
-                  className="rounded bg-warning/25 px-0.5 text-warning"
-                >
+                //
+                // O rotulo vai num <span> visualmente escondido DENTRO da
+                // marca, e nao num aria-label nela: o papel ARIA de <mark> e'
+                // name-prohibited, entao a tecnologia assistiva simplesmente
+                // ignora um aria-label ali — o destaque ficaria so visual, e
+                // quem nao ve a cor nao saberia que aquele {{nome}} e' um
+                // buraco. O texto escondido e' lido junto com o literal.
+                <mark key={i} className="rounded bg-warning/25 px-0.5 text-warning">
                   {seg.texto}
+                  <span className="sr-only">{` ${seg.nome} sem valor`}</span>
                 </mark>
               )
             }
             if (seg.tipo === 'desconhecida') {
               return (
                 // Distinguivel da lacuna por mais do que a cor (sublinhado
-                // pontilhado) e pelo proprio rotulo acessivel: sao dois
-                // problemas com correcoes diferentes.
+                // pontilhado) e pelo proprio rotulo escondido: sao dois
+                // problemas com correcoes diferentes. Mesmo motivo do <span>
+                // sr-only da lacuna acima.
                 <mark
                   key={i}
-                  aria-label={`${seg.nome} não é uma variável`}
                   className="rounded bg-destructive/25 px-0.5 text-destructive underline decoration-dotted"
                 >
                   {seg.texto}
+                  <span className="sr-only">{` ${seg.nome} não é uma variável`}</span>
                 </mark>
               )
             }

@@ -67,10 +67,17 @@ describe('Editor de script', () => {
     // visivel DURANTE a escrita, nao so na hora de enviar.
     conteudoDe('Olá {{primeiro_nome}}, aqui é sobre a {{empresa}}.')
 
-    // Por texto + atributo acessivel, nunca por classe: o que importa e' que
-    // um leitor de tela tambem saiba que ali falta valor.
-    const lacuna = screen.getByLabelText('empresa sem valor')
-    expect(lacuna.textContent).toBe('{{empresa}}')
+    // Pelo TEXTO exposto, e nao por aria-label nem por classe: o papel ARIA de
+    // <mark> e' name-prohibited, entao um aria-label nele nao chega a leitor de
+    // tela nenhum — a versao anterior deste teste passava so porque o
+    // testing-library casa o atributo, nao o nome exposto de verdade. O rotulo
+    // agora e' texto visualmente escondido dentro da propria marca.
+    const rotulo = screen.getByText(/empresa sem valor/)
+    const lacuna = rotulo.closest('mark')
+    expect(lacuna).not.toBeNull()
+    // O literal visivel continua sendo o primeiro no da marca — o rotulo
+    // escondido nao substituiu nem embaralhou o {{empresa}} que se le na tela.
+    expect(lacuna!.firstChild?.textContent).toBe('{{empresa}}')
 
     // Vermelho se o preview substituir a lacuna por vazio: a tag literal tem
     // que continuar no texto da previa.
@@ -90,10 +97,15 @@ describe('Editor de script', () => {
     conteudoDe('Olá {{Empresa}}, tudo bem?')
 
     const previa = screen.getByLabelText('Prévia')
+    // Nenhum <mark>: sem marca nao ha rotulo escondido, entao o textContent da
+    // previa e' exatamente o texto visivel. A igualdade exata continua valendo
+    // — e a asercao de marks abaixo e' o que a mantem honesta se um dia um
+    // rotulo escondido passar a existir aqui.
+    expect(previa.querySelectorAll('mark')).toHaveLength(0)
     expect(previa.textContent).toBe('Olá {{Empresa}}, tudo bem?')
-    // Nenhum destaque de lacuna nem de desconhecida.
-    expect(screen.queryByLabelText(/sem valor/i)).toBeNull()
-    expect(screen.queryByLabelText(/não é uma variável/i)).toBeNull()
+    // Nenhum dos dois rotulos escondidos foi para o DOM.
+    expect(screen.queryByText(/sem valor/i)).toBeNull()
+    expect(screen.queryByText(/não é uma variável/i)).toBeNull()
     expect(screen.queryByText(/variáve(l|is) sem valor/i)).toBeNull()
   })
 
@@ -108,6 +120,31 @@ describe('Editor de script', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Inserir empresa' }))
 
     expect(area.value).toBe('Olá {{empresa}}, tudo bem?')
+  })
+
+  it('Caso 3b: sem cursor nunca posicionado, a variavel vai para o FIM e nao para o topo', () => {
+    // Um <textarea> que nunca recebeu foco reporta selectionStart 0, e 0 e'
+    // indistinguivel de "o usuario pos o cursor no comeco". Abrindo um script
+    // que ja tem texto e clicando numa variavel, {{nome}} era enfiado ANTES da
+    // primeira letra. A posicao e' forcada para 0 aqui de proposito: e'
+    // exatamente o que o navegador reporta na condicao real, e sem isso o teste
+    // dependeria do palpite do jsdom para o caret inicial.
+    render(<Editor script={script({ conteudo: 'Texto que ja existia.' })} etapas={ETAPAS} />)
+    const area = screen.getByLabelText('Conteúdo') as HTMLTextAreaElement
+    area.selectionStart = 0
+    area.selectionEnd = 0
+
+    fireEvent.click(screen.getByRole('button', { name: 'Inserir empresa' }))
+
+    expect(area.value).toBe('Texto que ja existia.{{empresa}}')
+
+    // E depois do primeiro foco o cursor de verdade volta a mandar: a marca de
+    // "nunca tocado" nao pode virar "sempre no fim" para sempre.
+    fireEvent.focus(area)
+    area.selectionStart = 0
+    area.selectionEnd = 0
+    fireEvent.click(screen.getByRole('button', { name: 'Inserir email' }))
+    expect(area.value).toBe('{{email}}Texto que ja existia.{{empresa}}')
   })
 
   it('Caso 4: salvar envia o que foi editado e traduz a recusa pela mensagem do mapa', async () => {
