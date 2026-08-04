@@ -3,6 +3,12 @@ import type { Resultado } from '@/lib/domain/resultado'
 /** O que o Meta diz sobre um numero de WhatsApp Business, direto do Graph. */
 export type DadosDoNumero = { numeroExibicao: string; nomeVerificado: string }
 
+/** O que o Meta devolve ao aceitar uma submissao de template para revisao. */
+export type TemplateSubmetido = { idMeta: string; status: string }
+
+/** O que o Meta diz sobre o estado atual de um template ja submetido. */
+export type StatusTemplate = { status: string; motivo: string | null }
+
 /**
  * Prova, antes de gravar credencial nenhuma, que `token` de fato le
  * `phoneNumberId` no Graph. Port, e nao fetch espalhado, para que nenhum
@@ -16,4 +22,44 @@ export interface WhatsAppGraph {
    * credencial ou o id) ou 'whatsapp_indisponivel' (rede/5xx).
    */
   dadosDoNumero(token: string, phoneNumberId: string): Promise<Resultado<DadosDoNumero>>
+
+  /**
+   * Submete um template para revisao do Meta. Falhas viram codigo:
+   * 'template_recusado_pelo_meta' (4xx — o Graph recusou o template) ou
+   * 'whatsapp_indisponivel' (rede/5xx).
+   */
+  submeterTemplate(
+    token: string,
+    wabaId: string,
+    d: { nome: string; idioma: string; categoria: 'marketing' | 'utility'; corpo: string },
+  ): Promise<Resultado<TemplateSubmetido>>
+
+  /**
+   * Consulta o estado atual de um template pelo nome. Falhas viram codigo:
+   * 'template_nao_encontrado' (o Graph nao devolveu nenhum resultado) ou
+   * 'whatsapp_indisponivel' (rede/5xx ou qualquer outra recusa do Graph).
+   */
+  statusDoTemplate(
+    token: string,
+    wabaId: string,
+    nome: string,
+  ): Promise<Resultado<StatusTemplate>>
+
+  /**
+   * Apaga um template pelo nome. Falha vira codigo: 'whatsapp_indisponivel'
+   * (rede/5xx ou qualquer recusa do Graph).
+   */
+  apagarTemplate(token: string, wabaId: string, nome: string): Promise<Resultado<void>>
+
+  /**
+   * Envia um template aprovado a um destinatario. Falhas viram codigo:
+   * 'envio_recusado' (4xx — o Graph recusou o envio, ex.: template nao
+   * aprovado) ou 'whatsapp_indisponivel' (rede/5xx).
+   */
+  enviarTemplate(
+    token: string,
+    phoneNumberId: string,
+    e164Destino: string,
+    d: { nome: string; idioma: string; valores: string[] },
+  ): Promise<Resultado<{ idMensagem: string }>>
 }

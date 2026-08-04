@@ -62,3 +62,195 @@ describe('WhatsAppGraphReal', () => {
     expect(r.erro).toBe('whatsapp_indisponivel')
   })
 })
+
+describe('WhatsAppGraphReal — submeterTemplate, statusDoTemplate, apagarTemplate, enviarTemplate montam URL e corpo certos', () => {
+  const fetchOriginal = global.fetch
+
+  afterEach(() => {
+    global.fetch = fetchOriginal
+    vi.restoreAllMocks()
+  })
+
+  it('submeterTemplate faz POST em /{waba_id}/message_templates com categoria maiuscula no fio e status normalizado', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'tpl-123', status: 'PENDING' }),
+    })
+    global.fetch = fetchMock
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.submeterTemplate('token-valido', 'waba-1', {
+      nome: 'boas_vindas',
+      idioma: 'pt_BR',
+      categoria: 'marketing',
+      corpo: 'Ola {{1}}, bem-vindo!',
+    })
+
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor).toEqual({ idMeta: 'tpl-123', status: 'pending' })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [chamadaUrl, init] = fetchMock.mock.calls[0] as [string | URL, RequestInit]
+    const url = new URL(chamadaUrl)
+    expect(url.pathname).toContain('waba-1')
+    expect(url.pathname).toContain('message_templates')
+    expect(init.method).toBe('POST')
+    const corpo = JSON.parse(init.body as string)
+    expect(corpo).toEqual({
+      name: 'boas_vindas',
+      language: 'pt_BR',
+      category: 'MARKETING',
+      components: [{ type: 'BODY', text: 'Ola {{1}}, bem-vindo!' }],
+    })
+  })
+
+  it('statusDoTemplate faz GET com name e fields corretos, e normaliza status/rejected_reason', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [{ status: 'REJECTED', rejected_reason: 'INVALID_FORMAT' }] }),
+    })
+    global.fetch = fetchMock
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.statusDoTemplate('token-valido', 'waba-1', 'boas_vindas')
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor).toEqual({ status: 'rejected', motivo: 'INVALID_FORMAT' })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const url = new URL(fetchMock.mock.calls[0][0] as string | URL)
+    expect(url.pathname).toContain('waba-1')
+    expect(url.pathname).toContain('message_templates')
+    expect(decodeURIComponent(url.search)).toContain('name=boas_vindas')
+    expect(decodeURIComponent(url.search)).toContain('fields=status,rejected_reason')
+  })
+
+  it('apagarTemplate faz DELETE em /{waba_id}/message_templates com name na query', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true }),
+    })
+    global.fetch = fetchMock
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.apagarTemplate('token-valido', 'waba-1', 'boas_vindas')
+    expect(r.ok).toBe(true)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [chamadaUrl, init] = fetchMock.mock.calls[0] as [string | URL, RequestInit]
+    const url = new URL(chamadaUrl)
+    expect(url.pathname).toContain('waba-1')
+    expect(url.pathname).toContain('message_templates')
+    expect(decodeURIComponent(url.search)).toContain('name=boas_vindas')
+    expect(init.method).toBe('DELETE')
+  })
+
+  it('enviarTemplate faz POST em /{phone_number_id}/messages com "to" sem + e language.code', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ messages: [{ id: 'wamid.123' }] }),
+    })
+    global.fetch = fetchMock
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.enviarTemplate('token-valido', 'phone-1', '+5511999999999', {
+      nome: 'boas_vindas',
+      idioma: 'pt_BR',
+      valores: ['Fulano'],
+    })
+
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor).toEqual({ idMensagem: 'wamid.123' })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [chamadaUrl, init] = fetchMock.mock.calls[0] as [string | URL, RequestInit]
+    const url = new URL(chamadaUrl)
+    expect(url.pathname).toContain('phone-1')
+    expect(url.pathname).toContain('messages')
+    expect(init.method).toBe('POST')
+    const corpo = JSON.parse(init.body as string)
+    expect(corpo).toEqual({
+      messaging_product: 'whatsapp',
+      to: '5511999999999',
+      type: 'template',
+      template: {
+        name: 'boas_vindas',
+        language: { code: 'pt_BR' },
+        components: [{ type: 'body', parameters: [{ type: 'text', text: 'Fulano' }] }],
+      },
+    })
+  })
+})
+
+describe('WhatsAppGraphReal — traducao de erro por metodo', () => {
+  const fetchOriginal = global.fetch
+
+  afterEach(() => {
+    global.fetch = fetchOriginal
+    vi.restoreAllMocks()
+  })
+
+  it('submeterTemplate: 4xx com erro do Graph vira template_recusado_pelo_meta', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: { message: 'Invalid parameter', code: 100 } }),
+    })
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.submeterTemplate('token', 'waba-1', {
+      nome: 'x',
+      idioma: 'pt_BR',
+      categoria: 'marketing',
+      corpo: 'oi',
+    })
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('template_recusado_pelo_meta')
+  })
+
+  it('enviarTemplate: 4xx com erro do Graph vira envio_recusado', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: { message: 'Template not approved', code: 132001 } }),
+    })
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.enviarTemplate('token', 'phone-1', '5511999999999', {
+      nome: 'x',
+      idioma: 'pt_BR',
+      valores: [],
+    })
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('envio_recusado')
+  })
+
+  it('rejeicao de rede (DNS/conexao/TLS/timeout) vira whatsapp_indisponivel', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('fetch failed'))
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.apagarTemplate('token', 'waba-1', 'x')
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('whatsapp_indisponivel')
+  })
+
+  it('statusDoTemplate: zero resultados vira template_nao_encontrado', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [] }),
+    })
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.statusDoTemplate('token', 'waba-1', 'inexistente')
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('template_nao_encontrado')
+  })
+})
