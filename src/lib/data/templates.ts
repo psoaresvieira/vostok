@@ -260,9 +260,15 @@ export class SupabaseTemplateStore implements TemplateStore {
  * existir na ficha do lead. O `papel` sobe junto para as telas gatearem o bloco
  * de submissao; quem barra a escrita de verdade e' a RLS de
  * whatsapp_templates_insert/update/delete mais o pre-check da action.
+ *
+ * `contaId` sobe junto porque `DisparoServico.credencial(accountId)` precisa
+ * dele e NAO passa pela sessao (cliente anonimo + segredo). Sem isto, todo
+ * chamador teria que resolver a conta ativa uma segunda vez por outro caminho,
+ * e as duas resolucoes poderiam discordar — sendo que a que discordasse seria
+ * justamente a que escolhe de qual conta sai o token do WhatsApp.
  */
 export async function criarTemplateStoreDoServidor(): Promise<
-  Resultado<{ templates: SupabaseTemplateStore; papel: Papel }>
+  Resultado<{ templates: SupabaseTemplateStore; papel: Papel; contaId: string }>
 > {
   const cliente = await criarClienteServidor()
   const { data: sessao } = await cliente.auth.getUser()
@@ -274,6 +280,7 @@ export async function criarTemplateStoreDoServidor(): Promise<
   return ok({
     templates: new SupabaseTemplateStore(cliente, ativa.valor.conta.id),
     papel: ativa.valor.papel,
+    contaId: ativa.valor.conta.id,
   })
 }
 

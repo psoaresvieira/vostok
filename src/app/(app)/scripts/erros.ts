@@ -19,6 +19,36 @@ const MENSAGENS_ERRO: Record<string, string> = {
   erro_ao_salvar_script: 'Não foi possível salvar o script. Tente de novo.',
   erro_ao_carregar_scripts: 'Não foi possível carregar os scripts. Tente de novo.',
   [FALHA_DE_CONEXAO]: MENSAGEM_FALHA_DE_CONEXAO,
+
+  // Disparo de WhatsApp (Plano 11). Moram no MESMO mapa, e nao num
+  // template/erros.ts proprio, porque as duas telas que os mostram — o bloco de
+  // /scripts/[id] e o painel de scripts da ficha do lead — ja traduzem codigo de
+  // script pelo mesmo caminho, e um segundo mapa faria cada tela ter que saber
+  // de qual vocabulario o codigo veio antes de escolher o tradutor.
+  sem_conexao_whatsapp: 'Conecte um número de WhatsApp em Configuração antes de usar templates.',
+  template_variavel_desconhecida:
+    'O script usa uma variável que o CRM não conhece. Confira os nomes.',
+  template_posicional_reservado:
+    'O script contém {{número}}, forma reservada dos templates do Meta. Troque por uma variável nomeada.',
+  // Fora da lista do brief: guarda de `submeterTemplate` contra payload
+  // forjado. A assinatura da action e' 'marketing' | 'utility', mas o tipo nao
+  // sobrevive ao POST — e sem esta recusa a categoria invalida so pararia no
+  // check da 0022, DEPOIS de o Meta ja ter registrado um template orfao.
+  template_categoria_invalida: 'Escolha marketing ou utilidade antes de submeter.',
+  template_ja_pendente: 'Este script já tem um template em análise no Meta. Aguarde a resposta.',
+  template_ja_existe: 'Este script já tem um template. Recarregue a página.',
+  template_recusado_pelo_meta: 'O Meta recusou a submissão. Tente de novo em alguns minutos.',
+  template_nao_encontrado: 'Esse template não existe mais. Recarregue a página.',
+  template_nao_aprovado: 'O template deste script ainda não foi aprovado pelo Meta.',
+  template_desatualizado: 'O script mudou depois da aprovação. Re-submeta o template para enviar.',
+  whatsapp_sem_telefone: 'Este lead não tem telefone.',
+  whatsapp_lacunas: 'Faltam dados do lead para preencher o template.',
+  envio_recusado: 'O Meta recusou o envio. Confira o template e tente de novo.',
+  whatsapp_indisponivel: 'O Meta não respondeu. Tente de novo em alguns minutos.',
+  whatsapp_enviado_sem_evento:
+    'Mensagem enviada. Não conseguimos registrá-la na linha do tempo do lead.',
+  erro_ao_salvar_template: 'Não foi possível salvar o template. Tente de novo.',
+  erro_ao_carregar_templates: 'Não foi possível carregar os templates. Tente de novo.',
 }
 
 export function mensagemDeErroScript(codigo: string): string {
@@ -82,4 +112,28 @@ export function codigoDoErroDaAcao(codigo: string): string {
   return Object.prototype.hasOwnProperty.call(MENSAGENS_ERRO, codigo)
     ? codigo
     : ERRO_AO_SALVAR_SCRIPT
+}
+
+/** Generico de escrita do lado do template, o mesmo que o
+ * SupabaseTemplateStore devolve (ERRO_AO_SALVAR_TEMPLATE em
+ * lib/data/templates.ts). */
+const ERRO_AO_SALVAR_TEMPLATE = 'erro_ao_salvar_template'
+
+/**
+ * Mesma normalizacao de `codigoDoErroDaAcao`, mas com o generico do TEMPLATE:
+ * `submeterTemplate` (acoes-template.ts) encaminha codigo de tres origens que
+ * nao falam de template nenhum — `resolverContaAtiva` (`falha(error.message)`
+ * cru do Postgres, ou 'sem_conta'), `criarDisparoServico`
+ * ('ingestao_nao_configurada') e a propria RPC ('segredo_invalido'). Nenhum
+ * esta no mapa.
+ *
+ * Existe separada de `codigoDoErroDaAcao` porque o fallback dela diria "não foi
+ * possível salvar o SCRIPT" para quem clicou em "Submeter ao WhatsApp" — o
+ * script nem foi tocado, e a frase mandaria o usuario procurar o problema no
+ * lugar errado. Lista de permissao, como as outras duas.
+ */
+export function codigoDoErroDoTemplate(codigo: string): string {
+  return Object.prototype.hasOwnProperty.call(MENSAGENS_ERRO, codigo)
+    ? codigo
+    : ERRO_AO_SALVAR_TEMPLATE
 }

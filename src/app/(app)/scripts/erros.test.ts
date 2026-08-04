@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { codigoDoErroDoPainel, mensagemDeErroScript } from './erros'
+import { codigoDoErroDoPainel, codigoDoErroDoTemplate, mensagemDeErroScript } from './erros'
 import { FALHA_DE_CONEXAO, MENSAGEM_FALHA_DE_CONEXAO } from '@/lib/ui/acao'
 
 /**
@@ -8,7 +8,7 @@ import { FALHA_DE_CONEXAO, MENSAGEM_FALHA_DE_CONEXAO } from '@/lib/ui/acao'
  * literal de proposito, como o mapa: se uma chave sumir do mapa, este teste
  * fica vermelho em vez de a tela passar a mostrar o codigo cru.
  */
-const CODIGOS = [
+const CODIGOS_SCRIPT = [
   'titulo_vazio',
   'conteudo_vazio',
   'tags_demais',
@@ -20,6 +20,34 @@ const CODIGOS = [
   'erro_ao_carregar_scripts',
   FALHA_DE_CONEXAO,
 ]
+
+/**
+ * Os codigos do disparo (Plano 11): o que submeterTemplate (acoes-template.ts),
+ * o SupabaseTemplateStore, o DisparoServico e o WhatsAppGraph devolvem. Lista
+ * literal pelo mesmo motivo da de cima — e separada porque quem le esta tela
+ * precisa saber de qual vocabulario cada chave veio.
+ */
+const CODIGOS_TEMPLATE = [
+  'sem_conexao_whatsapp',
+  'template_variavel_desconhecida',
+  'template_posicional_reservado',
+  'template_categoria_invalida',
+  'template_ja_pendente',
+  'template_ja_existe',
+  'template_recusado_pelo_meta',
+  'template_nao_encontrado',
+  'template_nao_aprovado',
+  'template_desatualizado',
+  'whatsapp_sem_telefone',
+  'whatsapp_lacunas',
+  'envio_recusado',
+  'whatsapp_indisponivel',
+  'whatsapp_enviado_sem_evento',
+  'erro_ao_salvar_template',
+  'erro_ao_carregar_templates',
+]
+
+const CODIGOS = [...CODIGOS_SCRIPT, ...CODIGOS_TEMPLATE]
 
 describe('mensagemDeErroScript', () => {
   it('toda chave conhecida tem mensagem propria — nunca o codigo, nunca o Postgres cru', () => {
@@ -92,6 +120,77 @@ describe('codigoDoErroDoPainel', () => {
     // mensagemDeErroScript devolveria uma FUNCAO onde a tela espera texto.
     for (const herdada of ['constructor', 'toString', 'valueOf']) {
       expect(codigoDoErroDoPainel(herdada), herdada).toBe('erro_ao_carregar_scripts')
+    }
+  })
+})
+
+describe('mensagens normativas do disparo (Plano 11)', () => {
+  /**
+   * As frases sao contrato do brief da Task 5, nao gosto pessoal: a Task 6
+   * mapeia os mesmos codigos na ficha do lead, e as duas telas tem que dizer a
+   * mesma coisa. Literal aqui para que reescrever uma delas fique vermelho.
+   */
+  const ESPERADAS: [string, string][] = [
+    ['sem_conexao_whatsapp', 'Conecte um número de WhatsApp em Configuração antes de usar templates.'],
+    ['template_variavel_desconhecida', 'O script usa uma variável que o CRM não conhece. Confira os nomes.'],
+    [
+      'template_posicional_reservado',
+      'O script contém {{número}}, forma reservada dos templates do Meta. Troque por uma variável nomeada.',
+    ],
+    ['template_ja_pendente', 'Este script já tem um template em análise no Meta. Aguarde a resposta.'],
+    ['template_ja_existe', 'Este script já tem um template. Recarregue a página.'],
+    ['template_recusado_pelo_meta', 'O Meta recusou a submissão. Tente de novo em alguns minutos.'],
+    ['template_nao_encontrado', 'Esse template não existe mais. Recarregue a página.'],
+    ['template_nao_aprovado', 'O template deste script ainda não foi aprovado pelo Meta.'],
+    ['template_desatualizado', 'O script mudou depois da aprovação. Re-submeta o template para enviar.'],
+    ['whatsapp_sem_telefone', 'Este lead não tem telefone.'],
+    ['whatsapp_lacunas', 'Faltam dados do lead para preencher o template.'],
+    ['envio_recusado', 'O Meta recusou o envio. Confira o template e tente de novo.'],
+    ['whatsapp_indisponivel', 'O Meta não respondeu. Tente de novo em alguns minutos.'],
+    [
+      'whatsapp_enviado_sem_evento',
+      'Mensagem enviada. Não conseguimos registrá-la na linha do tempo do lead.',
+    ],
+    ['erro_ao_salvar_template', 'Não foi possível salvar o template. Tente de novo.'],
+    ['erro_ao_carregar_templates', 'Não foi possível carregar os templates. Tente de novo.'],
+  ]
+
+  it('cada codigo do disparo tem exatamente a frase do contrato', () => {
+    for (const [codigo, frase] of ESPERADAS) {
+      expect(mensagemDeErroScript(codigo), codigo).toBe(frase)
+    }
+  })
+})
+
+describe('codigoDoErroDoTemplate', () => {
+  it('deixa passar todo codigo conhecido — inclusive os de script, que a mesma tela mostra', () => {
+    for (const codigo of CODIGOS) {
+      expect(codigoDoErroDoTemplate(codigo), codigo).toBe(codigo)
+    }
+  })
+
+  it('troca pelo generico de ESCRITA DE TEMPLATE o que o mapa nao conhece', () => {
+    // Os codigos reais que chegam a submeterTemplate por caminhos de OUTRO
+    // vocabulario: `criarDisparoServico` recusa deploy sem segredo, a RPC
+    // levanta segredo_invalido, e resolverContaAtiva devolve a mensagem crua
+    // do Postgres. Nenhum dos tres esta no mapa.
+    expect(codigoDoErroDoTemplate('ingestao_nao_configurada')).toBe('erro_ao_salvar_template')
+    expect(codigoDoErroDoTemplate('segredo_invalido')).toBe('erro_ao_salvar_template')
+    expect(codigoDoErroDoTemplate('sem_conta')).toBe('erro_ao_salvar_template')
+    expect(
+      codigoDoErroDoTemplate('new row violates row-level security policy for table "memberships"'),
+    ).toBe('erro_ao_salvar_template')
+
+    // Composicao: o resultado sempre atravessa mensagemDeErroScript sem cair
+    // no fallback que ecoaria o codigo.
+    expect(mensagemDeErroScript(codigoDoErroDoTemplate('qualquer coisa'))).toBe(
+      'Não foi possível salvar o template. Tente de novo.',
+    )
+  })
+
+  it('propriedade herdada de Object.prototype nao conta como codigo conhecido', () => {
+    for (const herdada of ['constructor', 'toString', 'valueOf']) {
+      expect(codigoDoErroDoTemplate(herdada), herdada).toBe('erro_ao_salvar_template')
     }
   })
 })
