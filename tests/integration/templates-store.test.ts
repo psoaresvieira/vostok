@@ -141,6 +141,17 @@ async function lerTemplate(id: string) {
   })
 }
 
+/**
+ * Repor uma env var ausente e' `delete`, nunca atribuicao: `process.env.X =
+ * undefined` grava a STRING 'undefined', que tem length 4 e passaria batido
+ * pela guarda de `criarDisparoServico` — o caso seguinte rodaria com um
+ * segredo falso e falharia por um motivo que nao e' o dele.
+ */
+function reporEnv(nome: string, valor: string | undefined) {
+  if (valor === undefined) delete process.env[nome]
+  else process.env[nome] = valor
+}
+
 function dados(scriptId: string, over: Partial<DadosTemplate> = {}): DadosTemplate {
   return {
     scriptId,
@@ -197,7 +208,12 @@ describe('SupabaseTemplateStore e DisparoServico', () => {
     const store = await storeDe(c.gestorId)
     const scriptId = await criarScript(c)
 
-    const criado = await store.criar(dados(scriptId))
+    // Status em MAIUSCULAS de proposito: e' a forma que o Graph devolve
+    // ('APPROVED'/'PENDING'), e a coluna nao tem check nenhum. Se o store
+    // gravasse cru, o mesmo template ficaria 'APPROVED' por este caminho e
+    // 'approved' pelo da RPC (que minusculiza), e a comparacao de "enviavel"
+    // dependeria de quem escreveu por ultimo.
+    const criado = await store.criar(dados(scriptId, { status: 'APPROVED' }))
     if (!criado.ok) throw new Error(criado.erro)
 
     // Relido PELO SERVICO, nao pelo valor devolvido: o snapshot tem que ter
@@ -211,7 +227,9 @@ describe('SupabaseTemplateStore e DisparoServico', () => {
     expect(linha?.categoria).toBe('marketing')
     expect(linha?.corpo_posicional).toBe('Ola {{1}}, aqui e da {{2}}.')
     expect(linha?.mapa).toEqual(['primeiro_nome', 'empresa'])
-    expect(linha?.status).toBe('pending')
+    // Gravado em minusculas, como a RPC da 0022 grava — a tela compara com
+    // 'approved' literal, e um 'APPROVED' na coluna nao casaria.
+    expect(linha?.status).toBe('approved')
     expect(linha?.template_id_meta).toBe('meta-tpl-1')
 
     const r = await store.doScript(scriptId)
@@ -224,7 +242,7 @@ describe('SupabaseTemplateStore e DisparoServico', () => {
       categoria: 'marketing',
       corpoPosicional: 'Ola {{1}}, aqui e da {{2}}.',
       mapa: ['primeiro_nome', 'empresa'],
-      status: 'pending',
+      status: 'approved',
       motivoRejeicao: null,
       statusConsultadoEm: null,
     })
@@ -321,7 +339,9 @@ describe('SupabaseTemplateStore e DisparoServico', () => {
         nomeMeta: 'nome_novo_c3d4',
         corpoPosicional: 'Novo corpo com {{1}}.',
         mapa: ['empresa'],
-        status: 'pending',
+        // Maiusculas como o Graph devolve: o segundo escritor da coluna tem
+        // que minusculizar igual ao `criar` e a RPC (contrato da 0022).
+        status: 'PENDING',
         templateIdMeta: 'meta-tpl-2',
       }),
     )
@@ -475,15 +495,15 @@ describe('SupabaseTemplateStore e DisparoServico', () => {
 
       // A url tambem e' guarda de configuracao, e nao um `!` que estouraria
       // dentro da pagina como excecao sem Resultado.
-      process.env.INGESTAO_SEGREDO = segredoOriginal
+      reporEnv('INGESTAO_SEGREDO', segredoOriginal)
       process.env.NEXT_PUBLIC_SUPABASE_URL = ''
       const semUrl = criarDisparoServico()
       expect(semUrl.ok).toBe(false)
       if (semUrl.ok) throw new Error('nao deveria ter sucesso')
       expect(semUrl.erro).toBe('ingestao_nao_configurada')
     } finally {
-      process.env.INGESTAO_SEGREDO = segredoOriginal
-      process.env.NEXT_PUBLIC_SUPABASE_URL = urlOriginal
+      reporEnv('INGESTAO_SEGREDO', segredoOriginal)
+      reporEnv('NEXT_PUBLIC_SUPABASE_URL', urlOriginal)
     }
 
     // Nao-vacuo: com segredo PRESENTE porem errado, a fabrica monta o cliente e
@@ -499,7 +519,7 @@ describe('SupabaseTemplateStore e DisparoServico', () => {
       if (r.ok) throw new Error('nao deveria ter sucesso')
       expect(r.erro).toBe('segredo_invalido')
     } finally {
-      process.env.INGESTAO_SEGREDO = segredoOriginal
+      reporEnv('INGESTAO_SEGREDO', segredoOriginal)
     }
   })
 })

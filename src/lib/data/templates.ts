@@ -186,7 +186,13 @@ export class SupabaseTemplateStore implements TemplateStore {
         categoria: d.categoria,
         corpo_posicional: d.corpoPosicional,
         mapa: d.mapa,
-        status: d.status,
+        // Minusculizado aqui como `atualizar_status_template` faz com `lower()`
+        // (0022): a coluna e' texto livre SEM check, e o contrato de que o
+        // status mora em minusculas so vale se os DOIS escritores o cumprirem —
+        // senao 'APPROVED' vindo do Graph nao casaria com o 'approved' que a
+        // RPC grava, e o mesmo template seria enviavel ou nao conforme o
+        // caminho que escreveu por ultimo.
+        status: d.status.toLowerCase(),
         template_id_meta: d.templateIdMeta,
       })
       .select('id')
@@ -212,7 +218,8 @@ export class SupabaseTemplateStore implements TemplateStore {
         categoria: d.categoria,
         corpo_posicional: d.corpoPosicional,
         mapa: d.mapa,
-        status: d.status,
+        // Mesma minusculizacao do `criar`, pelo mesmo contrato da 0022.
+        status: d.status.toLowerCase(),
         template_id_meta: d.templateIdMeta,
         motivo_rejeicao: null,
         status_consultado_em: null,
