@@ -201,6 +201,32 @@ export class WhatsAppGraphReal implements WhatsAppGraph {
     const url = new URL(`${BASE}/${phoneNumberId}/messages`)
     url.searchParams.set('access_token', token)
 
+    // A chave `components` so entra quando ha valor para mandar: o Graph
+    // REJEITA `parameters: []` (erro #100, "Invalid parameter"), e template sem
+    // variavel nenhuma — que e' template legitimo e comum, um aviso fixo — deve
+    // ir SEM components. Montado fora do JSON.stringify de proposito: um
+    // `components: undefined` inline seria omitido pelo stringify hoje e
+    // sobreviveria a qualquer refatoracao que troque o serializador por um que
+    // emita `null`. Sem esta guarda, todo envio de template sem placeholder
+    // falharia para sempre com 'envio_recusado', e a tela nao teria como
+    // explicar por que.
+    const template: {
+      name: string
+      language: { code: string }
+      components?: { type: string; parameters: { type: string; text: string }[] }[]
+    } = {
+      name: d.nome,
+      language: { code: d.idioma },
+    }
+    if (d.valores.length > 0) {
+      template.components = [
+        {
+          type: 'body',
+          parameters: d.valores.map((v) => ({ type: 'text', text: v })),
+        },
+      ]
+    }
+
     const busca = await buscar(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -209,16 +235,7 @@ export class WhatsAppGraphReal implements WhatsAppGraph {
         // Sem "+" — mesmo formato que o link wa.me usa.
         to: e164Destino.replace(/^\+/, ''),
         type: 'template',
-        template: {
-          name: d.nome,
-          language: { code: d.idioma },
-          components: [
-            {
-              type: 'body',
-              parameters: d.valores.map((v) => ({ type: 'text', text: v })),
-            },
-          ],
-        },
+        template,
       }),
     })
     if (!busca.ok) return busca

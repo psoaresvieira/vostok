@@ -210,6 +210,44 @@ describe('WhatsAppGraphReal — submeterTemplate, statusDoTemplate, apagarTempla
       },
     })
   })
+
+  it('enviarTemplate SEM variaveis nao manda a chave components — o Graph rejeita parameters vazio', async () => {
+    // Template sem placeholder e' template legitimo e comum (um aviso fixo). O
+    // Graph recusa `parameters: []` com erro #100, entao mandar a chave vazia
+    // faria TODO envio desses templates falhar para sempre com
+    // 'envio_recusado' — e a tela nao teria como explicar por que.
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ messages: [{ id: 'wamid.456' }] }),
+    })
+    global.fetch = fetchMock
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.enviarTemplate('token-valido', 'phone-1', '+5511999999999', {
+      nome: 'aviso_fixo',
+      idioma: 'pt_BR',
+      valores: [],
+    })
+
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor).toEqual({ idMensagem: 'wamid.456' })
+
+    const [, init] = fetchMock.mock.calls[0] as [string | URL, RequestInit]
+    const corpo = JSON.parse(init.body as string)
+    // AUSENCIA da chave, e nao valor undefined: `components: undefined` some no
+    // JSON.stringify de hoje, mas viraria `null` no fio se o serializador
+    // mudasse — e null nao e' o mesmo que omitido para o Graph. O `in` prova a
+    // ausencia no corpo que de fato foi postado.
+    expect('components' in corpo.template).toBe(false)
+    expect(corpo.template).toEqual({ name: 'aviso_fixo', language: { code: 'pt_BR' } })
+    expect(corpo).toEqual({
+      messaging_product: 'whatsapp',
+      to: '5511999999999',
+      type: 'template',
+      template: { name: 'aviso_fixo', language: { code: 'pt_BR' } },
+    })
+  })
 })
 
 describe('WhatsAppGraphReal — traducao de erro por metodo', () => {
