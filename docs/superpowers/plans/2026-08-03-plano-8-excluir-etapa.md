@@ -527,6 +527,8 @@ Crie `tests/integration/0018_excluir_reordenar_etapas.test.ts`. Além do cenári
 
 12. **`prosecdef = false` nas três.** `select proname, prosecdef from pg_proc where proname in ('excluir_etapa', 'reordenar_etapas', 'resumo_etapas')` — três linhas, todas `false`. Uma letra de diferença no DDL desligaria a RLS sem nenhum erro visível; este teste transforma a convenção em asserção.
 
+13. **(De `reordenar_etapas`.) Lista mista — reais mais um id estranho no lugar de um real — é recusada com `ordem_invalida` e nenhuma ordem muda.** Sete posições: seis ids reais e um uuid inventado. As três contagens de tamanho fechariam sem a checagem de `v_encontrados`; este caso fica vermelho se ela cair.
+
 - [ ] **Step 2: Rodar e ver o vermelho**
 
 ```bash
@@ -559,10 +561,14 @@ declare
   v_leads bigint;
   v_mesmo_tipo bigint;
 begin
-  -- for update: serializa contra outra exclusao/reordenacao da mesma etapa.
-  -- Quem nao enxerga a linha (RLS) recebe "nao existe" — e nao "sem
-  -- permissao", de proposito: nao vaza que o id e real.
-  select * into v_stage from public.stages where id = p_stage_id for update;
+  -- Leitura SEM lock primeiro, de proposito: sob RLS, SELECT ... FOR UPDATE
+  -- exige que a linha passe TAMBEM pela policy de update (stages_admin_write,
+  -- admin-only) — com o lock aqui, o vendedor nunca alcancaria o guard de
+  -- papel logo abaixo e receberia "nao existe" para uma etapa que ele enxerga
+  -- na tela. Quem nao enxerga a linha nem por select (outra conta) recebe
+  -- "nao existe" — e nao "sem permissao", de proposito: nao vaza que o id e
+  -- real.
+  select * into v_stage from public.stages where id = p_stage_id;
   if v_stage.id is null then
     raise exception 'etapa_nao_encontrada';
   end if;
@@ -572,6 +578,14 @@ begin
   -- funcao devolveria sucesso mentindo.
   if public.papel_na_conta(public.conta_do_pipeline(v_stage.pipeline_id)) is distinct from 'admin' then
     raise exception 'sem_permissao';
+  end if;
+
+  -- Agora sim o lock: o chamador provou ser admin, entao a policy de update
+  -- devolve a linha. Serializa contra outra exclusao/reordenacao da mesma
+  -- etapa. A etapa pode ter sumido entre as duas leituras — dai o recheck.
+  select * into v_stage from public.stages where id = p_stage_id for update;
+  if v_stage.id is null then
+    raise exception 'etapa_nao_encontrada';
   end if;
 
   -- Guarda 1: lead dentro. Como o chamador ja provou ser admin, a RLS de
@@ -610,6 +624,7 @@ declare
   v_pipeline uuid;
   v_total bigint;
   v_distintos bigint;
+  v_encontrados bigint;
 begin
   if p_ids_na_ordem is null or coalesce(array_length(p_ids_na_ordem, 1), 0) = 0 then
     raise exception 'ordem_invalida';
@@ -634,13 +649,22 @@ begin
   -- se abracarem em deadlock).
   perform 1 from public.stages s where s.pipeline_id = v_pipeline order by s.id for update;
 
-  -- Permutacao EXATA: mesmo tamanho, sem repeticao, todos deste pipeline.
-  -- Sem isto, lista parcial deixaria buracos e id repetido colidiria no
-  -- indice unico no meio da escrita.
+  -- Permutacao EXATA: mesmo tamanho, sem repeticao, e CADA id resolvendo para
+  -- uma etapa deste pipeline. A terceira contagem nao e redundante com o
+  -- array_agg la de cima: array_agg agrega so as linhas que casaram, entao uma
+  -- lista com um id inexistente (ou invisivel pela RLS) no lugar de um real
+  -- ainda resolve para um pipeline so e fecha as outras duas contagens — e o
+  -- update aplicaria uma ordem que nao corresponde a lista pedida, ou
+  -- estouraria 23505 cru no indice unico.
   select count(*) into v_total from public.stages s where s.pipeline_id = v_pipeline;
   select count(distinct x) into v_distintos from unnest(p_ids_na_ordem) as x;
+  select count(*) into v_encontrados
+    from public.stages s
+   where s.id = any (p_ids_na_ordem)
+     and s.pipeline_id = v_pipeline;
   if v_total <> array_length(p_ids_na_ordem, 1)
-     or v_distintos <> array_length(p_ids_na_ordem, 1) then
+     or v_distintos <> array_length(p_ids_na_ordem, 1)
+     or v_encontrados <> array_length(p_ids_na_ordem, 1) then
     raise exception 'ordem_invalida';
   end if;
 

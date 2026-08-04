@@ -31,18 +31,23 @@ export default async function ConfigPage({
   if (!fonteContexto.ok) throw new Error(fonteContexto.erro)
 
   const { store } = contexto.valor
-  const [pipeline, membros, convites, fontes, entregas] = await Promise.all([
+  const [pipeline, membros, convites, fontes, entregas, resumoDeEtapas] = await Promise.all([
     store.pipelinePadrao(),
     store.membros(),
     adminContexto.valor.admin.convitesPendentes(),
     fonteContexto.valor.fontes.listar(),
     fonteContexto.valor.fontes.entregasRecentes(LIMITE_ENTREGAS),
+    adminContexto.valor.admin.resumoEtapas(),
   ])
   if (!pipeline.ok) throw new Error(pipeline.erro)
   if (!membros.ok) throw new Error(membros.erro)
   if (!convites.ok) throw new Error(convites.erro)
   if (!fontes.ok) throw new Error(fontes.erro)
   if (!entregas.ok) throw new Error(entregas.erro)
+  // resumoEtapas() alimenta so o dialogo de exclusao com numeros — nao e
+  // dado estrutural da config. Falha aqui degrada para diálogo sem numero
+  // (ver Etapas), nunca derruba a pagina inteira.
+  const resumo = resumoDeEtapas.ok ? resumoDeEtapas.valor : []
 
   // store.motivosPerda() so devolve ativos, que e o certo para o modal de perda.
   // A configuracao precisa dos inativos tambem, para poder reativar.
@@ -55,7 +60,7 @@ export default async function ConfigPage({
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-8 p-6">
       <h1 className="text-2xl font-semibold">Configuração</h1>
-      <Etapas etapas={pipeline.valor.etapas} />
+      <Etapas etapas={pipeline.valor.etapas} resumo={resumo} />
       <Motivos motivos={motivos.valor} />
       <Usuarios membros={membros.valor} convites={convites.valor} origem={origem} />
       <Integracoes

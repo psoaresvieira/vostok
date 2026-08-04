@@ -31,6 +31,17 @@ export async function renomearEtapaAction(etapaId: string, nome: string): Promis
   return ok(undefined)
 }
 
+export async function excluirEtapaAction(etapaId: string): Promise<Resultado<void>> {
+  const contexto = await criarAdminStoreDoServidor()
+  if (!contexto.ok) return falha(contexto.erro)
+
+  const r = await contexto.valor.admin.excluirEtapa(etapaId)
+  if (!r.ok) return falha(r.erro)
+  revalidatePath('/config')
+  revalidatePath('/funil')
+  return ok(undefined)
+}
+
 export async function reordenarEtapasAction(idsNaOrdem: string[]): Promise<Resultado<void>> {
   const contexto = await criarAdminStoreDoServidor()
   if (!contexto.ok) return falha(contexto.erro)
