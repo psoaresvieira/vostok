@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import type { Conta, MotivoPerda, Papel, StageTipo } from '@/lib/domain/tipos'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
@@ -17,10 +17,18 @@ export type Convite = {
   expiraEm: Date
 }
 
+export type ResumoEtapa = {
+  etapaId: string
+  leadsNaEtapa: number
+  leadsPassaram: number
+}
+
 export interface AdminStore {
   criarEtapa(nome: string, tipo: StageTipo): Promise<Resultado<string>>
   renomearEtapa(etapaId: string, nome: string): Promise<Resultado<void>>
+  excluirEtapa(etapaId: string): Promise<Resultado<void>>
   reordenarEtapas(idsNaOrdem: string[]): Promise<Resultado<void>>
+  resumoEtapas(): Promise<Resultado<ResumoEtapa[]>>
   criarMotivo(nome: string): Promise<Resultado<string>>
   alternarMotivo(motivoId: string, ativo: boolean): Promise<Resultado<void>>
   /** Inclui os inativos — a tela de configuracao precisa deles para reativar. */
@@ -31,6 +39,31 @@ export interface AdminStore {
 }
 
 const DIAS_DE_VALIDADE = 7
+
+/**
+ * Traduz o erro do PostgREST para um dos codigos que excluir_etapa e
+ * reordenar_etapas levantam. Mesmo padrao de codigoDoErroPostgres em
+ * supabase.ts:465 (privada la, repetida aqui porque a lista de codigos e
+ * outra): as strings sao nossas, cassar por `error.message.includes` e
+ * seguro e independente de locale.
+ */
+const CODIGOS_CONHECIDOS_DE_ETAPA = [
+  'etapa_nao_encontrada',
+  'etapa_tem_leads',
+  'ultima_etapa_do_tipo',
+  'ordem_invalida',
+  'sem_permissao',
+]
+
+function codigoDoErroDeEtapa(erro: Pick<PostgrestError, 'message' | 'code'>): string {
+  const achado = CODIGOS_CONHECIDOS_DE_ETAPA.find((c) => erro.message.includes(c))
+  if (achado) return achado
+  // leads.stage_id e NOT NULL / NO ACTION: se um lead entrar na etapa entre a
+  // contagem da guarda em excluir_etapa e o delete, a FK estoura 23503 em vez
+  // de levantar etapa_tem_leads — para quem esta na tela e a mesma recusa.
+  if (erro.code === '23503') return 'etapa_tem_leads'
+  return erro.message
+}
 
 export class SupabaseAdminStore implements AdminStore {
   constructor(
@@ -78,55 +111,42 @@ export class SupabaseAdminStore implements AdminStore {
     return ok(undefined)
   }
 
-  async reordenarEtapas(idsNaOrdem: string[]): Promise<Resultado<void>> {
-    // A troca em duas fases abaixo so e livre de colisao se idsNaOrdem for uma
-    // permutacao exata das etapas deste pipeline. Lista parcial, id repetido ou
-    // id de outro pipeline fazem o loop quebrar no meio e deixam linhas paradas
-    // na faixa 1000+ — sem transacao nao ha rollback, e a fase 1 da proxima
-    // reordenacao volta a colidir, travando a ordenacao de vez. Por isso a
-    // validacao vem antes de qualquer escrita.
-    const { data: existentes, error: erroExistentes } = await this.cliente
-      .from('stages')
-      .select('id')
-      .eq('pipeline_id', this.pipelineId)
-    if (erroExistentes) return falha(erroExistentes.message)
-
-    const doPipeline = new Set((existentes ?? []).map((e) => e.id as string))
-    const recebidos = new Set(idsNaOrdem)
-    const permutacaoExata =
-      idsNaOrdem.length === doPipeline.size &&
-      recebidos.size === idsNaOrdem.length &&
-      idsNaOrdem.every((id) => doPipeline.has(id))
-    if (!permutacaoExata) return falha('ordem_invalida')
-
-    // stages_ordem_por_pipeline e um indice unico em (pipeline_id, ordem):
-    // escrever as posicoes finais diretamente pode colidir com uma linha que
-    // ainda guarda a posicao de destino (ex.: inverter [1..7] tentaria gravar
-    // ordem=1 na ultima linha enquanto a primeira ainda esta com ordem=1).
-    // Por isso movemos tudo para uma faixa alta e sem uso primeiro — livre de
-    // colisao porque os valores 1000+i sao distintos entre si e maiores que
-    // qualquer ordem existente — e só então gravamos as posicoes finais,
-    // tambem distintas entre si.
-    // O filtro por pipeline_id repete o que a validacao acima ja garante: e
-    // defesa em profundidade, porque a policy sozinha deixaria escrever em
-    // qualquer etapa da conta, inclusive de outro pipeline.
-    for (let i = 0; i < idsNaOrdem.length; i++) {
-      const { error } = await this.cliente
-        .from('stages')
-        .update({ ordem: 1000 + i })
-        .eq('id', idsNaOrdem[i])
-        .eq('pipeline_id', this.pipelineId)
-      if (error) return falha(error.message)
-    }
-    for (let i = 0; i < idsNaOrdem.length; i++) {
-      const { error } = await this.cliente
-        .from('stages')
-        .update({ ordem: i + 1 })
-        .eq('id', idsNaOrdem[i])
-        .eq('pipeline_id', this.pipelineId)
-      if (error) return falha(error.message)
-    }
+  async excluirEtapa(etapaId: string): Promise<Resultado<void>> {
+    const { error } = await this.cliente.rpc('excluir_etapa', { p_stage_id: etapaId })
+    if (error) return falha(codigoDoErroDeEtapa(error))
     return ok(undefined)
+  }
+
+  async reordenarEtapas(idsNaOrdem: string[]): Promise<Resultado<void>> {
+    // A transacao (validacao + as duas fases de update contra o indice unico
+    // de ordem) vive inteira na RPC — ver reordenar_etapas na 0018. Falha em
+    // qualquer ponto desfaz tudo; daqui so traduzimos o erro.
+    const { error } = await this.cliente.rpc('reordenar_etapas', {
+      p_ids_na_ordem: idsNaOrdem,
+    })
+    if (error) return falha(codigoDoErroDeEtapa(error))
+    return ok(undefined)
+  }
+
+  async resumoEtapas(): Promise<Resultado<ResumoEtapa[]>> {
+    const { data, error } = await this.cliente.rpc('resumo_etapas', {
+      p_pipeline_id: this.pipelineId,
+    })
+    if (error) return falha(codigoDoErroDeEtapa(error))
+    const linhas = (data ?? []) as {
+      stage_id: string
+      leads_na_etapa: number
+      leads_passaram: number
+    }[]
+    return ok(
+      linhas.map((linha) => ({
+        etapaId: linha.stage_id,
+        // O supabase-js entrega bigint como number; Number() e so defesa
+        // contra um driver que devolva string, sem custo no caminho comum.
+        leadsNaEtapa: Number(linha.leads_na_etapa),
+        leadsPassaram: Number(linha.leads_passaram),
+      })),
+    )
   }
 
   async criarMotivo(nome: string): Promise<Resultado<string>> {

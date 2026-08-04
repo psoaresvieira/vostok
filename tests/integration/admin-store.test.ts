@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import { SupabaseAdminStore } from '@/lib/data/admin'
 import { comoServico, comoUsuario, criarUsuario, limparBanco } from './helpers/db'
-import { montarCenario, type Cenario } from './helpers/cenario'
+import { montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario'
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321'
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -128,6 +128,89 @@ describe('SupabaseAdminStore', () => {
     // e a reordenacao legitima seguinte continua funcionando
     const valida = await admin.reordenarEtapas([...ids].reverse())
     expect(valida.ok).toBe(true)
+  })
+
+  it('excluir etapa vazia devolve ok e a etapa some', async () => {
+    const admin = new SupabaseAdminStore(
+      await clienteDoUsuario(c.adminId),
+      c.accountId,
+      c.adminId,
+      c.pipelineId,
+    )
+    const proposta = etapa(c, 'Proposta')
+
+    const r = await admin.excluirEtapa(proposta)
+    expect(r.ok).toBe(true)
+
+    const existe = await comoServico(
+      async (cli) =>
+        (await cli.query('select 1 from public.stages where id = $1', [proposta])).rowCount,
+    )
+    expect(existe).toBe(0)
+  })
+
+  it('excluir etapa com lead dentro devolve falha etapa_tem_leads', async () => {
+    const admin = new SupabaseAdminStore(
+      await clienteDoUsuario(c.adminId),
+      c.accountId,
+      c.adminId,
+      c.pipelineId,
+    )
+    const contato = etapa(c, 'Contato feito')
+    await criarLead(c, 'Lead preso', c.vendedorAId, contato)
+
+    const r = await admin.excluirEtapa(contato)
+    expect(r.ok).toBe(false)
+    // codigo conhecido, nao a mensagem crua do Postgres
+    if (!r.ok) expect(r.erro).toBe('etapa_tem_leads')
+  })
+
+  it('excluir a ultima etapa do tipo ganho devolve falha ultima_etapa_do_tipo', async () => {
+    const admin = new SupabaseAdminStore(
+      await clienteDoUsuario(c.adminId),
+      c.accountId,
+      c.adminId,
+      c.pipelineId,
+    )
+    const ganho = etapa(c, 'Ganho')
+
+    const r = await admin.excluirEtapa(ganho)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.erro).toBe('ultima_etapa_do_tipo')
+  })
+
+  it('resumoEtapas conta leads parados e leads que passaram, mesmo cenario do caso 11 da 0018', async () => {
+    const admin = new SupabaseAdminStore(
+      await clienteDoUsuario(c.adminId),
+      c.accountId,
+      c.adminId,
+      c.pipelineId,
+    )
+    const novo = etapa(c, 'Novo lead')
+    const contato = etapa(c, 'Contato feito')
+    const qualificacao = etapa(c, 'Qualificação')
+
+    // Lead 1 fica parado em "Contato feito".
+    await criarLead(c, 'Lead parado', c.vendedorAId, novo)
+    const parado = await criarLead(c, 'Lead parado 2', c.vendedorAId, novo)
+    await comoUsuario(c.vendedorAId, (cli) =>
+      cli.query('select public.move_lead_stage($1, $2)', [parado, contato]),
+    )
+
+    // Lead 2 passa por "Contato feito" e segue ate "Qualificacao".
+    const passante = await criarLead(c, 'Lead passante', c.vendedorAId, novo)
+    await comoUsuario(c.vendedorAId, (cli) =>
+      cli.query('select public.move_lead_stage($1, $2)', [passante, contato]),
+    )
+    await comoUsuario(c.vendedorAId, (cli) =>
+      cli.query('select public.move_lead_stage($1, $2)', [passante, qualificacao]),
+    )
+
+    const r = await admin.resumoEtapas()
+    if (!r.ok) throw new Error(r.erro)
+
+    const doContato = r.valor.find((x) => x.etapaId === contato)
+    expect(doContato).toEqual({ etapaId: contato, leadsNaEtapa: 1, leadsPassaram: 2 })
   })
 
   it('vendedor nao cria etapa', async () => {
