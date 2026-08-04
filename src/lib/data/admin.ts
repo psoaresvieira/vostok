@@ -41,11 +41,14 @@ export interface AdminStore {
 const DIAS_DE_VALIDADE = 7
 
 /**
- * Traduz o erro do PostgREST para um dos codigos que excluir_etapa e
- * reordenar_etapas levantam. Mesmo padrao de codigoDoErroPostgres em
- * supabase.ts:465 (privada la, repetida aqui porque a lista de codigos e
- * outra): as strings sao nossas, cassar por `error.message.includes` e
- * seguro e independente de locale.
+ * Traduz o erro do PostgREST para um dos cinco codigos nomeados que
+ * excluir_etapa, reordenar_etapas e resumo_etapas podem levantar por
+ * excecao. Mesmo padrao de codigoDoErroPostgres em supabase.ts:465 (privada
+ * la, repetida aqui porque a lista de codigos e outra): as strings sao
+ * nossas, cassar por `error.message.includes` e seguro e independente de
+ * locale. NAO cobre 23503 (FK de leads.stage_id) de proposito — esse SQLSTATE
+ * so faz sentido tratado em excluirEtapa, que trata antes de chegar aqui; nas
+ * outras duas chamadas um 23503 cairia no fallback `erro.message` mesmo.
  */
 const CODIGOS_CONHECIDOS_DE_ETAPA = [
   'etapa_nao_encontrada',
@@ -55,14 +58,9 @@ const CODIGOS_CONHECIDOS_DE_ETAPA = [
   'sem_permissao',
 ]
 
-function codigoDoErroDeEtapa(erro: Pick<PostgrestError, 'message' | 'code'>): string {
+function codigoDoErroDeEtapa(erro: Pick<PostgrestError, 'message'>): string {
   const achado = CODIGOS_CONHECIDOS_DE_ETAPA.find((c) => erro.message.includes(c))
-  if (achado) return achado
-  // leads.stage_id e NOT NULL / NO ACTION: se um lead entrar na etapa entre a
-  // contagem da guarda em excluir_etapa e o delete, a FK estoura 23503 em vez
-  // de levantar etapa_tem_leads — para quem esta na tela e a mesma recusa.
-  if (erro.code === '23503') return 'etapa_tem_leads'
-  return erro.message
+  return achado ?? erro.message
 }
 
 export class SupabaseAdminStore implements AdminStore {
@@ -113,7 +111,16 @@ export class SupabaseAdminStore implements AdminStore {
 
   async excluirEtapa(etapaId: string): Promise<Resultado<void>> {
     const { error } = await this.cliente.rpc('excluir_etapa', { p_stage_id: etapaId })
-    if (error) return falha(codigoDoErroDeEtapa(error))
+    if (error) {
+      // leads.stage_id e NOT NULL / NO ACTION: se um lead entrar na etapa
+      // entre a contagem da guarda dentro de excluir_etapa e o delete, a FK
+      // estoura 23503 em vez da excecao nomeada etapa_tem_leads — mas para
+      // quem esta na tela e a mesma recusa. Tratado aqui, e so aqui: e o
+      // unico dos tres RPCs que apaga uma etapa, entao e o unico onde esse
+      // SQLSTATE pode aparecer com este significado.
+      if (error.code === '23503') return falha('etapa_tem_leads')
+      return falha(codigoDoErroDeEtapa(error))
+    }
     return ok(undefined)
   }
 

@@ -165,6 +165,62 @@ describe('SupabaseAdminStore', () => {
     if (!r.ok) expect(r.erro).toBe('etapa_tem_leads')
   })
 
+  it('excluir etapa cuja guarda nao enxerga lead de outra conta (FK 23503) tambem devolve falha etapa_tem_leads', async () => {
+    const admin = new SupabaseAdminStore(
+      await clienteDoUsuario(c.adminId),
+      c.accountId,
+      c.adminId,
+      c.pipelineId,
+    )
+
+    // Etapa descartavel do pipeline da conta A. Tipo 'aberta': ha varias
+    // etapas 'aberta' no seed, entao a guarda de "ultima etapa do tipo" nao
+    // barra a exclusao antes de chegarmos na guarda de leads.
+    const etapaDescartavel = await comoServico(async (cli) => {
+      const r = await cli.query<{ id: string }>(
+        `insert into public.stages (pipeline_id, nome, ordem, tipo)
+         values ($1, 'Descartavel', 90, 'aberta') returning id`,
+        [c.pipelineId],
+      )
+      return r.rows[0].id
+    })
+
+    // Uma segunda conta, so para ter um account_id valido e distinto.
+    const outroAdmin = await criarUsuario('admin-23503@outra.com')
+    const outraConta = await comoUsuario(outroAdmin, async (cli) =>
+      (
+        await cli.query<{ id: string }>('select public.criar_conta($1) as id', ['Outra 23503'])
+      ).rows[0].id,
+    )
+
+    // Lead da conta B apontando para uma etapa da conta A: nada no schema
+    // impede isso (leads nao tem FK composta account+stage), e e exatamente
+    // o que aconteceria se um lead entrasse na etapa entre a contagem da
+    // guarda de excluir_etapa e o delete. Para o admin da conta A a RLS de
+    // leads_select esconde essa linha (is_member_of(account_id) falha para a
+    // conta B), entao a guarda de "tem lead" conta zero — mas a FK de
+    // leads.stage_id nao respeita RLS, e o delete da etapa estoura 23503.
+    await comoServico((cli) =>
+      cli.query(
+        `insert into public.leads (account_id, nome, pipeline_id, stage_id)
+         values ($1, 'Lead invisivel para a conta A', $2, $3)`,
+        [outraConta, c.pipelineId, etapaDescartavel],
+      ),
+    )
+
+    const r = await admin.excluirEtapa(etapaDescartavel)
+    expect(r.ok).toBe(false)
+    // codigo conhecido, nunca a mensagem crua da violacao de FK do Postgres
+    if (!r.ok) expect(r.erro).toBe('etapa_tem_leads')
+
+    const existe = await comoServico(
+      async (cli) =>
+        (await cli.query('select 1 from public.stages where id = $1', [etapaDescartavel]))
+          .rowCount,
+    )
+    expect(existe).toBe(1)
+  })
+
   it('excluir a ultima etapa do tipo ganho devolve falha ultima_etapa_do_tipo', async () => {
     const admin = new SupabaseAdminStore(
       await clienteDoUsuario(c.adminId),
