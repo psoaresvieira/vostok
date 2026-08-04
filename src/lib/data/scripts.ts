@@ -160,6 +160,13 @@ export class SupabaseScriptStore implements ScriptStore {
       // notFound(), nunca 403. Mesma convencao de buscarLead.
       .eq('account_id', this.contaId)
       .maybeSingle()
+    // uuid invalido e' "nao encontrado", nao falha tecnica: /scripts/abc chega
+    // aqui como texto que o Postgres recusa no `=` da coluna uuid (22P02,
+    // invalid_text_representation). Tratado como erro generico, a pagina
+    // renderizaria "Nao foi possivel carregar os scripts" para um link velho ou
+    // uma digitacao errada; devolvendo ok(null) ela responde notFound(), que e'
+    // a verdade e a mesma convencao do id inexistente logo abaixo.
+    if (error?.code === '22P02') return ok(null)
     if (error) return falha(ERRO_AO_CARREGAR_SCRIPTS)
     return ok(data ? paraScript(data as unknown as LinhaScript) : null)
   }

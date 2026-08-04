@@ -330,6 +330,19 @@ describe('SupabaseScriptStore', () => {
     expect(lista.valor.map((s) => s.id)).toEqual([scriptA])
   })
 
+  it('Caso 5b: id que nem e uuid e ok(null), nao falha tecnica — /scripts/abc responde 404', async () => {
+    const store = await storeDe(c.adminId)
+
+    // O Postgres recusa 'nao-e-uuid' no `=` da coluna uuid com 22P02
+    // (invalid_text_representation) e o PostgREST devolve isso como erro. Se o
+    // store tratasse como falha generica, /scripts/abc renderizaria "Nao foi
+    // possivel carregar os scripts" em vez do notFound() que a rota promete —
+    // e qualquer link velho ou digitacao errada viraria erro de sistema.
+    const r = await store.buscar('nao-e-uuid')
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor).toBeNull()
+  })
+
   it('Caso 6: criar com etapa de outra conta ou etapa inexistente falha com etapa_invalida', async () => {
     const b = await segundaContaComEtapa('Conta B', 'admin-b-6@b.com')
     const store = await storeDe(c.gestorId)
