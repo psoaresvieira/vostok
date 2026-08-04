@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Resultado } from '@/lib/domain/resultado'
 import type { Etapa, StageTipo } from '@/lib/domain/tipos'
 import type { ResumoEtapa } from '@/lib/data/admin'
@@ -12,6 +12,19 @@ import {
 } from './acoes'
 import { chamarAcao } from '@/lib/ui/acao'
 import { mensagemDeErro } from './erros'
+
+/** Quanto tempo o "Salvo ✓" fica visivel antes de sumir sozinho. */
+const DURACAO_SALVO_MS = 2_500
+
+function mensagemLeadsPassaram(n: number): string {
+  return n === 1 ? '1 lead já passou por ela.' : `${n} leads já passaram por ela.`
+}
+
+function mensagemMoverLeads(n: number): string {
+  return n === 1
+    ? 'Mova o 1 lead desta etapa antes de excluí-la.'
+    : `Mova os ${n} leads desta etapa antes de excluí-la.`
+}
 
 export function Etapas({
   etapas,
@@ -29,8 +42,44 @@ export function Etapas({
   const [erro, setErro] = useState<string | null>(null)
   const [salvoId, setSalvoId] = useState<string | null>(null)
   const [etapaParaExcluir, setEtapaParaExcluir] = useState<Etapa | null>(null)
+  const [excluindo, setExcluindo] = useState(false)
 
   const resumoPorEtapa = new Map(resumo.map((r) => [r.etapaId, r]))
+
+  // O "Salvo" e' um sinal TRANSITORIO: sem o temporizador ele ficava colado
+  // na tela para sempre, e uma recusa de exclusao em OUTRA linha (setErro)
+  // aparecia ao lado de um "Salvo" de minutos atras, como se os dois
+  // fizessem parte do mesmo evento. O ref guarda o id do setTimeout para
+  // poder cancelar/reiniciar num re-save antes do prazo, e o cleanup do
+  // useEffect evita setState depois de desmontar.
+  const timeoutSalvo = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timeoutSalvo.current) clearTimeout(timeoutSalvo.current)
+    }
+  }, [])
+
+  function marcarSalvo(id: string) {
+    if (timeoutSalvo.current) clearTimeout(timeoutSalvo.current)
+    setSalvoId(id)
+    timeoutSalvo.current = setTimeout(() => {
+      setSalvoId(null)
+      timeoutSalvo.current = null
+    }, DURACAO_SALVO_MS)
+  }
+
+  /** Todo erro passa por aqui, nunca por `setErro` direto: um "Salvo" de uma
+   * linha nao pode sobreviver a um erro que acabou de aparecer em outra —
+   * os dois juntos na tela leem como se fossem o mesmo evento. */
+  function reportarErro(mensagem: string) {
+    if (timeoutSalvo.current) {
+      clearTimeout(timeoutSalvo.current)
+      timeoutSalvo.current = null
+    }
+    setSalvoId(null)
+    setErro(mensagem)
+  }
 
   async function mover(indice: number, direcao: -1 | 1) {
     const destino = indice + direcao
@@ -38,25 +87,26 @@ export function Etapas({
     const ids = etapas.map((e) => e.id)
     ;[ids[indice], ids[destino]] = [ids[destino], ids[indice]]
     const r = await chamarAcao(reordenarEtapasAction(ids))
-    if (!r.ok) setErro(mensagemDeErro(r.erro))
+    if (!r.ok) reportarErro(mensagemDeErro(r.erro))
   }
 
   async function renomearCampo(e: Etapa, valor: string) {
     if (valor === e.nome) return
-    setSalvoId(null)
     const r = await chamarAcao(renomear(e.id, valor))
     if (!r.ok) {
-      setErro(mensagemDeErro(r.erro))
+      reportarErro(mensagemDeErro(r.erro))
     } else {
       setErro(null)
-      setSalvoId(e.id)
+      marcarSalvo(e.id)
     }
   }
 
   async function confirmarExclusao() {
     const alvo = etapaParaExcluir
-    if (!alvo) return
+    if (!alvo || excluindo) return
+    setExcluindo(true)
     const r = await chamarAcao(excluir(alvo.id))
+    setExcluindo(false)
     setEtapaParaExcluir(null)
     if (!r.ok) {
       // O codigo do erro manda; o numero do resumo so ilustra quando ele
@@ -65,15 +115,13 @@ export function Etapas({
       // que ja diz a mesma coisa sem numero.
       if (r.erro === 'etapa_tem_leads') {
         const res = resumoPorEtapa.get(alvo.id)
-        setErro(
-          res
-            ? `Mova os ${res.leadsNaEtapa} leads desta etapa antes de excluí-la.`
-            : mensagemDeErro('etapa_tem_leads'),
+        reportarErro(
+          res ? mensagemMoverLeads(res.leadsNaEtapa) : mensagemDeErro('etapa_tem_leads'),
         )
       } else if (r.erro === 'ultima_etapa_do_tipo') {
-        setErro(`Esta é a última etapa do tipo ${alvo.tipo}.`)
+        reportarErro(`Esta é a última etapa do tipo ${alvo.tipo}.`)
       } else {
-        setErro(mensagemDeErro(r.erro))
+        reportarErro(mensagemDeErro(r.erro))
       }
     } else {
       setErro(null)
@@ -135,7 +183,7 @@ export function Etapas({
           type="button"
           onClick={async () => {
             const r = await chamarAcao(criarEtapaAction(nome, tipo))
-            if (!r.ok) setErro(mensagemDeErro(r.erro))
+            if (!r.ok) reportarErro(mensagemDeErro(r.erro))
             else {
               setErro(null)
               setNome('')
@@ -157,15 +205,16 @@ export function Etapas({
           <p>
             Excluir a etapa &quot;{etapaParaExcluir.nome}&quot;?
             {resumoPorEtapa.has(etapaParaExcluir.id) &&
-              ` ${resumoPorEtapa.get(etapaParaExcluir.id)!.leadsPassaram} leads já passaram por ela.`}
+              ` ${mensagemLeadsPassaram(resumoPorEtapa.get(etapaParaExcluir.id)!.leadsPassaram)}`}
           </p>
           <p>O histórico e as métricas desta etapa serão preservados.</p>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={confirmarExclusao}
+              disabled={excluindo}
               aria-label={`Confirmar exclusão de ${etapaParaExcluir.nome}`}
-              className="rounded bg-destructive px-3 py-1 text-primary-foreground"
+              className="rounded bg-destructive px-3 py-1 text-primary-foreground disabled:opacity-50"
             >
               Confirmar exclusão
             </button>

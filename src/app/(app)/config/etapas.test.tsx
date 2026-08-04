@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { Etapas } from './etapas'
 import { ok, falha } from '@/lib/domain/resultado'
 import type { Resultado } from '@/lib/domain/resultado'
@@ -55,6 +55,19 @@ describe('Etapas', () => {
     expect(dialogo.textContent).toContain('Engano')
     // Fica vermelho se o clique excluir chamar a acao direto, sem confirmacao.
     expect(chamadas).toHaveLength(0)
+    cleanup()
+
+    // Singular: "1 lead já passou", nunca "1 leads já passaram".
+    const eSingular = etapa({ id: 'e-1s', nome: 'Engano solitario' })
+    const resumoSingular: ResumoEtapa[] = [
+      { etapaId: 'e-1s', leadsNaEtapa: 0, leadsPassaram: 1 },
+    ]
+    const singular = stubRegistrando<[string], void>(ok(undefined))
+    render(<Etapas etapas={[eSingular]} resumo={resumoSingular} excluir={singular.fn} />)
+    fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
+    const dialogoSingular = screen.getByRole('dialog')
+    expect(dialogoSingular.textContent).toContain('1 lead já passou por ela.')
+    expect(dialogoSingular.textContent).not.toContain('1 leads')
   })
 
   it('confirmar chama a acao com o id certo; cancelar nao chama nada', () => {
@@ -89,6 +102,21 @@ describe('Etapas', () => {
     fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
 
     expect(await screen.findByText(/3/)).toBeTruthy()
+    cleanup()
+
+    // Singular: "Mova o 1 lead", nunca "Mova os 1 leads".
+    const eSingular = etapa({ id: 'e-3s', nome: 'Negociação solitaria' })
+    const resumoSingular: ResumoEtapa[] = [
+      { etapaId: 'e-3s', leadsNaEtapa: 1, leadsPassaram: 1 },
+    ]
+    const { fn: excluirSingular } = stubRegistrando<[string], void>(falha('etapa_tem_leads'))
+    render(<Etapas etapas={[eSingular]} resumo={resumoSingular} excluir={excluirSingular} />)
+    fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
+
+    expect(
+      await screen.findByText('Mova o 1 lead desta etapa antes de excluí-la.'),
+    ).toBeTruthy()
   })
 
   it('recusa ultima_etapa_do_tipo mostra o tipo da etapa', async () => {
@@ -124,5 +152,60 @@ describe('Etapas', () => {
     fireEvent.blur(campoFalha)
     await screen.findByText(/nao existe mais|não existe mais/i)
     expect(screen.queryByText(/salvo/i)).toBeNull()
+  })
+
+  it('um erro depois de um renomear bem-sucedido apaga o "Salvo" antigo — o sinal e transitorio', async () => {
+    // Duas etapas: a primeira e renomeada com sucesso (mostra "Salvo"), a
+    // segunda tem a exclusao recusada. Sem a limpeza cruzada, o "Salvo" da
+    // primeira linha ficaria colado na tela ao lado do erro da segunda,
+    // como se os dois fizessem parte do mesmo evento.
+    const a = etapa({ id: 'e-6', nome: 'Etapa A' })
+    const b = etapa({ id: 'e-7', nome: 'Etapa B', tipo: 'ganho' })
+    const renomear = stubRegistrando<[string, string], void>(ok(undefined))
+    const excluir = stubRegistrando<[string], void>(falha('ultima_etapa_do_tipo'))
+
+    render(<Etapas etapas={[a, b]} resumo={[]} renomear={renomear.fn} excluir={excluir.fn} />)
+
+    const campo = screen.getByDisplayValue('Etapa A')
+    fireEvent.change(campo, { target: { value: 'Etapa A renomeada' } })
+    fireEvent.blur(campo)
+    expect(await screen.findByText(/salvo/i)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir etapa Etapa B' }))
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
+
+    expect(await screen.findByText('Esta é a última etapa do tipo ganho.')).toBeTruthy()
+    expect(screen.queryByText(/salvo/i)).toBeNull()
+  })
+
+  it('confirmar fica desabilitado durante a exclusao; clique duplo nao dispara duas chamadas', async () => {
+    // O bug que este teste tranca: sem guarda de "em andamento", dois
+    // cliques rapidos em "Confirmar exclusão" disparavam a RPC duas vezes —
+    // a segunda chegava depois que a etapa ja tinha sido apagada pela
+    // primeira e pintava "etapa_nao_encontrada" de vermelho logo apos um
+    // sucesso. O stub so resolve quando o teste manda (`liberar`), o que
+    // deixa a chamada "em voo" tempo suficiente para o segundo clique
+    // acontecer enquanto o botao deveria estar desabilitado.
+    const e = etapa({ id: 'e-8', nome: 'Intermediaria' })
+    const chamadas: string[] = []
+    let liberar: (r: Resultado<void>) => void = () => {}
+    const excluir = (id: string): Promise<Resultado<void>> => {
+      chamadas.push(id)
+      return new Promise((resolve) => {
+        liberar = resolve
+      })
+    }
+
+    render(<Etapas etapas={[e]} resumo={[]} excluir={excluir} />)
+    fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
+    const confirmar = screen.getByRole('button', { name: /confirmar/i }) as HTMLButtonElement
+
+    fireEvent.click(confirmar)
+    expect(confirmar.disabled).toBe(true)
+    fireEvent.click(confirmar)
+    expect(chamadas).toEqual(['e-8'])
+
+    liberar(ok(undefined))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 })
