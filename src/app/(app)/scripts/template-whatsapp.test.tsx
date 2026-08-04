@@ -172,7 +172,7 @@ describe('TemplateWhatsApp', () => {
       expect(chamadas[0]).toEqual(['script-1', 'utility'])
     })
 
-    it('sem conexao: o bloco vira uma linha apontando para /config', () => {
+    it('sem conexao e sem template: a area de submissao vira a linha para /config', () => {
       render(
         <TemplateWhatsApp
           scriptId="script-1"
@@ -188,6 +188,49 @@ describe('TemplateWhatsApp', () => {
       // Sem o formulario: clicar submeteria contra uma conexao que nao existe.
       expect(screen.queryByRole('button', { name: /submeter/i })).toBeNull()
       expect(screen.queryByLabelText('Categoria')).toBeNull()
+    })
+
+    it('sem conexao COM template aprovado: o chip sobrevive; so a submissao vira a linha', () => {
+      // "Sem conexao" pode ser falha transitoria da RPC de credencial — a
+      // pagina nao distingue. Engolir o bloco inteiro diria "conecte um numero"
+      // a quem tem um template aprovado, sumindo com fatos que estao gravados
+      // no banco e continuam verdadeiros com o Meta fora do ar.
+      render(
+        <TemplateWhatsApp
+          scriptId="script-1"
+          template={template({ status: 'approved' })}
+          desatualizado={false}
+          semConexao
+          agora={AGORA}
+        />,
+      )
+
+      expect(screen.getByText('Aprovado')).toBeTruthy()
+      expect(screen.getByText('abordagem_inicial_aaaaaaaa')).toBeTruthy()
+      expect(screen.getByRole('link', { name: /configuração/i }).getAttribute('href')).toBe(
+        '/config',
+      )
+      expect(screen.queryByRole('button', { name: /submeter/i })).toBeNull()
+    })
+
+    it('sem conexao COM template recusado: chip, motivo e nota seguem; o re-submeter da lugar a linha', () => {
+      render(
+        <TemplateWhatsApp
+          scriptId="script-1"
+          template={template({ status: 'rejected', motivoRejeicao: 'INVALID_FORMAT' })}
+          desatualizado
+          semConexao
+          agora={AGORA}
+        />,
+      )
+
+      expect(screen.getByText('Recusado')).toBeTruthy()
+      expect(screen.getByText('INVALID_FORMAT')).toBeTruthy()
+      expect(
+        screen.getByText('O script mudou desde a submissão — re-submeta para atualizar'),
+      ).toBeTruthy()
+      expect(screen.queryByRole('button', { name: /re-submeter/i })).toBeNull()
+      expect(screen.getByRole('link', { name: /configuração/i })).toBeTruthy()
     })
   })
 

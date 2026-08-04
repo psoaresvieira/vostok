@@ -72,7 +72,7 @@ export function TemplateWhatsApp({
   template,
   desatualizado,
   semConexao,
-  agora = new Date(),
+  agora,
   submeter = submeterTemplate,
 }: {
   scriptId: string
@@ -81,7 +81,12 @@ export function TemplateWhatsApp({
    * servidor, onde o conteudo atual e o snapshot existem lado a lado. */
   desatualizado: boolean
   semConexao: boolean
-  agora?: Date
+  /** OBRIGATORIO, e nunca `= new Date()` como default aqui: o relogio do SSR e
+   * o da hidratacao sao instantes diferentes, e "Consultado ha 3 minutos"
+   * renderizado no servidor viraria "ha 4 minutos" no cliente — mismatch de
+   * hidratacao. Quem carimba e' a pagina, uma vez, e o valor viaja no payload.
+   * Mesmo contrato de PainelTarefas e da Lista de tarefas. */
+  agora: Date
   submeter?: AcaoSubmeter
 }) {
   const [categoria, setCategoria] = useState<'marketing' | 'utility'>('marketing')
@@ -111,20 +116,23 @@ export function TemplateWhatsApp({
     template === null ||
     (!emAnalise && (desatualizado || template.status !== 'approved'))
 
-  if (semConexao) {
-    return (
-      <section className="flex flex-col gap-2 rounded border p-4">
-        <h2 className="font-medium">Template do WhatsApp</h2>
-        <p className="text-sm text-muted-foreground">
-          Conecte um número de WhatsApp em{' '}
-          <Link href="/config" className="underline">
-            Configuração
-          </Link>{' '}
-          para submeter este script como template.
-        </p>
-      </section>
-    )
-  }
+  /**
+   * A linha que aponta para /config substitui SO a area de submissao, e nunca o
+   * bloco inteiro. Sem conexao pode ser falha transitoria da RPC de credencial
+   * (a pagina nao distingue), e engolir o bloco todo diria "conecte um numero"
+   * a quem tem um template APROVADO — sumindo com o chip e com o nome no Meta,
+   * que sao fatos gravados no banco e continuam verdadeiros com o Meta fora do
+   * ar. O que de fato nao da' para fazer sem credencial e' submeter.
+   */
+  const linhaSemConexao = (
+    <p className="text-sm text-muted-foreground">
+      Conecte um número de WhatsApp em{' '}
+      <Link href="/config" className="underline">
+        Configuração
+      </Link>{' '}
+      para submeter este script como template.
+    </p>
+  )
 
   return (
     <section className="flex flex-col gap-3 rounded border p-4">
@@ -157,7 +165,9 @@ export function TemplateWhatsApp({
         <p className="text-sm">O script mudou desde a submissão — re-submeta para atualizar</p>
       )}
 
-      {podeSubmeter && (
+      {semConexao && linhaSemConexao}
+
+      {!semConexao && podeSubmeter && (
         <div className="flex flex-col gap-2">
           {template === null && (
             <>

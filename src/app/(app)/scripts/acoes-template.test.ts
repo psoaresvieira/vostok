@@ -51,35 +51,39 @@ vi.mock('@/lib/data/templates', () => ({
 }))
 
 /**
- * `falso` e' o duplo compartilhado do teste; `graph` e' o que a fabrica
- * devolve. Os dois apontam para o mesmo objeto por padrao — os dois casos que
- * precisam de uma resposta que a falsa nao produz (status em maiuscula, recusa
- * do Meta) trocam so `graph`, e continuam podendo afirmar sobre `falso`.
+ * `falso` e' o duplo compartilhado; `graph` e' o que a fabrica devolve — um
+ * envelope fino em volta dele que registra a SEQUENCIA das chamadas em `ordem`
+ * (os registros do duplo sao um array por metodo, e sozinhos nao diriam se o
+ * apagar veio antes ou depois do submeter) e deixa `submissao` sobrescrever a
+ * resposta da submissao nos casos que a falsa nao produz.
  */
 let falso = new WhatsAppGraphFalso()
-let graph: WhatsAppGraph = falso
+let ordem: string[] = []
+let submissao: Resultado<TemplateSubmetido> | null = null
+
+const graph: WhatsAppGraph = {
+  dadosDoNumero: (t, p) => falso.dadosDoNumero(t, p),
+  statusDoTemplate: (t, w, n) => falso.statusDoTemplate(t, w, n),
+  enviarTemplate: (t, p, e, d) => falso.enviarTemplate(t, p, e, d),
+  async apagarTemplate(token, wabaId, nome) {
+    ordem.push('apagar')
+    return falso.apagarTemplate(token, wabaId, nome)
+  },
+  async submeterTemplate(token, wabaId, d) {
+    ordem.push('submeter')
+    if (submissao) {
+      falso.submetidos.push({ token, wabaId, ...d })
+      return submissao
+    }
+    return falso.submeterTemplate(token, wabaId, d)
+  },
+}
 
 vi.mock('@/lib/integracoes/fabrica', () => ({
   whatsappGraph: () => graph,
 }))
 
 import { submeterTemplate } from './acoes-template'
-
-/** Graph que delega tudo a `falso` menos a submissao. */
-function graphComSubmissao(
-  resposta: Resultado<TemplateSubmetido>,
-): WhatsAppGraph {
-  return {
-    dadosDoNumero: (t, p) => falso.dadosDoNumero(t, p),
-    statusDoTemplate: (t, w, n) => falso.statusDoTemplate(t, w, n),
-    apagarTemplate: (t, w, n) => falso.apagarTemplate(t, w, n),
-    enviarTemplate: (t, p, e, d) => falso.enviarTemplate(t, p, e, d),
-    async submeterTemplate(token, wabaId, d) {
-      falso.submetidos.push({ token, wabaId, ...d })
-      return resposta
-    },
-  }
-}
 
 const CONTA_ID = 'conta-1'
 const CREDENCIAL = { token: 'tok-1', phoneNumberId: 'phone-1', wabaId: 'waba-1' }
@@ -138,7 +142,8 @@ describe('submeterTemplate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     falso = new WhatsAppGraphFalso()
-    graph = falso
+    ordem = []
+    submissao = null
   })
 
   it('caso 1 — vendedor recebe sem_permissao e nenhum IO acontece', async () => {
@@ -240,7 +245,7 @@ describe('submeterTemplate', () => {
 
   it('caso 4b — status do Graph em maiuscula chega minusculo ao store', async () => {
     cenarioFeliz()
-    graph = graphComSubmissao({ ok: true, valor: { idMeta: 'id-1', status: 'PENDING' } })
+    submissao = { ok: true, valor: { idMeta: 'id-1', status: 'PENDING' } }
 
     const r = await submeterTemplate('script-1', 'marketing')
 
@@ -248,7 +253,7 @@ describe('submeterTemplate', () => {
     expect(templatesStoreMock.criar.mock.calls[0][0].status).toBe('pending')
   })
 
-  it('caso 5 — re-submissao apaga o nome antigo no Meta e substitui a linha', async () => {
+  it('caso 5 — re-submissao substitui a linha e apaga o nome antigo DEPOIS de gravar', async () => {
     cenarioFeliz()
     templatesStoreMock.doScript.mockResolvedValue({
       ok: true,
@@ -261,12 +266,16 @@ describe('submeterTemplate', () => {
     expect(falso.apagados).toEqual([
       { token: 'tok-1', wabaId: 'waba-1', nome: 'nome_antigo_11111111' },
     ])
+    // A ORDEM e' o contrato (emenda ao plano): apagar antes de submeter deixaria
+    // a linha antiga 'approved' no banco apontando para um nome que ja nao
+    // existe na WABA, se o Meta recusasse a nova.
+    expect(ordem).toEqual(['submeter', 'apagar'])
     expect(templatesStoreMock.substituir).toHaveBeenCalledTimes(1)
     expect(templatesStoreMock.substituir.mock.calls[0][0]).toBe('template-1')
     expect(templatesStoreMock.criar).not.toHaveBeenCalled()
   })
 
-  it('caso 5b — falha do apagar NAO bloqueia a re-submissao', async () => {
+  it('caso 5b — falha do apagar NAO bloqueia a re-submissao ja gravada', async () => {
     cenarioFeliz()
     templatesStoreMock.doScript.mockResolvedValue({
       ok: true,
@@ -276,11 +285,35 @@ describe('submeterTemplate', () => {
 
     const r = await submeterTemplate('script-1', 'marketing')
 
+    // Higiene da WABA que nao deu certo nao pode virar erro de uma submissao
+    // que deu: a linha nova ja esta gravada quando o apagar acontece.
     expect(r).toEqual({ ok: true, valor: undefined })
     expect(falso.apagados).toHaveLength(1)
-    // A submissao seguiu mesmo com o delete recusado: o nome novo nunca colide.
     expect(falso.submetidos).toHaveLength(1)
+    expect(ordem).toEqual(['submeter', 'apagar'])
     expect(templatesStoreMock.substituir).toHaveBeenCalledTimes(1)
+  })
+
+  it('caso 5c — Meta recusa a re-submissao: a linha antiga fica intacta e o nome antigo NAO e apagado', async () => {
+    cenarioFeliz()
+    templatesStoreMock.doScript.mockResolvedValue({
+      ok: true,
+      valor: template({ status: 'approved', nomeMeta: 'nome_antigo_11111111' }),
+    })
+    submissao = { ok: false, erro: 'template_recusado_pelo_meta' }
+
+    const r = await submeterTemplate('script-1', 'marketing')
+
+    expect(r).toEqual({ ok: false, erro: 'template_recusado_pelo_meta' })
+    // O template que o usuario TEM continua valendo: nada foi gravado por cima
+    // e o nome dele continua registrado no Meta. Fosse o apagar antes, a linha
+    // seguiria 'approved' — estado FINAL, que a atualizacao sob demanda nunca
+    // reconsulta — apontando para um nome ja removido da WABA, e todo envio
+    // daria 'envio_recusado' sem nada na tela explicando por que.
+    expect(falso.apagados).toEqual([])
+    expect(ordem).toEqual(['submeter'])
+    expect(templatesStoreMock.substituir).not.toHaveBeenCalled()
+    expect(templatesStoreMock.criar).not.toHaveBeenCalled()
   })
 
   it('sem conexao de WhatsApp devolve sem_conexao_whatsapp sem tocar o Graph', async () => {
@@ -316,7 +349,7 @@ describe('submeterTemplate', () => {
 
   it('recusa do Meta na submissao nao grava nada no store', async () => {
     cenarioFeliz()
-    graph = graphComSubmissao({ ok: false, erro: 'template_recusado_pelo_meta' })
+    submissao = { ok: false, erro: 'template_recusado_pelo_meta' }
 
     const r = await submeterTemplate('script-1', 'marketing')
 

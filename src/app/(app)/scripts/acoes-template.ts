@@ -43,8 +43,14 @@ function sufixoAleatorio(): string {
  * que ninguem apaga depois.
  *
  * (0) categoria; (1) stores + papel; (2) o script; (3) a traducao posicional;
- * (4) template `pending` ja em analise; (5) credencial; (6) apagar o nome
- * antigo; (7) nome novo; (8) submissao; (9) gravacao; (10) revalidate.
+ * (4) template `pending` ja em analise; (5) credencial; (6) nome novo; (7)
+ * submissao; (8) gravacao; (9) apagar o nome antigo, best-effort; (10)
+ * revalidate.
+ *
+ * O apagar vem DEPOIS da gravacao por emenda ao plano: antes, uma submissao
+ * recusada pelo Meta deixava a linha antiga 'approved' no banco apontando para
+ * um nome ja apagado na WABA — e 'approved' e' estado final para a atualizacao
+ * sob demanda, que nunca mais reconsultaria.
  */
 export async function submeterTemplate(
   scriptId: string,
@@ -96,25 +102,10 @@ export async function submeterTemplate(
   const credencial = await servico.valor.credencial(contextoTemplates.valor.contaId)
   if (!credencial.ok) return falha(codigoDoErroDoTemplate(credencial.erro))
 
-  // (6) Re-submissao: tira do Meta o template antigo, que ninguem mais vai
-  // usar. A falha NAO bloqueia — e isso e' intencao explicita do usuario, nao
-  // compensacao de erro (guarda nº 4 das guardas silenciosas): ele pediu para
-  // submeter de novo, o nome novo tem sufixo proprio e nunca colide com o
-  // velho, e abortar aqui trocaria "sobrou um template morto na WABA" por
-  // "nao da' para re-submeter enquanto o Meta estiver instavel". O que se
-  // perde e' a limpeza; o que se perderia do outro lado e' a funcao.
-  if (existente.valor) {
-    await whatsappGraph().apagarTemplate(
-      credencial.valor.token,
-      credencial.valor.wabaId,
-      existente.valor.nomeMeta,
-    )
-  }
-
-  // (7)
+  // (6)
   const nomeMeta = nomeMetaDoTitulo(script.valor.titulo, sufixoAleatorio())
 
-  // (8)
+  // (7)
   const submetido = await whatsappGraph().submeterTemplate(
     credencial.valor.token,
     credencial.valor.wabaId,
@@ -122,7 +113,7 @@ export async function submeterTemplate(
   )
   if (!submetido.ok) return falha(codigoDoErroDoTemplate(submetido.erro))
 
-  // (9) Corpo e mapa DA TRADUCAO, nunca do conteudo cru: e' este par que a
+  // (8) Corpo e mapa DA TRADUCAO, nunca do conteudo cru: e' este par que a
   // Task 6 compara com a traducao do conteudo atual para decidir se o envio
   // ainda corresponde ao que o Meta aprovou. O status vem do Graph, e desce
   // minusculo — o store tambem minusculiza, mas o contrato de que status mora
@@ -141,6 +132,26 @@ export async function submeterTemplate(
     ? await contextoTemplates.valor.templates.substituir(existente.valor.id, dados)
     : await contextoTemplates.valor.templates.criar(dados)
   if (!gravado.ok) return falha(codigoDoErroDoTemplate(gravado.erro))
+
+  // (9) So AGORA o nome antigo sai do Meta, e so quando a submissao nova ja
+  // esta gravada. Apagar antes era o defeito: uma submissao recusada pelo Meta
+  // deixava a linha antiga intacta no banco — status 'approved', que a
+  // atualizacao sob demanda considera FINAL e nunca reconsulta — apontando para
+  // um nome que ja nao existe na WABA. O envio daria 'envio_recusado' para
+  // sempre, sem nada na tela explicando por que.
+  //
+  // A falha NAO bloqueia, e o resultado nem e' lido: isto e' higiene da WABA,
+  // nao parte do que o usuario pediu. O nome novo tem sufixo proprio e nunca
+  // colide com o velho, entao um delete que nao foi so' deixa um template morto
+  // la' — abortar aqui devolveria erro para uma re-submissao que JA DEU CERTO e
+  // ja esta gravada, o que seria mentir sobre o resultado.
+  if (existente.valor) {
+    await whatsappGraph().apagarTemplate(
+      credencial.valor.token,
+      credencial.valor.wabaId,
+      existente.valor.nomeMeta,
+    )
+  }
 
   // (10)
   revalidatePath(`/scripts/${scriptId}`)

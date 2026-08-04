@@ -92,6 +92,11 @@ export default async function ScriptPage({ params }: { params: Promise<{ id: str
         template={template}
         desatualizado={template !== null && estaDesatualizado(script.valor.conteudo, template)}
         semConexao={credencial === null}
+        // Carimbado UMA vez, aqui, e enviado no payload — como PainelTarefas e a
+        // Lista de tarefas. Um `new Date()` como default dentro do componente
+        // cliente seria lido duas vezes (SSR e hidratacao) em instantes
+        // diferentes, e o "Consultado ha X" divergiria entre os dois HTMLs.
+        agora={new Date()}
       />
     </div>
   )
