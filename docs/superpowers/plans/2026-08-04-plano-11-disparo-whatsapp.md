@@ -238,7 +238,7 @@ export function nomeMetaDoTitulo(titulo: string, sufixo: string): string
 **Invariantes:**
 
 - **Gramática apertada (dívida do Plano 10, spec §4.1):** `PADRAO_TAG` troca `\s*` por `[ \t]*` — espaço horizontal apenas. `{{ empresa }}` continua casando; `{{\n empresa }}` passa a ficar **literal** no preview e no template. Os testes existentes de `interpolar` continuam verdes (nenhum deles usa quebra de linha dentro de `{{ }}`); um caso novo pina cada lado.
-- **`traduzirParaPosicional`:** percorre com `PADRAO_TAG`; cada variável **distinta** ganha a posição da primeira ocorrência (`mapa[0]` preenche `{{1}}`), e **todas** as ocorrências viram o posicional (variável repetida → mesmo número repetido). Nome de forma válida **fora do catálogo** → `falha('template_variavel_desconhecida')`. Conteúdo sem variável → `ok({ corpo: conteudo, mapa: [] })`. O que não casa o padrão atravessa literal, como em `interpolar`.
+- **`traduzirParaPosicional`:** percorre com `PADRAO_TAG`; cada variável **distinta** ganha a posição da primeira ocorrência (`mapa[0]` preenche `{{1}}`), e **todas** as ocorrências viram o posicional (variável repetida → mesmo número repetido). Nome de forma válida **fora do catálogo** → `falha('template_variavel_desconhecida')`. **Texto que já contém `{{N}}` literal (`{{1}}`, `{{01}}`, `{{ 2 }}`) → `falha('template_posicional_reservado')`** — o preenchedor não distingue placeholder emitido de texto do usuário, e o Meta renderizaria o literal como parâmetro (achado de review da execução). Conteúdo sem variável → `ok({ corpo: conteudo, mapa: [] })`. O resto que não casa o padrão atravessa literal, como em `interpolar`.
 - **`valoresPosicionais`:** para cada posição do mapa, o valor do contexto; `null` ou só espaços em qualquer posição → `falha('whatsapp_lacunas')` (o chamador lista as lacunas pelo mapa — a função pode devolver o código simples; a tela já tem o contador do Plano 10).
 - **`preencherPosicional`:** substitui `{{1}}`..`{{n}}` pelos valores, sem tocar em mais nada. É o texto que o Meta manda — usado no snapshot da timeline e no teste de comutação.
 - **Invariante de comutação, com teste nomeado (o teste central da task):** para conteúdo válido e contexto completo, `preencherPosicional(corpo, valores) === textoPlano(interpolar(conteudo, ctx))`, byte a byte — incluindo um caso com variável repetida e um com conteúdo multilinha. Fica vermelho se tradução e interpolação divergirem em qualquer regra da gramática.
@@ -443,6 +443,7 @@ export async function submeterTemplate(
 ```ts
 sem_conexao_whatsapp: 'Conecte um número de WhatsApp em Configuração antes de usar templates.',
 template_variavel_desconhecida: 'O script usa uma variável que o CRM não conhece. Confira os nomes.',
+template_posicional_reservado: 'O script contém {{número}}, forma reservada dos templates do Meta. Troque por uma variável nomeada.',
 template_ja_pendente: 'Este script já tem um template em análise no Meta. Aguarde a resposta.',
 template_ja_existe: 'Este script já tem um template. Recarregue a página.',
 template_recusado_pelo_meta: 'O Meta recusou a submissão. Tente de novo em alguns minutos.',
