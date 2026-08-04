@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { criarScriptStoreDoServidor } from '@/lib/data/scripts'
 import { criarStoreDoServidor } from '@/lib/data/supabase'
 import { mensagemDeErroScript } from './erros'
+import { ListaDeScripts } from './lista'
 
 export default async function ScriptsPage({
   searchParams,
@@ -128,33 +129,14 @@ export default async function ScriptsPage({
           )}
         </div>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {lista.valor.map((s) => (
-            <li key={s.id} className="flex flex-col gap-1 rounded border border-border p-3">
-              <Link href={`/scripts/${s.id}`} className="font-medium underline">
-                {s.titulo}
-              </Link>
-              <span className="text-xs text-muted-foreground">
-                {s.stageId === null
-                  ? 'Qualquer etapa'
-                  : // A FK e' `on delete set null`, entao stage_id apontando
-                    // para etapa inexistente nao acontece hoje; o fallback
-                    // cobre o script de um pipeline que nao e o padrao, sem
-                    // mentir dizendo "Qualquer etapa".
-                    (nomeDaEtapa.get(s.stageId) ?? 'Etapa de outro funil')}
-              </span>
-              {s.tags.length > 0 && (
-                <ul className="flex flex-wrap gap-1">
-                  {s.tags.map((t) => (
-                    <li key={t} className="rounded bg-muted px-2 py-0.5 text-xs">
-                      {t}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
-        </ul>
+        // podeEscrever governa as duas coisas de proposito: quem nao edita nao
+        // ve "Novo script" nem titulo linkado, porque /scripts/[id] responde
+        // notFound() para ele. Ver o comentario em lista.tsx.
+        <ListaDeScripts
+          scripts={lista.valor}
+          nomeDaEtapa={nomeDaEtapa}
+          podeEditar={podeEscrever}
+        />
       )}
     </div>
   )
