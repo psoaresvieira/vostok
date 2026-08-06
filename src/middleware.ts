@@ -5,6 +5,9 @@ const ROTAS_PUBLICAS = [
   '/login',
   '/signup',
   '/convite',
+  // O painel do Meta exige a URL da politica de privacidade publica e a valida
+  // sem sessao; atras do portao, o Login do Facebook fica "indisponivel".
+  '/privacidade',
   // Webhook nao tem sessao por definicao: quem chama e o Meta, o Google ou o
   // cron da Vercel, nunca um navegador logado. "Publico no middleware" aqui
   // significa so "nao passa pelo portao de sessao" -- nunca "nao autenticado".
