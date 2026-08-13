@@ -83,7 +83,7 @@ vi.mock('@/lib/integracoes/fabrica', () => ({
   whatsappGraph: () => graph,
 }))
 
-import { submeterTemplate } from './acoes-template'
+import { excluirTemplate, submeterTemplate } from './acoes-template'
 
 const CONTA_ID = 'conta-1'
 const CREDENCIAL = { token: 'tok-1', phoneNumberId: 'phone-1', wabaId: 'waba-1' }
@@ -368,5 +368,100 @@ describe('submeterTemplate', () => {
     const r = await submeterTemplate('script-1', 'marketing')
 
     expect(r).toEqual({ ok: false, erro: 'erro_ao_salvar_template' })
+  })
+})
+
+/**
+ * Exclusao e' o que abre o caminho "exclua e submeta" que a re-submissao
+ * deliberadamente nao cobre: trocar a categoria exige comecar do zero, e ate
+ * aqui o TemplateStore.excluir existia sem nenhum chamador na UI.
+ */
+describe('excluirTemplate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    falso = new WhatsAppGraphFalso()
+    ordem = []
+    submissao = null
+    templatesStoreMock.excluir.mockImplementation(async () => {
+      // Mesmo registro de sequencia do envelope do Graph: os arrays por metodo
+      // nao diriam se o banco apagou antes ou depois da WABA.
+      ordem.push('excluir-local')
+      return { ok: true, valor: undefined }
+    })
+    templatesStoreMock.doScript.mockResolvedValue({ ok: true, valor: template() })
+  })
+
+  it('caso 1 — vendedor recebe sem_permissao e nada e apagado, nem local nem no Meta', async () => {
+    cenarioFeliz('vendedor')
+
+    const r = await excluirTemplate('script-1')
+
+    expect(r).toEqual({ ok: false, erro: 'sem_permissao' })
+    expect(templatesStoreMock.doScript).not.toHaveBeenCalled()
+    expect(templatesStoreMock.excluir).not.toHaveBeenCalled()
+    expect(falso.apagados).toEqual([])
+  })
+
+  it('caso 2 — script sem template devolve template_nao_encontrado sem tocar o Graph', async () => {
+    cenarioFeliz()
+    templatesStoreMock.doScript.mockResolvedValue({ ok: true, valor: null })
+
+    const r = await excluirTemplate('script-1')
+
+    expect(r).toEqual({ ok: false, erro: 'template_nao_encontrado' })
+    expect(templatesStoreMock.excluir).not.toHaveBeenCalled()
+    expect(falso.apagados).toEqual([])
+  })
+
+  it('caso 3 — fluxo feliz: apaga no banco ANTES da WABA, e o Graph recebe o nomeMeta gravado', async () => {
+    cenarioFeliz()
+    templatesStoreMock.doScript.mockResolvedValue({ ok: true, valor: template() })
+
+    const r = await excluirTemplate('script-1')
+
+    expect(r).toEqual({ ok: true, valor: undefined })
+    expect(templatesStoreMock.excluir).toHaveBeenCalledTimes(1)
+    expect(templatesStoreMock.excluir.mock.calls[0][0]).toBe('template-1')
+    expect(falso.apagados).toEqual([
+      { token: 'tok-1', wabaId: 'waba-1', nome: 'abordagem_inicial_aaaaaaaa' },
+    ])
+    // Local primeiro: o pedido do usuario e' tirar o template do CRM, e ele
+    // nao pode ficar refem do Meta fora do ar. A WABA e' higiene best-effort.
+    expect(ordem).toEqual(['excluir-local', 'apagar'])
+  })
+
+  it('caso 4 — falha do Graph nao desfaz nem falha: o banco ja apagou e a acao devolve ok', async () => {
+    cenarioFeliz()
+    templatesStoreMock.doScript.mockResolvedValue({ ok: true, valor: template() })
+    falso.apagaresQueFalham.add('abordagem_inicial_aaaaaaaa')
+
+    const r = await excluirTemplate('script-1')
+
+    expect(r).toEqual({ ok: true, valor: undefined })
+    expect(templatesStoreMock.excluir).toHaveBeenCalledTimes(1)
+    expect(falso.apagados).toHaveLength(1)
+  })
+
+  it('caso 5 — sem credencial a exclusao local vale e o Graph nem e chamado', async () => {
+    cenarioFeliz()
+    templatesStoreMock.doScript.mockResolvedValue({ ok: true, valor: template() })
+    disparoMock.credencial.mockResolvedValue({ ok: false, erro: 'sem_conexao_whatsapp' })
+
+    const r = await excluirTemplate('script-1')
+
+    expect(r).toEqual({ ok: true, valor: undefined })
+    expect(templatesStoreMock.excluir).toHaveBeenCalledTimes(1)
+    expect(falso.apagados).toEqual([])
+  })
+
+  it('caso 6 — falha do store propaga e a WABA fica intacta', async () => {
+    cenarioFeliz()
+    templatesStoreMock.doScript.mockResolvedValue({ ok: true, valor: template() })
+    templatesStoreMock.excluir.mockResolvedValue({ ok: false, erro: 'template_nao_encontrado' })
+
+    const r = await excluirTemplate('script-1')
+
+    expect(r).toEqual({ ok: false, erro: 'template_nao_encontrado' })
+    expect(falso.apagados).toEqual([])
   })
 })

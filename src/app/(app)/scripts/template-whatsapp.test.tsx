@@ -349,4 +349,108 @@ describe('TemplateWhatsApp', () => {
       expect(screen.getByRole('button', { name: 'Re-submeter ao WhatsApp' })).toBeTruthy()
     })
   })
+
+  describe('excluir template — o caminho "exclua e submeta"', () => {
+    type ArgsExcluir = [string]
+
+    it('com template: o botao existe, o dialogo pede confirmacao, e confirmar chama a action com o scriptId', async () => {
+      const { fn: excluir, chamadas } = stubRegistrando<ArgsExcluir, void>(ok(undefined))
+
+      render(
+        <TemplateWhatsApp
+          scriptId="script-1"
+          template={template()}
+          desatualizado={false}
+          semConexao={false}
+          agora={AGORA}
+          excluir={excluir}
+        />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Excluir template' }))
+
+      // Nada foi excluido ainda: abrir o dialogo nao e' consentir.
+      expect(chamadas).toHaveLength(0)
+      const dialogo = screen.getByRole('dialog', { name: 'Excluir template' })
+      expect(dialogo.textContent).toMatch(/nova submissão e aprovação do Meta/i)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar exclusão do template' }))
+
+      await waitFor(() => expect(chamadas).toHaveLength(1))
+      expect(chamadas[0]).toEqual(['script-1'])
+    })
+
+    it('cancelar fecha o dialogo sem chamar a action', () => {
+      const { fn: excluir, chamadas } = stubRegistrando<ArgsExcluir, void>(ok(undefined))
+
+      render(
+        <TemplateWhatsApp
+          scriptId="script-1"
+          template={template()}
+          desatualizado={false}
+          semConexao={false}
+          agora={AGORA}
+          excluir={excluir}
+        />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Excluir template' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar exclusão do template' }))
+
+      expect(screen.queryByRole('dialog', { name: 'Excluir template' })).toBeNull()
+      expect(chamadas).toHaveLength(0)
+    })
+
+    it('sem template nao ha o que excluir: o botao nao existe', () => {
+      render(
+        <TemplateWhatsApp
+          scriptId="script-1"
+          template={null}
+          desatualizado={false}
+          semConexao={false}
+          agora={AGORA}
+        />,
+      )
+
+      expect(screen.queryByRole('button', { name: 'Excluir template' })).toBeNull()
+    })
+
+    it('sem conexao o excluir CONTINUA existindo: a exclusao comeca no banco e nao depende do Meta', () => {
+      render(
+        <TemplateWhatsApp
+          scriptId="script-1"
+          template={template()}
+          desatualizado={false}
+          semConexao={true}
+          agora={AGORA}
+        />,
+      )
+
+      expect(screen.getByRole('button', { name: 'Excluir template' })).toBeTruthy()
+    })
+
+    it('erro da action aparece na tela com a mensagem mapeada', async () => {
+      const { fn: excluir } = stubRegistrando<ArgsExcluir, void>(
+        falha('template_nao_encontrado'),
+      )
+
+      render(
+        <TemplateWhatsApp
+          scriptId="script-1"
+          template={template()}
+          desatualizado={false}
+          semConexao={false}
+          agora={AGORA}
+          excluir={excluir}
+        />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Excluir template' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar exclusão do template' }))
+
+      await waitFor(() =>
+        expect(screen.getByText('Esse template não existe mais. Recarregue a página.')).toBeTruthy(),
+      )
+    })
+  })
 })
