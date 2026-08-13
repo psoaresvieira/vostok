@@ -25,6 +25,7 @@ type RespostaErro = { error?: { message?: string; code?: number } }
 type RespostaSubmissao = { id?: string; status?: string } & RespostaErro
 type RespostaStatus = {
   data?: { name?: string; status?: string; rejected_reason?: string }[]
+  paging?: { next?: string }
 } & RespostaErro
 type RespostaApagar = { success?: boolean } & RespostaErro
 type RespostaEnvio = { messages?: { id?: string }[] } & RespostaErro
@@ -135,40 +136,63 @@ export class WhatsAppGraphReal implements WhatsAppGraph {
     wabaId: string,
     nome: string,
   ): Promise<Resultado<StatusTemplate>> {
-    const url = new URL(`${BASE}/${wabaId}/message_templates`)
+    let url = new URL(`${BASE}/${wabaId}/message_templates`)
     url.searchParams.set('name', nome)
     url.searchParams.set('fields', 'name,status,rejected_reason')
     url.searchParams.set('access_token', token)
 
-    const busca = await buscar(url)
-    if (!busca.ok) return busca
-    const r = busca.valor
+    // O `name=` e prefix-match e a resposta e paginada: com orfaos de
+    // re-submissao acumulados (o apagar e best-effort), o template exato pode
+    // cair fora da primeira pagina. O teto existe para uma WABA patologica
+    // nao virar um loop de rede dentro do request; 10 paginas cobrem centenas
+    // de templates com o MESMO prefixo, que o sufixo aleatorio ja torna raro.
+    const PAGINAS_MAX = 10
+    for (let pagina = 0; pagina < PAGINAS_MAX; pagina++) {
+      const busca = await buscar(url)
+      if (!busca.ok) return busca
+      const r = busca.valor
 
-    if (r.status >= 500) {
-      console.error('whatsapp graph indisponivel', r.status)
-      return falha('whatsapp_indisponivel')
-    }
-    const dados = (await r.json().catch(() => ({}))) as RespostaStatus
-    // 4xx com corpo de erro, ou 200 em formato inesperado (sem "data" como
-    // array): nenhum codigo mais especifico foi definido para este caso, so
-    // "zero resultados" (abaixo) e rede/5xx (acima) tem traducao propria.
-    if (!r.ok || dados.error || !Array.isArray(dados.data)) {
-      console.error('whatsapp graph recusou consulta de status', r.status, dados.error?.code, dados.error?.message)
-      return falha('whatsapp_indisponivel')
-    }
-    // O filtro `name=` do Graph e por prefixo/match amplo, nao exato — o
-    // mesmo cuidado de posseDaPagina em meta-real.ts (que compara o id
-    // devolvido em vez de confiar so no que foi pedido). Sem este `find`,
-    // uma resposta cuja primeira linha e de outro template levaria
-    // silenciosamente o status errado para a tela.
-    const item = dados.data.find((t) => t.name === nome)
-    if (!item) return falha('template_nao_encontrado')
+      if (r.status >= 500) {
+        console.error('whatsapp graph indisponivel', r.status)
+        return falha('whatsapp_indisponivel')
+      }
+      const dados = (await r.json().catch(() => ({}))) as RespostaStatus
+      // 4xx com corpo de erro, ou 200 em formato inesperado (sem "data" como
+      // array): nenhum codigo mais especifico foi definido para este caso, so
+      // "zero resultados" (abaixo) e rede/5xx (acima) tem traducao propria.
+      if (!r.ok || dados.error || !Array.isArray(dados.data)) {
+        console.error('whatsapp graph recusou consulta de status', r.status, dados.error?.code, dados.error?.message)
+        return falha('whatsapp_indisponivel')
+      }
+      // Match EXATO de nome — o mesmo cuidado de posseDaPagina em meta-real.ts
+      // (que compara o id devolvido em vez de confiar so no que foi pedido).
+      // Sem este `find`, uma resposta cuja primeira linha e de outro template
+      // levaria silenciosamente o status errado para a tela.
+      const item = dados.data.find((t) => t.name === nome)
+      if (item) {
+        // O Graph devolve rejected_reason: 'NONE' quando o template nao foi
+        // rejeitado — 'NONE' na tela seria pior que nulo, entao normaliza para
+        // null junto com o caso de campo ausente.
+        const motivo =
+          item.rejected_reason && item.rejected_reason !== 'NONE' ? item.rejected_reason : null
+        return ok({ status: (item.status ?? '').toLowerCase(), motivo })
+      }
 
-    // O Graph devolve rejected_reason: 'NONE' quando o template nao foi
-    // rejeitado — 'NONE' na tela seria pior que nulo, entao normaliza para
-    // null junto com o caso de campo ausente.
-    const motivo = item.rejected_reason && item.rejected_reason !== 'NONE' ? item.rejected_reason : null
-    return ok({ status: (item.status ?? '').toLowerCase(), motivo })
+      const proxima = dados.paging?.next
+      // Fim das paginas sem match: agora sim "nao existe" e afirmacao provada.
+      if (!proxima) return falha('template_nao_encontrado')
+      try {
+        url = new URL(proxima)
+      } catch {
+        console.error('whatsapp graph paging.next malformado na consulta de status')
+        return falha('whatsapp_indisponivel')
+      }
+    }
+    // Teto atingido com paginas restantes: "nao encontrado" seria afirmacao
+    // sem prova, e a tela trata indisponivel como transitorio — que e o que
+    // isso e.
+    console.error('whatsapp graph paginacao excedida na consulta de status')
+    return falha('whatsapp_indisponivel')
   }
 
   async apagarTemplate(token: string, wabaId: string, nome: string): Promise<Resultado<void>> {

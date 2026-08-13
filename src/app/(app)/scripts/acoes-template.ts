@@ -157,3 +157,50 @@ export async function submeterTemplate(
   revalidatePath(`/scripts/${scriptId}`)
   return ok(undefined)
 }
+
+/**
+ * Exclui o template do script — o caminho "exclua e submeta" que a
+ * re-submissao deliberadamente nao cobre (trocar a categoria e' decisao de
+ * submissao do zero).
+ *
+ * A ordem e' o inverso da submissao, e de proposito: o banco apaga PRIMEIRO,
+ * porque o pedido do usuario e' tirar o template do CRM e ele nao pode ficar
+ * refem do Meta fora do ar. O apagar na WABA vem depois, best-effort e com o
+ * resultado deliberadamente nao lido — e' a mesma higiene do passo (9) da
+ * submissao, com o mesmo custo aceito: um delete que nao foi so' deixa um
+ * template morto la', e nome novo nunca colide com o velho (sufixo proprio).
+ */
+export async function excluirTemplate(scriptId: string): Promise<Resultado<void>> {
+  const contexto = await criarTemplateStoreDoServidor()
+  if (!contexto.ok) return falha(codigoDoErroDoTemplate(contexto.erro))
+
+  // Pre-check de papel pela mesma razao da submissao: sem ele o vendedor veria
+  // a mensagem generica em vez de "sem permissao". A guarda de verdade e' a
+  // RLS de whatsapp_templates_delete.
+  if (contexto.valor.papel === 'vendedor') return falha('sem_permissao')
+
+  const existente = await contexto.valor.templates.doScript(scriptId)
+  if (!existente.ok) return falha(codigoDoErroDoTemplate(existente.erro))
+  if (!existente.valor) return falha('template_nao_encontrado')
+
+  const apagado = await contexto.valor.templates.excluir(existente.valor.id)
+  if (!apagado.ok) return falha(codigoDoErroDoTemplate(apagado.erro))
+
+  // Higiene da WABA: sem credencial (numero desconectado, RPC fora) a exclusao
+  // local ja valeu — pular o Graph aqui nao e' erro, e' o best-effort falhando
+  // cedo.
+  const servico = criarDisparoServico()
+  if (servico.ok) {
+    const credencial = await servico.valor.credencial(contexto.valor.contaId)
+    if (credencial.ok) {
+      await whatsappGraph().apagarTemplate(
+        credencial.valor.token,
+        credencial.valor.wabaId,
+        existente.valor.nomeMeta,
+      )
+    }
+  }
+
+  revalidatePath(`/scripts/${scriptId}`)
+  return ok(undefined)
+}

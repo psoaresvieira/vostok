@@ -7,13 +7,15 @@ import Link from 'next/link'
 import type { TemplateWhatsApp as Template } from '@/lib/data/templates'
 import type { Resultado } from '@/lib/domain/resultado'
 import { chamarAcao } from '@/lib/ui/acao'
-import { submeterTemplate } from './acoes-template'
+import { excluirTemplate, submeterTemplate } from './acoes-template'
 import { mensagemDeErroScript } from './erros'
 
 type AcaoSubmeter = (
   scriptId: string,
   categoria: 'marketing' | 'utility',
 ) => Promise<Resultado<void>>
+
+type AcaoExcluir = (scriptId: string) => Promise<Resultado<void>>
 
 /** Estado em que o Meta ainda pode mudar de ideia: nada de re-submeter por
  * cima, porque a action recusa (template_ja_pendente) e o botao so existiria
@@ -74,6 +76,7 @@ export function TemplateWhatsApp({
   semConexao,
   agora,
   submeter = submeterTemplate,
+  excluir = excluirTemplate,
 }: {
   scriptId: string
   template: Template | null
@@ -88,10 +91,12 @@ export function TemplateWhatsApp({
    * Mesmo contrato de PainelTarefas e da Lista de tarefas. */
   agora: Date
   submeter?: AcaoSubmeter
+  excluir?: AcaoExcluir
 }) {
   const [categoria, setCategoria] = useState<'marketing' | 'utility'>('marketing')
   const [pendente, setPendente] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false)
 
   // Re-submissao reusa a categoria com que o template ja foi registrado: mudar
   // de marketing para utility no meio do caminho e' outra decisao, e ela cabe
@@ -105,6 +110,16 @@ export function TemplateWhatsApp({
     setErro(null)
     const r = await chamarAcao(submeter(scriptId, categoriaAEnviar))
     setPendente(false)
+    if (!r.ok) setErro(mensagemDeErroScript(r.erro))
+  }
+
+  async function confirmarExclusao() {
+    if (pendente) return
+    setPendente(true)
+    setErro(null)
+    const r = await chamarAcao(excluir(scriptId))
+    setPendente(false)
+    setConfirmandoExclusao(false)
     if (!r.ok) setErro(mensagemDeErroScript(r.erro))
   }
 
@@ -163,6 +178,56 @@ export function TemplateWhatsApp({
 
       {template && desatualizado && (
         <p className="text-sm">O script mudou desde a submissão — re-submeta para atualizar</p>
+      )}
+
+      {/* Excluir e' o caminho para trocar a categoria (submissao do zero).
+          Fora do gate de semConexao, de proposito: a exclusao comeca no banco
+          e a limpeza na WABA e' best-effort da action — sem credencial ela
+          continua valendo. */}
+      {template && !confirmandoExclusao && (
+        <button
+          type="button"
+          onClick={() => setConfirmandoExclusao(true)}
+          disabled={pendente}
+          className="w-fit rounded border border-destructive px-3 py-1 text-sm text-destructive disabled:opacity-50"
+        >
+          Excluir template
+        </button>
+      )}
+
+      {template && confirmandoExclusao && (
+        <div
+          role="dialog"
+          aria-label="Excluir template"
+          className="flex flex-col gap-2 rounded border p-3 text-sm"
+        >
+          <p>
+            Excluir o template &quot;{template.nomeMeta}&quot;?
+            {/* Excluir + submeter do zero contorna o template_ja_pendente em
+                dois cliques — legitimo, desde que o abandono da analise seja
+                consciente. */}
+            {emAnalise && ' Este template ainda está em análise no Meta — excluir abandona a análise.'}{' '}
+            Enviar este script por WhatsApp vai exigir nova submissão e aprovação do Meta.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void confirmarExclusao()}
+              disabled={pendente}
+              aria-label="Confirmar exclusão do template"
+              className="rounded bg-destructive px-3 py-1 text-primary-foreground disabled:opacity-50"
+            >
+              Confirmar exclusão
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmandoExclusao(false)}
+              aria-label="Cancelar exclusão do template"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
       )}
 
       {semConexao && linhaSemConexao}
