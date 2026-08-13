@@ -103,3 +103,9 @@ grant execute on function public.stage_da_conta(uuid, uuid) to authenticated;
 -- backfill_snapshot_etapas, handle_new_user, hash_segredo, segredo_confere,
 -- snapshot_lead_tags e snapshot_stage_history ficam sem grant nenhum, de
 -- proposito: sao internas.
+--
+-- `service_role` fica DE FORA do sweep e do teste, tambem de proposito: este
+-- projeto nao usa a service key em lugar nenhum (regra desde o Plano 1), e o
+-- papel tem BYPASSRLS — grant de EXECUTE nao e o que o contem. Se um dia a
+-- service key entrar no produto, a decisao de grants dela entra no mapa da
+-- 0024 junto.

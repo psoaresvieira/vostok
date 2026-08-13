@@ -202,8 +202,12 @@ export function TemplateWhatsApp({
           className="flex flex-col gap-2 rounded border p-3 text-sm"
         >
           <p>
-            Excluir o template &quot;{template.nomeMeta}&quot;? Enviar este script por WhatsApp vai
-            exigir nova submissão e aprovação do Meta.
+            Excluir o template &quot;{template.nomeMeta}&quot;?
+            {/* Excluir + submeter do zero contorna o template_ja_pendente em
+                dois cliques — legitimo, desde que o abandono da analise seja
+                consciente. */}
+            {emAnalise && ' Este template ainda está em análise no Meta — excluir abandona a análise.'}{' '}
+            Enviar este script por WhatsApp vai exigir nova submissão e aprovação do Meta.
           </p>
           <div className="flex gap-2">
             <button

@@ -401,6 +401,43 @@ describe('TemplateWhatsApp', () => {
       expect(chamadas).toHaveLength(0)
     })
 
+    it('template em analise: o dialogo AVISA que a analise esta em curso, para o bypass ser consciente', () => {
+      // Excluir + submeter do zero e' um contorno legitimo de dois cliques do
+      // template_ja_pendente — mas so se o usuario souber que esta abandonando
+      // uma analise em andamento.
+      render(
+        <TemplateWhatsApp
+          scriptId="script-1"
+          template={template({ status: 'pending' })}
+          desatualizado={false}
+          semConexao={false}
+          agora={AGORA}
+        />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Excluir template' }))
+
+      const dialogo = screen.getByRole('dialog', { name: 'Excluir template' })
+      expect(dialogo.textContent).toMatch(/ainda está em análise no Meta/i)
+    })
+
+    it('template aprovado: o dialogo NAO fala de analise em curso', () => {
+      render(
+        <TemplateWhatsApp
+          scriptId="script-1"
+          template={template()}
+          desatualizado={false}
+          semConexao={false}
+          agora={AGORA}
+        />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Excluir template' }))
+
+      const dialogo = screen.getByRole('dialog', { name: 'Excluir template' })
+      expect(dialogo.textContent).not.toMatch(/em análise/i)
+    })
+
     it('sem template nao ha o que excluir: o botao nao existe', () => {
       render(
         <TemplateWhatsApp

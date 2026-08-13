@@ -35,9 +35,13 @@ export interface WhatsAppGraph {
   ): Promise<Resultado<TemplateSubmetido>>
 
   /**
-   * Consulta o estado atual de um template pelo nome. Falhas viram codigo:
-   * 'template_nao_encontrado' (o Graph nao devolveu nenhum resultado) ou
-   * 'whatsapp_indisponivel' (rede/5xx ou qualquer outra recusa do Graph).
+   * Consulta o estado atual de um template pelo nome (match EXATO — o `name=`
+   * do Graph e prefix-match e paginado, e a implementacao real segue
+   * `paging.next` ate achar). Falhas viram codigo: 'template_nao_encontrado'
+   * (todas as paginas percorridas sem o nome exato) ou 'whatsapp_indisponivel'
+   * (rede/5xx, qualquer outra recusa do Graph, teto de paginas atingido ou
+   * `paging.next` malformado — casos em que "nao existe" seria afirmacao sem
+   * prova, entao a falha e transitoria de proposito).
    */
   statusDoTemplate(
     token: string,
