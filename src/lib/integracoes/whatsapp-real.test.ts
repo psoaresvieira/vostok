@@ -151,6 +151,81 @@ describe('WhatsAppGraphReal — submeterTemplate, statusDoTemplate, apagarTempla
     expect(r.valor).toEqual({ status: 'approved', motivo: null })
   })
 
+  it('statusDoTemplate segue paging.next quando o template exato nao esta na primeira pagina', async () => {
+    // O `name=` do Graph e prefix-match e a resposta e paginada: com orfaos de
+    // re-submissao acumulados (o apagar e best-effort), o template exato pode
+    // cair fora da primeira pagina — e parar nela devolveria
+    // template_nao_encontrado para um template que EXISTE, derrubando o envio.
+    const proxima =
+      'https://graph.facebook.com/v21.0/waba-1/message_templates?after=CURSOR&access_token=token-valido'
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: [{ name: 'boas_vindas_11111111', status: 'REJECTED', rejected_reason: 'NONE' }],
+          paging: { next: proxima },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: [{ name: 'boas_vindas', status: 'APPROVED', rejected_reason: 'NONE' }],
+        }),
+      })
+    global.fetch = fetchMock
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.statusDoTemplate('token-valido', 'waba-1', 'boas_vindas')
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor).toEqual({ status: 'approved', motivo: null })
+
+    // A segunda chamada foi para o link que o Graph mandou, como esta.
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(String(new URL(fetchMock.mock.calls[1][0] as string | URL))).toBe(proxima)
+  })
+
+  it('statusDoTemplate para no teto de paginas e devolve whatsapp_indisponivel, nunca um "nao existe" sem ter olhado tudo', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: [{ name: 'outro', status: 'APPROVED', rejected_reason: 'NONE' }],
+        paging: {
+          next: 'https://graph.facebook.com/v21.0/waba-1/message_templates?after=X&access_token=t',
+        },
+      }),
+    })
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.statusDoTemplate('token-valido', 'waba-1', 'boas_vindas')
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    // Nao e template_nao_encontrado: com paginas restantes, "nao existe" seria
+    // afirmacao sem prova — e a tela trata indisponivel como transitorio.
+    expect(r.erro).toBe('whatsapp_indisponivel')
+    expect(global.fetch).toHaveBeenCalledTimes(10)
+  })
+
+  it('statusDoTemplate com paging.next malformado devolve whatsapp_indisponivel em vez de estourar', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: [{ name: 'outro', status: 'APPROVED', rejected_reason: 'NONE' }],
+        paging: { next: 'nao-e-uma-url' },
+      }),
+    })
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.statusDoTemplate('token-valido', 'waba-1', 'boas_vindas')
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('whatsapp_indisponivel')
+  })
+
   it('apagarTemplate faz DELETE em /{waba_id}/message_templates com name na query', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
