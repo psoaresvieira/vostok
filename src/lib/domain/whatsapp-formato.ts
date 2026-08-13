@@ -16,27 +16,62 @@ type TokenDelim = { tipo: EstiloWhatsApp; delim: string }
 // literal") — decisao registrada em analisarTrecho, nao aqui.
 const LIMITE_ANINHAMENTO = 2
 
+// RULING (dono do plano): os bytes de uma tag ({{lacuna}}/{{desconhecida})
+// sao conteudo OPACO — podem ficar DENTRO de um par que o usuario escreveu
+// ao redor ('*Ola {{nome}}*' continua em negrito), mas os proprios
+// caracteres da tag nunca abrem nem fecham um par (o '_' de
+// '{{primeiro_nome}}' nao e um delimitador italico). `mascara[i] === 1`
+// marca uma posicao coberta por uma tag; detectarToken/acharFechamento a
+// tratam como se nao houvesse delimitador ali, sem tirar esses bytes do
+// conteudo de um par que os envolva por fora.
+function estaMascarado(mascara: Uint8Array, inicio: number, fim: number): boolean {
+  for (let i = inicio; i < fim; i++) {
+    if (mascara[i]) return true
+  }
+  return false
+}
+
 /** Delimitador comecando exatamente em `pos`, sem ultrapassar `fim` (o
- * '```' de mono precisa dos 3 crases inteiras dentro do limite). */
-function detectarToken(texto: string, pos: number, fim: number): TokenDelim | null {
+ * '```' de mono precisa dos 3 crases inteiras dentro do limite). Nenhum dos
+ * caracteres do token pode cair dentro de uma tag mascarada. */
+function detectarToken(
+  texto: string,
+  pos: number,
+  fim: number,
+  mascara: Uint8Array,
+): TokenDelim | null {
+  if (mascara[pos]) return null
   const c = texto[pos]
   if (c === '*') return { tipo: 'negrito', delim: '*' }
   if (c === '_') return { tipo: 'italico', delim: '_' }
   if (c === '~') return { tipo: 'riscado', delim: '~' }
   if (c === '`' && pos + 3 <= fim && texto.slice(pos, pos + 3) === '```') {
+    if (estaMascarado(mascara, pos, pos + 3)) return null
     return { tipo: 'mono', delim: '```' }
   }
   return null
 }
 
-/** Proxima ocorrencia do mesmo delimitador dentro de [de, fim); -1 se nao
- * achar ou se a ocorrencia mais proxima cair fora do limite (o que, no uso
- * feito aqui, representa "nao fecha nesta linha"). */
-function acharFechamento(texto: string, de: number, fim: number, token: TokenDelim): number {
-  const idx = texto.indexOf(token.delim, de)
-  if (idx === -1) return -1
-  if (idx + token.delim.length > fim) return -1
-  return idx
+/** Proxima ocorrencia do mesmo delimitador dentro de [de, fim), pulando
+ * ocorrencias que caiam (total ou parcialmente) dentro de uma tag
+ * mascarada; -1 se nao achar nenhuma valida ou se a ocorrencia mais
+ * proxima cair fora do limite (o que, no uso feito aqui, representa "nao
+ * fecha nesta linha"). */
+function acharFechamento(
+  texto: string,
+  de: number,
+  fim: number,
+  token: TokenDelim,
+  mascara: Uint8Array,
+): number {
+  let cursor = de
+  while (true) {
+    const idx = texto.indexOf(token.delim, cursor)
+    if (idx === -1) return -1
+    if (idx + token.delim.length > fim) return -1
+    if (!estaMascarado(mascara, idx, idx + token.delim.length)) return idx
+    cursor = idx + 1
+  }
 }
 
 function mesmosEstilos(a: EstiloWhatsApp[], b: EstiloWhatsApp[]): boolean {
@@ -57,12 +92,18 @@ function empurrarSpan(lista: Span[], start: number, end: number, estilos: Estilo
   lista.push({ start, end, estilos: [...estilos] })
 }
 
+function ehEspacoDeBorda(c: string): boolean {
+  // Tab conta como o mesmo tipo de "encostado" que espaço — a regra e
+  // "sem whitespace tocando o delimitador", nao literalmente so ' '.
+  return c === ' ' || c === '\t'
+}
+
 /**
  * Varre [inicio, fim) — sempre dentro de uma unica linha, pois quem chama
  * (analisarLinhas ou uma recursao de conteudo, que herda o limite da linha
  * de quem a chamou) nunca deixa `fim` cruzar um '\n' — procurando pares de
  * delimitador validos: fecha antes de `fim`, conteudo nao vazio e nao
- * comeca/termina com espaco.
+ * comeca/termina com espaco (tab conta como espaco).
  *
  * `estourou` sinaliza que, em algum ponto dentro deste trecho, um par com
  * forma valida foi recusado so por causa do limite de aninhamento (nao por
@@ -78,6 +119,7 @@ function analisarTrecho(
   inicio: number,
   fim: number,
   ativos: EstiloWhatsApp[],
+  mascara: Uint8Array,
 ): { spans: Span[]; estourou: boolean } {
   const spans: Span[] = []
   let cursor = inicio
@@ -85,15 +127,15 @@ function analisarTrecho(
   let estourou = false
 
   while (cursor < fim) {
-    const token = detectarToken(texto, cursor, fim)
+    const token = detectarToken(texto, cursor, fim, mascara)
     if (token) {
       const inicioConteudo = cursor + token.delim.length
-      const fechamento = acharFechamento(texto, inicioConteudo, fim, token)
+      const fechamento = acharFechamento(texto, inicioConteudo, fim, token, mascara)
       const valido =
         fechamento !== -1 &&
         fechamento > inicioConteudo &&
-        texto[inicioConteudo] !== ' ' &&
-        texto[fechamento - 1] !== ' '
+        !ehEspacoDeBorda(texto[inicioConteudo]) &&
+        !ehEspacoDeBorda(texto[fechamento - 1])
 
       if (valido) {
         empurrarSpan(spans, inicioLiteral, cursor, ativos)
@@ -109,7 +151,7 @@ function analisarTrecho(
           empurrarSpan(spans, cursor, fechamento + token.delim.length, [...ativos, 'mono'])
         } else {
           const novosAtivos: EstiloWhatsApp[] = [...ativos, token.tipo]
-          const filho = analisarTrecho(texto, inicioConteudo, fechamento, novosAtivos)
+          const filho = analisarTrecho(texto, inicioConteudo, fechamento, novosAtivos, mascara)
           if (filho.estourou) {
             empurrarSpan(spans, cursor, fechamento + token.delim.length, ativos)
             estourou = true
@@ -135,19 +177,38 @@ function analisarTrecho(
 /** Quebra `texto` em linhas (o '\n' vira seu proprio span, sem estilo) e
  * roda analisarTrecho em cada uma — e essa quebra que impede um par de
  * cruzar linha, sem analisarTrecho precisar saber nada sobre '\n'. */
-function analisarLinhas(texto: string): Span[] {
+function analisarLinhas(texto: string, mascara: Uint8Array): Span[] {
   const spans: Span[] = []
   let pos = 0
   while (pos <= texto.length) {
     const quebra = texto.indexOf('\n', pos)
     const fimLinha = quebra === -1 ? texto.length : quebra
-    const { spans: daLinha } = analisarTrecho(texto, pos, fimLinha, [])
+    const { spans: daLinha } = analisarTrecho(texto, pos, fimLinha, [], mascara)
     for (const s of daLinha) empurrarSpan(spans, s.start, s.end, s.estilos)
     if (quebra === -1) break
     empurrarSpan(spans, quebra, quebra + 1, [])
     pos = quebra + 1
   }
   return spans
+}
+
+/** Marca, em toda a extensao de `plano`, as posicoes cobertas por um
+ * segmento 'lacuna'/'desconhecida' — os bytes da tag original ('{{nome}}'),
+ * que a varredura de delimitador (analisarTrecho) deve tratar como
+ * opacos: contam como conteudo para um par que os envolva por fora, mas
+ * nunca abrem/fecham um par por conta propria (RULING do dono do plano). */
+function construirMascara(segs: Segmento[], tamanho: number): Uint8Array {
+  const mascara = new Uint8Array(tamanho)
+  let cursor = 0
+  for (const seg of segs) {
+    const inicio = cursor
+    const fim = cursor + seg.texto.length
+    if (seg.tipo === 'lacuna' || seg.tipo === 'desconhecida') {
+      mascara.fill(1, inicio, fim)
+    }
+    cursor = fim
+  }
+  return mascara
 }
 
 /**
@@ -168,7 +229,8 @@ function analisarLinhas(texto: string): Span[] {
  */
 export function formatarSegmentos(segs: Segmento[]): TrechoFormatado[] {
   const plano = textoPlano(segs)
-  const spans = analisarLinhas(plano)
+  const mascara = construirMascara(segs, plano.length)
+  const spans = analisarLinhas(plano, mascara)
 
   const saida: TrechoFormatado[] = []
   let cursor = 0
@@ -191,7 +253,7 @@ export function formatarSegmentos(segs: Segmento[]): TrechoFormatado[] {
 
     let pos = inicioSeg
     while (pos < fimSeg) {
-      while (spans[si].end <= pos) si++
+      while (si < spans.length && spans[si].end <= pos) si++
       const span = spans[si]
       const fimPedaco = Math.min(span.end, fimSeg)
       const pedaco = plano.slice(pos, fimPedaco)
