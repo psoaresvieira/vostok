@@ -66,7 +66,12 @@ test.describe('/scripts redireciona para /disparo', () => {
 
     // Biblioteca visivel de verdade, nao so uma URL que resolveu: conta
     // recem-criada, sem script nenhum, mostra o estado vazio da lista.
-    await expect(page.getByText('Nenhum script na biblioteca ainda.')).toBeVisible()
+    // Escopado a regiao da biblioteca (Plano 13 Task 7 acrescentou a area
+    // "Disparar" com o proprio estado vazio, texto DIFERENTE de proposito —
+    // ver o comentario em disparar.tsx — mas o escopo aqui e' o que deixa a
+    // asercao a prova de qualquer texto que a area de disparo venha a ter).
+    const biblioteca = page.getByRole('region', { name: 'Biblioteca de scripts' })
+    await expect(biblioteca.getByText('Nenhum script na biblioteca ainda.')).toBeVisible()
   })
 })
 
@@ -197,7 +202,13 @@ test.describe('scripts na ficha do lead', () => {
       await expect(
         paginaVendedor.getByRole('heading', { name: 'Disparo de WhatsApp', level: 1 }),
       ).toBeVisible()
-      await expect(paginaVendedor.getByText(tituloScript)).toBeVisible()
+      // Escopado a regiao da biblioteca: o titulo tambem aparece na area
+      // "Disparar" (Plano 13 Task 7) — o mesmo catalogo em dois lugares da
+      // pagina, de proposito. `getByText` sem escopo bateria em ambos.
+      const bibliotecaVendedor = paginaVendedor.getByRole('region', {
+        name: 'Biblioteca de scripts',
+      })
+      await expect(bibliotecaVendedor.getByText(tituloScript)).toBeVisible()
       // So agora a negativa: nenhum caminho de escrita oferecido.
       await expect(paginaVendedor.getByRole('link', { name: 'Novo script' })).toHaveCount(0)
 
