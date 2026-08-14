@@ -154,6 +154,11 @@ export function Disparar({
     if (timeoutEnviado.current) clearTimeout(timeoutEnviado.current)
     setLeadEnviadoId(idDoLead)
     setEnviado(true)
+    // De-arma o envio: sem lead selecionado, a secao com o botao (que exige
+    // `lead` nao-nulo) some ate o usuario escolher de novo — uma segunda
+    // mensagem cobrada pelo Meta exige um clique deliberado, nao um segundo
+    // clique acidental em cima da mesma previa.
+    setLeadId(null)
     timeoutEnviado.current = setTimeout(() => {
       setEnviado(false)
       timeoutEnviado.current = null
@@ -238,7 +243,13 @@ export function Disparar({
                 <li key={l.id} className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setLeadId(l.id)}
+                    onClick={() => {
+                      setLeadId(l.id)
+                      // Erro do envio anterior era do lead que estava
+                      // selecionado antes — trocar de lead sem reenviar nao
+                      // pode deixar esse erro colado sob a previa de outro.
+                      setErroEnvio(null)
+                    }}
                     disabled={l.telefoneE164 === null}
                     title={l.telefoneE164 === null ? 'Este lead não tem telefone' : undefined}
                     aria-pressed={leadId === l.id}
@@ -259,29 +270,37 @@ export function Disparar({
         </section>
       )}
 
-      {script && lead && (
+      {/* A confirmacao de sucesso (Enviado ✓ / Ver na ficha) NAO depende de
+          `lead`: um envio bem-sucedido limpa `leadId` (ver enviarClique) para
+          de-armar um segundo clique, mas a confirmacao do envio que acabou de
+          sair tem que continuar visivel mesmo sem lead selecionado. */}
+      {script && (lead || (enviado && leadEnviadoId)) && (
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-medium">Passo 3 — Prévia e envio</h3>
-          <div
-            role="region"
-            aria-label={`Prévia para ${lead.nome}`}
-            className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-sm"
-          >
-            <PreviaSegmentos segmentos={segmentos} />
-          </div>
+          {lead && (
+            <div
+              role="region"
+              aria-label={`Prévia para ${lead.nome}`}
+              className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-sm"
+            >
+              <PreviaSegmentos segmentos={segmentos} />
+            </div>
+          )}
 
-          {motivoBloqueio && <p className="text-xs text-warning">{motivoBloqueio}</p>}
+          {lead && motivoBloqueio && <p className="text-xs text-warning">{motivoBloqueio}</p>}
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void enviarClique()}
-              disabled={!podeEnviar || enviando}
-              title={motivoBloqueio ?? undefined}
-              className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
-            >
-              Enviar WhatsApp
-            </button>
+            {lead && (
+              <button
+                type="button"
+                onClick={() => void enviarClique()}
+                disabled={!podeEnviar || enviando}
+                title={motivoBloqueio ?? undefined}
+                className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
+              >
+                Enviar WhatsApp
+              </button>
+            )}
 
             {enviado && leadEnviadoId && (
               <span role="status" className="text-sm text-success">
@@ -293,7 +312,7 @@ export function Disparar({
             )}
           </div>
 
-          {erroEnvio && <p className="text-sm text-destructive">{erroEnvio}</p>}
+          {lead && erroEnvio && <p className="text-sm text-destructive">{erroEnvio}</p>}
         </section>
       )}
     </div>

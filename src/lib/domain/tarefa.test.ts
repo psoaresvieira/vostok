@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  FUSO_PADRAO,
-  classificar,
-  contarUrgentes,
-  instanteDeDatetimeLocal,
-} from './tarefa'
+import { FUSO_PADRAO, classificar, instanteDeDatetimeLocal } from './tarefa'
 
 describe('classificar', () => {
   it('um milissegundo antes de agora e atrasada', () => {
@@ -98,16 +93,5 @@ describe('instanteDeDatetimeLocal', () => {
     // Segundo fora de faixa transborda em silencio como os demais campos:
     // ':99' viraria +1min39s se so ano/mes/dia/hora/minuto fossem conferidos.
     expect(instanteDeDatetimeLocal('2026-08-10T10:00:99', FUSO_PADRAO)).toBeNull()
-  })
-})
-
-describe('contarUrgentes', () => {
-  it('soma atrasada e hoje e ignora o resto', () => {
-    const agora = new Date('2026-08-02T12:00:00-03:00')
-    const atrasada = new Date('2026-08-02T08:00:00-03:00')
-    const hoje = new Date('2026-08-02T18:00:00-03:00')
-    const proximos7 = new Date('2026-08-05T12:00:00-03:00')
-    const depois = new Date('2026-08-15T12:00:00-03:00')
-    expect(contarUrgentes([atrasada, hoje, proximos7, depois], agora, FUSO_PADRAO)).toBe(2)
   })
 })

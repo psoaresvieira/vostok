@@ -302,5 +302,50 @@ describe('Disparar', () => {
       const link = screen.getByRole('link', { name: /ver na ficha/i })
       expect(link.getAttribute('href')).toBe('/leads/lead-1')
     })
+
+    it('erro de envio do lead A some ao trocar para o lead B, sem novo envio', async () => {
+      const leadA = lead({ id: 'lead-a', nome: 'Lead A' })
+      const leadB = lead({ id: 'lead-b', nome: 'Lead B' })
+      const { fn: buscarLeads } = stubRegistrando<[string], LeadParaDisparo[]>(
+        ok([leadA, leadB]),
+      )
+      const { fn: enviar } = stubRegistrando<[string, string], void>(
+        falha('whatsapp_sem_telefone'),
+      )
+
+      render(
+        <Disparar
+          scripts={[SCRIPT_APROVADO]}
+          podeEditar
+          buscarLeads={buscarLeads}
+          enviar={enviar}
+        />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Abordagem inicial' }))
+      fireEvent.change(screen.getByLabelText('Buscar lead'), { target: { value: 'lead' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Lead A' })).toBeTruthy())
+
+      fireEvent.click(screen.getByRole('button', { name: 'Lead A' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Enviar WhatsApp' }))
+      await waitFor(() =>
+        expect(screen.getByText('Este lead não tem telefone.')).toBeTruthy(),
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Lead B' }))
+
+      expect(screen.queryByText('Este lead não tem telefone.')).toBeNull()
+    })
+
+    it('depois do sucesso, o botao Enviar WhatsApp some ate escolher um lead de novo', async () => {
+      const { fn: enviar } = stubRegistrando<[string, string], void>(ok(undefined))
+      await renderComScriptELeadSelecionados({ enviar })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Enviar WhatsApp' }))
+
+      await waitFor(() => expect(screen.getByText('Enviado ✓')).toBeTruthy())
+      expect(screen.queryByRole('button', { name: 'Enviar WhatsApp' })).toBeNull()
+    })
   })
 })

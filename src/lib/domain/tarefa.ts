@@ -137,11 +137,3 @@ export function instanteDeDatetimeLocal(naive: string, fuso: string): string | n
   if (Number.isNaN(instante.getTime())) return null
   return instante.toISOString()
 }
-
-/** Conta quantas tarefas caem em 'atrasada' ou 'hoje'. Alimenta o badge. */
-export function contarUrgentes(venceEm: Date[], agora: Date, fuso: string): number {
-  return venceEm.filter((v) => {
-    const balde = classificar(v, agora, fuso)
-    return balde === 'atrasada' || balde === 'hoje'
-  }).length
-}
