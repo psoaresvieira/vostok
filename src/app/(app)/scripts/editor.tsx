@@ -15,6 +15,7 @@ import {
 import { chamarAcao } from '@/lib/ui/acao'
 import { mensagemDeErroScript } from './erros'
 import { criarScript, atualizarScript, excluirScript } from './acoes'
+import { PreviaSegmentos } from './previa'
 
 /**
  * Lead ficticio do preview. `empresa` e' NULO DE PROPOSITO: a lacuna tem que
@@ -333,42 +334,12 @@ export function Editor({
           aria-label="Prévia"
           className="min-h-40 whitespace-pre-wrap rounded border border-border p-3 text-sm"
         >
-          {segmentos.map((seg, i) => {
-            if (seg.tipo === 'lacuna') {
-              return (
-                // A tag literal continua no texto, nunca substituida por vazio:
-                // uma lacuna invisivel viraria uma mensagem com buraco enviada
-                // a um lead de verdade.
-                //
-                // O rotulo vai num <span> visualmente escondido DENTRO da
-                // marca, e nao num aria-label nela: o papel ARIA de <mark> e'
-                // name-prohibited, entao a tecnologia assistiva simplesmente
-                // ignora um aria-label ali — o destaque ficaria so visual, e
-                // quem nao ve a cor nao saberia que aquele {{nome}} e' um
-                // buraco. O texto escondido e' lido junto com o literal.
-                <mark key={i} className="rounded bg-warning/25 px-0.5 text-warning">
-                  {seg.texto}
-                  <span className="sr-only">{` ${seg.nome} sem valor`}</span>
-                </mark>
-              )
-            }
-            if (seg.tipo === 'desconhecida') {
-              return (
-                // Distinguivel da lacuna por mais do que a cor (sublinhado
-                // pontilhado) e pelo proprio rotulo escondido: sao dois
-                // problemas com correcoes diferentes. Mesmo motivo do <span>
-                // sr-only da lacuna acima.
-                <mark
-                  key={i}
-                  className="rounded bg-destructive/25 px-0.5 text-destructive underline decoration-dotted"
-                >
-                  {seg.texto}
-                  <span className="sr-only">{` ${seg.nome} não é uma variável`}</span>
-                </mark>
-              )
-            }
-            return <span key={i}>{seg.texto}</span>
-          })}
+          {/* A tag literal de lacuna/desconhecida continua no texto, nunca
+              substituida por vazio, e o rotulo de a11y vai num <span>
+              escondido DENTRO da marca — nao num aria-label nela, ja que o
+              papel ARIA de <mark> e' name-prohibited. Pintura compartilhada
+              com o painter da ficha do lead (Plano 13, Task 2). */}
+          <PreviaSegmentos segmentos={segmentos} />
         </div>
 
         {segmentos.length === 0 && (
