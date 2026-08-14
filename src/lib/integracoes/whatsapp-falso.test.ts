@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { NUMERO_FALSO_PADRAO, TOKEN_FALSO_PADRAO, WhatsAppGraphFalso } from './whatsapp-falso'
+import {
+  NUMERO_FALSO_PADRAO,
+  NUMERO_FALSO_SECUNDARIO,
+  TOKEN_FALSO_PADRAO,
+  TOKEN_FALSO_SECUNDARIO,
+  WhatsAppGraphFalso,
+} from './whatsapp-falso'
 
 describe('WhatsAppGraphFalso', () => {
   it('devolve os dados de um numero cadastrado e registra a consulta', async () => {
@@ -33,6 +39,27 @@ describe('WhatsAppGraphFalso', () => {
       numeroExibicao: NUMERO_FALSO_PADRAO.numeroExibicao,
       nomeVerificado: NUMERO_FALSO_PADRAO.nomeVerificado,
     })
+  })
+
+  it('o par SECUNDARIO tambem vale sem semeadura, e sobrevive ao reiniciar() — junto com o padrao', async () => {
+    // Task 9: disparo-pela-aba.spec.ts conecta este par para nao competir com
+    // NUMERO_FALSO_PADRAO (unico global em whatsapp_connections) na mesma
+    // rodada de disparo-whatsapp.spec.ts. Este caso e' o contrato disso: se o
+    // par secundario sumir, disparo-pela-aba.spec.ts para de conseguir
+    // conectar e o vermelho aparece longe daqui.
+    const g = new WhatsAppGraphFalso()
+    g.reiniciar()
+
+    const r = await g.dadosDoNumero(TOKEN_FALSO_SECUNDARIO, NUMERO_FALSO_SECUNDARIO.phoneNumberId)
+    if (!r.ok) throw new Error(r.erro)
+    expect(r.valor).toEqual({
+      numeroExibicao: NUMERO_FALSO_SECUNDARIO.numeroExibicao,
+      nomeVerificado: NUMERO_FALSO_SECUNDARIO.nomeVerificado,
+    })
+
+    // Os dois pares coexistem — reiniciar() nao troca um pelo outro.
+    const padrao = await g.dadosDoNumero(TOKEN_FALSO_PADRAO, NUMERO_FALSO_PADRAO.phoneNumberId)
+    expect(padrao.ok).toBe(true)
   })
 
   it('recusa token nao cadastrado com token_whatsapp_invalido e ainda assim registra a consulta', async () => {

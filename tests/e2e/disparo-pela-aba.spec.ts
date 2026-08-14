@@ -1,6 +1,9 @@
 import { test, expect, type Page } from '@playwright/test'
 import { carimbo, coluna, criarConta } from './apoio'
-import { NUMERO_FALSO_PADRAO, TOKEN_FALSO_PADRAO } from '@/lib/integracoes/whatsapp-falso'
+import {
+  NUMERO_FALSO_SECUNDARIO,
+  TOKEN_FALSO_SECUNDARIO,
+} from '@/lib/integracoes/whatsapp-falso'
 
 /**
  * O caso nomeado da Task 9 (spec §5 do Plano 13 remodelada): pela aba
@@ -19,6 +22,19 @@ import { NUMERO_FALSO_PADRAO, TOKEN_FALSO_PADRAO } from '@/lib/integracoes/whats
  * repetir toda a arrumacao (conta, WhatsApp, template aprovado) dentro do
  * teste da ficha ou acoplar dois casos com propositos diferentes num so'
  * `test()` gigante.
+ *
+ * NUMERO_FALSO_SECUNDARIO, e nao NUMERO_FALSO_PADRAO: os dois specs de
+ * disparo conectam o WhatsApp falso, e `whatsapp_connections_numero_idx`
+ * (0019:33) e' unico GLOBAL. Um numero fixo POR spec elimina o recurso
+ * compartilhado — nenhum teste depende de desconectar antes do outro rodar,
+ * nem da ORDEM alfabetica em que os arquivos sao descobertos (achado do
+ * review da Task 9: com um numero so, o try/finally de limpeza local so'
+ * funcionava porque este arquivo por acaso ordena antes de
+ * disparo-whatsapp.spec.ts — um teste que morresse antes do finally deixaria
+ * o numero preso do mesmo jeito que o bug que global-setup.ts ja existe para
+ * evitar). `global-setup.ts` limpa os DOIS numeros (PADRAO e SECUNDARIO) no
+ * inicio de toda invocacao — mesmo padrao ja usado para as tres Pages falsas
+ * do Meta.
  */
 
 const ETAPA_DO_LEAD = 'Novo lead'
@@ -38,29 +54,12 @@ async function conectarWhatsApp(pagina: Page): Promise<void> {
     ).toBeVisible({ timeout: 1_000 })
   }).toPass({ timeout: 20_000 })
 
-  await pagina.getByLabel('Token').fill(TOKEN_FALSO_PADRAO)
-  await pagina.getByLabel('ID do número').fill(NUMERO_FALSO_PADRAO.phoneNumberId)
-  await pagina.getByLabel('ID da WABA').fill(NUMERO_FALSO_PADRAO.wabaId)
+  await pagina.getByLabel('Token').fill(TOKEN_FALSO_SECUNDARIO)
+  await pagina.getByLabel('ID do número').fill(NUMERO_FALSO_SECUNDARIO.phoneNumberId)
+  await pagina.getByLabel('ID da WABA').fill(NUMERO_FALSO_SECUNDARIO.wabaId)
   await conectar.click()
 
-  await expect(pagina.getByText(NUMERO_FALSO_PADRAO.numeroExibicao)).toBeVisible()
-}
-
-/**
- * `whatsapp_connections_numero_idx` (0019:33) e' unico GLOBAL — o mesmo motivo
- * documentado em global-setup.ts para as Pages falsas do Meta. Sem desconectar
- * no fim deste teste, o numero falso fixo (NUMERO_FALSO_PADRAO) fica preso a
- * esta conta ate o fim da rodada inteira do `npm run test:e2e`, e
- * disparo-whatsapp.spec.ts — que conecta o MESMO numero para uma conta
- * diferente — falha logo depois com "numero ja conectado a outra conta"
- * (achado ao rodar a suite completa: a falha so' aparece com os dois arquivos
- * juntos, nunca isolado).
- */
-async function desconectarWhatsApp(pagina: Page): Promise<void> {
-  await pagina.goto('/config')
-  await pagina.getByRole('button', { name: 'Desconectar' }).click()
-  await pagina.getByRole('button', { name: 'Confirmar desconexão' }).click()
-  await expect(pagina.getByRole('button', { name: 'Conectar' })).toBeVisible()
+  await expect(pagina.getByText(NUMERO_FALSO_SECUNDARIO.numeroExibicao)).toBeVisible()
 }
 
 async function criarLeadCompleto(
@@ -87,80 +86,74 @@ test.describe('disparo de WhatsApp pela aba /disparo', () => {
   }) => {
     await criarConta(page)
 
-    // --- WhatsApp conectado + script com template aprovado ---
+    // --- WhatsApp conectado (numero SECUNDARIO — ver comentario do topo) +
+    // script com template aprovado ---
     await conectarWhatsApp(page)
-    try {
-      const tituloScript = `Disparo pela aba ${carimbo()}`
-      const conteudo = 'Olá {{primeiro_nome}}, tudo bem na {{empresa}}?'
-      await page.goto('/scripts/novo')
-      await expect(page.getByRole('heading', { name: 'Novo script', level: 1 })).toBeVisible()
 
-      await page.getByLabel('Título').fill(tituloScript)
-      // exact: true — a lista "clique para inserir" tem um botao
-      // aria-label="Inserir etapa", que casa por substring com 'Etapa'.
-      await page.getByLabel('Etapa', { exact: true }).selectOption({ label: ETAPA_DO_LEAD })
-      await page.getByLabel('Conteúdo').fill(conteudo)
-      await page.getByRole('button', { name: 'Salvar' }).click()
-      await page.waitForURL(/\/scripts\/[0-9a-f-]{36}$/)
+    const tituloScript = `Disparo pela aba ${carimbo()}`
+    const conteudo = 'Olá {{primeiro_nome}}, tudo bem na {{empresa}}?'
+    await page.goto('/scripts/novo')
+    await expect(page.getByRole('heading', { name: 'Novo script', level: 1 })).toBeVisible()
 
-      await page.getByRole('button', { name: 'Submeter ao WhatsApp' }).click()
-      await expect(page.getByText('Aprovado')).toBeVisible()
+    await page.getByLabel('Título').fill(tituloScript)
+    // exact: true — a lista "clique para inserir" tem um botao
+    // aria-label="Inserir etapa", que casa por substring com 'Etapa'.
+    await page.getByLabel('Etapa', { exact: true }).selectOption({ label: ETAPA_DO_LEAD })
+    await page.getByLabel('Conteúdo').fill(conteudo)
+    await page.getByRole('button', { name: 'Salvar' }).click()
+    await page.waitForURL(/\/scripts\/[0-9a-f-]{36}$/)
 
-      // --- Lead com telefone e empresa (as duas variaveis do script) ---
-      const nomeLead = `Cliente Disparo Aba ${carimbo()}`
-      const empresa = `Loja ${carimbo()}`
-      await criarLeadCompleto(page, { nome: nomeLead, telefone: '(83) 98888-1234', empresa })
+    await page.getByRole('button', { name: 'Submeter ao WhatsApp' }).click()
+    await expect(page.getByText('Aprovado')).toBeVisible()
 
-      const primeiroNome = nomeLead.split(' ')[0]
-      const textoEsperado = `Olá ${primeiroNome}, tudo bem na ${empresa}?`
+    // --- Lead com telefone e empresa (as duas variaveis do script) ---
+    const nomeLead = `Cliente Disparo Aba ${carimbo()}`
+    const empresa = `Loja ${carimbo()}`
+    await criarLeadCompleto(page, { nome: nomeLead, telefone: '(83) 98888-1234', empresa })
 
-      // --- Pela aba /disparo: escolher script, buscar lead, ver a previa ---
-      await page.goto('/disparo')
-      await expect(
-        page.getByRole('heading', { name: 'Disparo de WhatsApp', level: 1 }),
-      ).toBeVisible()
+    const primeiroNome = nomeLead.split(' ')[0]
+    const textoEsperado = `Olá ${primeiroNome}, tudo bem na ${empresa}?`
 
-      await page.getByRole('button', { name: tituloScript }).click()
+    // --- Pela aba /disparo: escolher script, buscar lead, ver a previa ---
+    await page.goto('/disparo')
+    await expect(
+      page.getByRole('heading', { name: 'Disparo de WhatsApp', level: 1 }),
+    ).toBeVisible()
 
-      await page.getByLabel('Buscar lead').fill(nomeLead)
-      await page.getByRole('button', { name: 'Buscar' }).click()
-      const botaoLead = page.getByRole('button', { name: nomeLead })
-      await expect(botaoLead).toBeEnabled()
-      await botaoLead.click()
+    await page.getByRole('button', { name: tituloScript }).click()
 
-      await expect(page.getByRole('region', { name: `Prévia para ${nomeLead}` })).toHaveText(
-        textoEsperado,
-      )
+    await page.getByLabel('Buscar lead').fill(nomeLead)
+    await page.getByRole('button', { name: 'Buscar' }).click()
+    const botaoLead = page.getByRole('button', { name: nomeLead })
+    await expect(botaoLead).toBeEnabled()
+    await botaoLead.click()
 
-      // --- Enviar (sem dialogo de confirmacao nesta superficie) ---
-      const enviar = page.getByRole('button', { name: 'Enviar WhatsApp' })
-      await expect(enviar).toBeEnabled()
-      await enviar.click()
+    await expect(page.getByRole('region', { name: `Prévia para ${nomeLead}` })).toHaveText(
+      textoEsperado,
+    )
 
-      // Transitorio (2.5s): a asercao comeca a esperar ANTES de a action
-      // responder, entao ela ve a janela inteira em vez de correr contra ela.
-      await expect(page.getByText('Enviado ✓')).toBeVisible()
+    // --- Enviar (sem dialogo de confirmacao nesta superficie) ---
+    const enviar = page.getByRole('button', { name: 'Enviar WhatsApp' })
+    await expect(enviar).toBeEnabled()
+    await enviar.click()
 
-      // --- "Ver na ficha" leva para a ficha do lead certo ---
-      await page.getByRole('link', { name: 'Ver na ficha' }).click()
-      await expect(
-        page.getByRole('heading', { name: nomeLead, exact: true, level: 1 }),
-      ).toBeVisible()
+    // Transitorio (2.5s): a asercao comeca a esperar ANTES de a action
+    // responder, entao ela ve a janela inteira em vez de correr contra ela.
+    await expect(page.getByText('Enviado ✓')).toBeVisible()
 
-      // --- A timeline mostra o texto EXATO que foi enviado ---
-      await page.reload()
-      const linhaEvento = page
-        .locator('li')
-        .filter({ hasText: 'WhatsApp enviado:' })
-        .locator('p')
-        .first()
-      await expect(linhaEvento).toHaveText(`WhatsApp enviado: ${textoEsperado}`)
-    } finally {
-      // Libera o numero falso fixo para o proximo arquivo da rodada — ver o
-      // comentario de `desconectarWhatsApp`. `finally` de proposito: mesmo
-      // que uma asercao acima quebre, o numero nao pode ficar preso a esta
-      // conta e derrubar um teste que nao tem nada a ver com a quebra.
-      await desconectarWhatsApp(page)
-    }
+    // --- "Ver na ficha" leva para a ficha do lead certo ---
+    await page.getByRole('link', { name: 'Ver na ficha' }).click()
+    await expect(
+      page.getByRole('heading', { name: nomeLead, exact: true, level: 1 }),
+    ).toBeVisible()
+
+    // --- A timeline mostra o texto EXATO que foi enviado ---
+    await page.reload()
+    const linhaEvento = page
+      .locator('li')
+      .filter({ hasText: 'WhatsApp enviado:' })
+      .locator('p')
+      .first()
+    await expect(linhaEvento).toHaveText(`WhatsApp enviado: ${textoEsperado}`)
   })
 })
