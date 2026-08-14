@@ -271,3 +271,24 @@ test('do lead manual e do webhook ate o anuncio, no funil e no canal', async ({ 
   await page.goto('/metricas?dias=7')
   await expect(totalDaCoorte(page)).toHaveText('1')
 })
+
+/**
+ * Plano 13 (remodelada), Tarefa 5: o trackeamento (Canais) abre a tela, antes
+ * do Funil e das Etiquetas — so a ORDEM das secoes muda, nada de calculo.
+ * boundingBox().y, nao um seletor de "primeiro elemento": as tres secoes
+ * ficam empilhadas por `flex flex-col` (page.tsx), entao a secao que vem
+ * antes no JSX sempre desenha mais acima na tela — a mesma logica que
+ * `arrastar()` ja usa para posicao de elementos neste arquivo.
+ */
+test('trackeamento abre a tela: Canais vem antes do Funil no DOM', async ({ page }) => {
+  await criarConta(page)
+  await criarLead(page, `Lead Ordem ${carimbo()}`)
+
+  await page.goto('/metricas')
+
+  const boxCanais = await secaoCanais(page).boundingBox()
+  const boxFunil = await secaoFunil(page).boundingBox()
+  if (!boxCanais || !boxFunil) throw new Error('secao de Canais ou de Funil sem bounding box')
+
+  expect(boxCanais.y).toBeLessThan(boxFunil.y)
+})

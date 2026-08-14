@@ -26,9 +26,9 @@ const FORMATO_PRAZO = new Intl.DateTimeFormat('pt-BR', {
   timeZone: FUSO_PADRAO,
 })
 
-/** Rotulo de urgencia por cima de `classificar` — so os dois baldes que
- * tambem alimentam o badge (contarUrgentes) ganham texto visivel; os demais
- * ficam mudos para nao poluir a lista com "no prazo" em toda linha. */
+/** Rotulo de urgencia por cima de `classificar` — so os dois baldes mais
+ * urgentes ('atrasada' e 'hoje') ganham texto visivel; os demais ficam mudos
+ * para nao poluir a lista com "no prazo" em toda linha. */
 function rotuloUrgencia(venceEm: Date, agora: Date): string | null {
   const balde = classificar(venceEm, agora, FUSO_PADRAO)
   if (balde === 'atrasada') return 'Atrasada'

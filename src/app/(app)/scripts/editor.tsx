@@ -15,6 +15,7 @@ import {
 import { chamarAcao } from '@/lib/ui/acao'
 import { mensagemDeErroScript } from './erros'
 import { criarScript, atualizarScript, excluirScript } from './acoes'
+import { PreviaSegmentos } from './previa'
 
 /**
  * Lead ficticio do preview. `empresa` e' NULO DE PROPOSITO: a lacuna tem que
@@ -102,17 +103,38 @@ export function Editor({
   // normalizado (ou o contrario) faria o usuario discordar do que salvou.
   const tags = normalizarTags(tagsTexto.split(','))
 
-  function inserirVariavel(nome: string) {
+  // Enquanto o campo nunca foi focado, o fim do texto e' o unico palpite
+  // honesto: o usuario nao escolheu posicao nenhuma. Depois do primeiro foco
+  // (inclusive o que o efeito acima devolve), vale o cursor de verdade. Um so
+  // criterio para "onde fica o cursor", usado tanto por inserirVariavel quanto
+  // por inserirFormatacao — duplica-lo teria criado um segundo caminho de
+  // insercao que podia divergir do primeiro.
+  function selecaoAtual(): { inicio: number; fim: number } {
     const el = refConteudo.current
-    const tag = `{{${nome}}}`
-    // Enquanto o campo nunca foi focado, o fim do texto e' o unico palpite
-    // honesto: o usuario nao escolheu posicao nenhuma. Depois do primeiro foco
-    // (inclusive o que o efeito acima devolve), vale o cursor de verdade.
     const temCursor = cursorConfiavel.current && el !== null
-    const inicio = temCursor ? el.selectionStart : conteudo.length
-    const fim = temCursor ? el.selectionEnd : conteudo.length
+    return temCursor
+      ? { inicio: el.selectionStart, fim: el.selectionEnd }
+      : { inicio: conteudo.length, fim: conteudo.length }
+  }
+
+  function inserirVariavel(nome: string) {
+    const tag = `{{${nome}}}`
+    const { inicio, fim } = selecaoAtual()
     setConteudo(conteudo.slice(0, inicio) + tag + conteudo.slice(fim))
     setCaret(inicio + tag.length)
+  }
+
+  // Com selecao, o delimitador envolve exatamente o texto selecionado; sem
+  // selecao, insere o par vazio e poe o cursor entre os dois delimitadores
+  // (nao no fim), para o autor digitar na hora sem precisar mover a mao pro
+  // meio.
+  function inserirFormatacao(delimitador: string) {
+    const { inicio, fim } = selecaoAtual()
+    const selecionado = conteudo.slice(inicio, fim)
+    const novo =
+      conteudo.slice(0, inicio) + delimitador + selecionado + delimitador + conteudo.slice(fim)
+    setConteudo(novo)
+    setCaret(inicio === fim ? inicio + delimitador.length : fim + 2 * delimitador.length)
   }
 
   async function salvar() {
@@ -159,7 +181,10 @@ export function Editor({
       setErro(mensagemDeErroScript(r.erro))
       return
     }
-    router.push('/scripts')
+    // A biblioteca vive em /disparo desde a Task 7 (Plano 13); /scripts so
+    // redireciona para la, entao mandar para ele so para bater no redirect
+    // no proximo request seria um passo a mais sem motivo.
+    router.push('/disparo')
   }
 
   return (
@@ -243,6 +268,29 @@ export function Editor({
             rows={16}
             className="rounded border border-border px-2 py-1 font-mono text-sm"
           />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">Formatação:</span>
+          <ul className="flex flex-wrap gap-1">
+            {(
+              [
+                { nome: 'Negrito', delimitador: '*', className: 'font-bold' },
+                { nome: 'Itálico', delimitador: '_', className: 'italic' },
+                { nome: 'Riscado', delimitador: '~', className: 'line-through' },
+              ] as const
+            ).map((f) => (
+              <li key={f.nome}>
+                <button
+                  type="button"
+                  onClick={() => inserirFormatacao(f.delimitador)}
+                  className={`rounded border border-border px-2 py-0.5 text-xs ${f.className}`}
+                >
+                  {f.nome}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div className="flex flex-col gap-1">
@@ -333,42 +381,12 @@ export function Editor({
           aria-label="Prévia"
           className="min-h-40 whitespace-pre-wrap rounded border border-border p-3 text-sm"
         >
-          {segmentos.map((seg, i) => {
-            if (seg.tipo === 'lacuna') {
-              return (
-                // A tag literal continua no texto, nunca substituida por vazio:
-                // uma lacuna invisivel viraria uma mensagem com buraco enviada
-                // a um lead de verdade.
-                //
-                // O rotulo vai num <span> visualmente escondido DENTRO da
-                // marca, e nao num aria-label nela: o papel ARIA de <mark> e'
-                // name-prohibited, entao a tecnologia assistiva simplesmente
-                // ignora um aria-label ali — o destaque ficaria so visual, e
-                // quem nao ve a cor nao saberia que aquele {{nome}} e' um
-                // buraco. O texto escondido e' lido junto com o literal.
-                <mark key={i} className="rounded bg-warning/25 px-0.5 text-warning">
-                  {seg.texto}
-                  <span className="sr-only">{` ${seg.nome} sem valor`}</span>
-                </mark>
-              )
-            }
-            if (seg.tipo === 'desconhecida') {
-              return (
-                // Distinguivel da lacuna por mais do que a cor (sublinhado
-                // pontilhado) e pelo proprio rotulo escondido: sao dois
-                // problemas com correcoes diferentes. Mesmo motivo do <span>
-                // sr-only da lacuna acima.
-                <mark
-                  key={i}
-                  className="rounded bg-destructive/25 px-0.5 text-destructive underline decoration-dotted"
-                >
-                  {seg.texto}
-                  <span className="sr-only">{` ${seg.nome} não é uma variável`}</span>
-                </mark>
-              )
-            }
-            return <span key={i}>{seg.texto}</span>
-          })}
+          {/* A tag literal de lacuna/desconhecida continua no texto, nunca
+              substituida por vazio, e o rotulo de a11y vai num <span>
+              escondido DENTRO da marca — nao num aria-label nela, ja que o
+              papel ARIA de <mark> e' name-prohibited. Pintura compartilhada
+              com o painter da ficha do lead (Plano 13, Task 2). */}
+          <PreviaSegmentos segmentos={segmentos} />
         </div>
 
         {segmentos.length === 0 && (

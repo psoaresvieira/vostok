@@ -17,6 +17,7 @@ import {
 import { chamarAcao } from '@/lib/ui/acao'
 import { estaDesatualizado } from '@/app/(app)/scripts/desatualizado'
 import { mensagemDeErroScript } from '@/app/(app)/scripts/erros'
+import { PreviaSegmentos } from '@/app/(app)/scripts/previa'
 import { enviarWhatsApp } from './acoes-whatsapp'
 
 /** Quanto tempo o "Copiado ✓" / "Enviado ✓" fica visivel antes de sumir
@@ -167,33 +168,13 @@ function ItemScript({
         aria-label={`Prévia de ${script.titulo}`}
         className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded bg-muted/40 p-2 text-sm"
       >
-        {segmentos.map((seg, i) => {
-          if (seg.tipo === 'lacuna') {
-            return (
-              // Mesma marca do editor, pelo mesmo motivo: a tag literal
-              // continua no texto (lacuna invisivel = mensagem com buraco
-              // enviada de verdade), e o rotulo vai num <span> escondido DENTRO
-              // da marca — <mark> tem papel ARIA name-prohibited, entao um
-              // aria-label nela nao chega a leitor de tela nenhum.
-              <mark key={i} className="rounded bg-warning/25 px-0.5 text-warning">
-                {seg.texto}
-                <span className="sr-only">{` ${seg.nome} sem valor`}</span>
-              </mark>
-            )
-          }
-          if (seg.tipo === 'desconhecida') {
-            return (
-              <mark
-                key={i}
-                className="rounded bg-destructive/25 px-0.5 text-destructive underline decoration-dotted"
-              >
-                {seg.texto}
-                <span className="sr-only">{` ${seg.nome} não é uma variável`}</span>
-              </mark>
-            )
-          }
-          return <span key={i}>{seg.texto}</span>
-        })}
+        {/* Mesma marca do editor, pelo mesmo motivo — pintura compartilhada
+            via <PreviaSegmentos> (Plano 13, Task 2): a tag literal continua
+            no texto (lacuna invisivel = mensagem com buraco enviada de
+            verdade), e o rotulo vai num <span> escondido DENTRO da marca —
+            <mark> tem papel ARIA name-prohibited, entao um aria-label nela
+            nao chega a leitor de tela nenhum. */}
+        <PreviaSegmentos segmentos={segmentos} />
       </div>
 
       {/* O contador e' o AVISO para copiar/wa.me, nao um bloqueio: os dois
@@ -385,7 +366,7 @@ export function PainelScripts({
       ) : scripts.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Nenhum script para esta etapa.{' '}
-          <Link href="/scripts" className="underline">
+          <Link href="/disparo" className="underline">
             Ver a biblioteca de scripts
           </Link>
         </p>

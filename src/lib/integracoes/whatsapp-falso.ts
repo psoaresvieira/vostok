@@ -35,6 +35,25 @@ export const NUMERO_FALSO_PADRAO = {
 }
 
 /**
+ * Segundo par padrao, para um SEGUNDO consumidor de E2E que tambem precisa
+ * conectar o WhatsApp pela tela sem abrir mao do primeiro — mesmo motivo de
+ * PAGINAS_PADRAO ter tres Pages em meta-falso.ts, e nao uma so'.
+ * `whatsapp_connections_numero_idx` (0019:33) e' unico GLOBAL: dois specs que
+ * conectam o MESMO numero, na MESMA rodada de `npm run test:e2e`, sem
+ * desconectar entre um e outro, colidem — e o vermelho depende da ORDEM em
+ * que os arquivos rodam (achado da Task 9). Um numero fixo por spec elimina o
+ * recurso compartilhado em vez de coordenar quem desconecta antes de quem;
+ * global-setup.ts limpa OS DOIS (a mesma lista que ja limpa as tres Pages).
+ */
+export const TOKEN_FALSO_SECUNDARIO = 'token-falso-secundario'
+export const NUMERO_FALSO_SECUNDARIO = {
+  phoneNumberId: 'phone-number-id-falso-secundario',
+  wabaId: 'waba-id-falso-secundario',
+  numeroExibicao: '+55 11 90000-0001',
+  nomeVerificado: 'Empresa Falsa 2',
+}
+
+/**
  * Test double do WhatsAppGraph, na forma de MetaGraphFalso: mapa de dados
  * cadastrados por phoneNumberId, conjunto de tokens aceitos, e registro de
  * chamadas para os testes afirmarem sobre o estado do duplo — nunca spy.
@@ -93,15 +112,20 @@ export class WhatsAppGraphFalso implements WhatsAppGraph {
     this.semearPadrao()
   }
 
-  /** O par padrao do E2E — ver TOKEN_FALSO_PADRAO. Fica fora do corpo do
-   * construtor para `reiniciar()` restaurar o MESMO estado inicial: um
-   * reiniciar que apagasse o padrao deixaria a falsa num estado que o
-   * construtor nunca produz. */
+  /** Os dois pares padrao do E2E — ver TOKEN_FALSO_PADRAO/TOKEN_FALSO_SECUNDARIO.
+   * Fica fora do corpo do construtor para `reiniciar()` restaurar o MESMO
+   * estado inicial: um reiniciar que apagasse os padroes deixaria a falsa num
+   * estado que o construtor nunca produz. */
   private semearPadrao(): void {
     this.tokensAceitos.add(TOKEN_FALSO_PADRAO)
     this.numeros.set(NUMERO_FALSO_PADRAO.phoneNumberId, {
       numeroExibicao: NUMERO_FALSO_PADRAO.numeroExibicao,
       nomeVerificado: NUMERO_FALSO_PADRAO.nomeVerificado,
+    })
+    this.tokensAceitos.add(TOKEN_FALSO_SECUNDARIO)
+    this.numeros.set(NUMERO_FALSO_SECUNDARIO.phoneNumberId, {
+      numeroExibicao: NUMERO_FALSO_SECUNDARIO.numeroExibicao,
+      nomeVerificado: NUMERO_FALSO_SECUNDARIO.nomeVerificado,
     })
   }
 

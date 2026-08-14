@@ -5,12 +5,18 @@ import { FUSO_PADRAO } from '@/lib/domain/tarefa'
 /**
  * O percurso do brief da Task 7, ponta a ponta: vendedor agenda uma tarefa
  * para amanha, ve ela em "Proximos 7 dias", agenda uma segunda para ontem, ve
- * ela em "Atrasadas" com o badge contando, conclui a atrasada (some da lista,
- * badge desce) e volta ao lead para ver "Tarefa concluida" na timeline. Mais
- * as duas propriedades que o criterio de aceite do plano exige e que esses
- * seis passos nao cobrem: um segundo vendedor da mesma conta nao ve nenhuma
- * dessas tarefas, e o admin ve as dele por padrao e chega as dos outros pelo
- * filtro.
+ * ela em "Atrasadas", conclui a atrasada (some da lista) e volta ao lead para
+ * ver "Tarefa concluida" na timeline. Mais as duas propriedades que o
+ * criterio de aceite do plano exige e que esses seis passos nao cobrem: um
+ * segundo vendedor da mesma conta nao ve nenhuma dessas tarefas, e o admin ve
+ * as dele por padrao e chega as dos outros pelo filtro.
+ *
+ * A Task 8 do Plano 13 (remodelada) removeu o link "Tarefas" e o badge de
+ * urgentes do header — a rota /tarefas em si continua de pe, so deixou de
+ * estar listada na navegacao. Este arquivo ja navegava por URL direta
+ * (`page.goto('/tarefas')`), nunca clicando o link do header, entao os passos
+ * abaixo continuam validos tal como estao; so as asercoes que liam o
+ * accessible name do link/badge do header saíram.
  */
 
 // --- datas relativas ao dia civil em FUSO_PADRAO, nunca ao relogio da
@@ -82,17 +88,6 @@ function itemDaTarefa(secao: import('@playwright/test').Locator, texto: string) 
   return secao.locator('li').filter({ hasText: texto })
 }
 
-/** O link "Tarefas" da navegacao: quando ha tarefa urgente, o badge e' um
- * `<span>` com `aria-label` proprio (nao role/heading), e o nome acessivel do
- * `<a>` inteiro vira "Tarefas N tarefa(s) urgente(s)" — comentado em
- * layout.tsx, que ja antecipa este E2E lendo por aqui. Afirmar pelo nome
- * acessivel do link (toHaveAccessibleName) e' o jeito de checar o badge sem
- * depender de classe CSS nem do texto cru do digito, que sozinho ("1") nao diz
- * o que conta. */
-function linkTarefasNav(page: Page) {
-  return page.getByRole('link', { name: /^Tarefas/ })
-}
-
 async function abrirLead(page: Page, nomeDoLead: string) {
   await page.getByRole('link', { name: nomeDoLead }).click()
   await expect(page.getByRole('heading', { name: nomeDoLead, exact: true, level: 1 })).toBeVisible()
@@ -112,7 +107,7 @@ async function criarTarefaNaFicha(
   await resposta
 }
 
-test.describe('ciclo de vida de uma tarefa, da ficha do lead ao badge', () => {
+test.describe('ciclo de vida de uma tarefa, da ficha do lead a lista de /tarefas', () => {
   test('vendedor agenda, ve nos baldes certos, conclui e a timeline registra — isolado de outro vendedor, visivel ao admin pelo filtro', async ({
     browser,
   }) => {
@@ -153,8 +148,7 @@ test.describe('ciclo de vida de uma tarefa, da ficha do lead ao badge', () => {
         itemDaTarefa(secaoBalde(paginaA, 'Próximos 7 dias'), `${nomeLead} · ${tituloUrgente}`),
       ).toBeVisible()
 
-      // --- Passo 4: segunda tarefa, prazo ontem, sob "Atrasadas" com o badge
-      // contando ---
+      // --- Passo 4: segunda tarefa, prazo ontem, sob "Atrasadas" ---
       await abrirLead(paginaA, nomeLead)
       const tituloAtrasado = 'Confirmar orçamento'
       await criarTarefaNaFicha(paginaA, tituloAtrasado, datetimeLocal(ontem, '09:00'))
@@ -165,26 +159,17 @@ test.describe('ciclo de vida de uma tarefa, da ficha do lead ao badge', () => {
       await paginaA.goto('/tarefas')
       const secaoAtrasadas = secaoBalde(paginaA, 'Atrasadas')
       await expect(itemDaTarefa(secaoAtrasadas, `${nomeLead} · ${tituloAtrasado}`)).toBeVisible()
-      // Badge da navegacao: das duas tarefas do vendedor A, so a de ontem cai
-      // em 'atrasada' (contarUrgentes so conta 'atrasada'/'hoje') — a de
-      // amanha cai em 'proximos7' e nao soma. Exatamente 1 urgente agora.
-      // Sem espaco entre "Tarefas" e o aria-label do badge (nao ha whitespace
-      // entre os dois no JSX de layout.tsx) — o nome acessivel concatena os
-      // dois nós direto: "Tarefas1 tarefa urgente".
-      await expect(linkTarefasNav(paginaA)).toHaveAccessibleName('Tarefas1 tarefa urgente')
 
-      // --- Passo 5: concluir a atrasada. Positiva (o badge ja mostra o
-      // numero novo, zero, e some) ANTES da negativa (a linha sumiu da lista)
-      // — regra do repo contra asserção negativa correndo na frente do
-      // proprio bug que existe para pegar. ---
+      // --- Passo 5: concluir a atrasada. ---
       await itemDaTarefa(secaoAtrasadas, `${nomeLead} · ${tituloAtrasado}`)
         .getByRole('button', { name: 'Concluir' })
         .click()
 
-      await expect(linkTarefasNav(paginaA)).toHaveAccessibleName('Tarefas')
-
-      // So agora a negativa: a linha atrasada sumiu da secao, com a positiva
-      // do badge ja tendo provado que o estado pos-conclusao esta valendo.
+      // A linha atrasada some da secao depois de concluida. O badge da
+      // navegacao que costumava confirmar essa mesma contagem por outro
+      // angulo saiu com a Task 8 (Plano 13 remodelada) — o link "Tarefas" do
+      // header nao existe mais, so a rota /tarefas em si (que continua de
+      // pe); a garantia aqui passa a ser so sobre a propria lista.
       await expect(itemDaTarefa(secaoAtrasadas, `${nomeLead} · ${tituloAtrasado}`)).toHaveCount(0)
 
       // --- Passo 6: voltar ao lead, ver "Tarefa concluída" na timeline ---
@@ -215,10 +200,6 @@ test.describe('ciclo de vida de uma tarefa, da ficha do lead ao badge', () => {
       // (a de amanha, ainda aberta) aparecem para o vendedor B.
       await expect(paginaB.getByText(nomeLead)).toHaveCount(0)
       await expect(paginaB.getByText(tituloUrgente)).toHaveCount(0)
-      // O badge do layout tambem le minhasAbertas — se so a tela filtrasse e
-      // o badge nao, o vendedor B veria "Tarefas" sem numero na tela mas o
-      // sino da tarefa ficaria aceso por engano em outra rota.
-      await expect(linkTarefasNav(paginaB)).toHaveAccessibleName('Tarefas')
 
       // --- Admin: ve as dele por padrao (nao as de todo mundo), e chega as
       // do vendedor A pelo filtro. ---

@@ -54,6 +54,27 @@ async function aceitarConvite(paginaConvidado: Page, link: string, nome: string,
 // aparece. E' a etapa que o script vai amarrar, e o valor de {{etapa}}.
 const ETAPA_DO_LEAD = 'Novo lead'
 
+test.describe('/scripts redireciona para /disparo', () => {
+  test('visitar /scripts termina em /disparo com a biblioteca visivel', async ({ page }) => {
+    await criarConta(page)
+
+    // A rota velha nao pode virar 404 nem ficar de pe duplicada: quem tinha
+    // /scripts salvo (favorito, link antigo) tem que cair na biblioteca nova,
+    // sem saber que o caminho mudou.
+    await page.goto('/scripts')
+    await expect(page).toHaveURL(/\/disparo$/)
+
+    // Biblioteca visivel de verdade, nao so uma URL que resolveu: conta
+    // recem-criada, sem script nenhum, mostra o estado vazio da lista.
+    // Escopado a regiao da biblioteca (Plano 13 Task 7 acrescentou a area
+    // "Disparar" com o proprio estado vazio, texto DIFERENTE de proposito —
+    // ver o comentario em disparar.tsx — mas o escopo aqui e' o que deixa a
+    // asercao a prova de qualquer texto que a area de disparo venha a ter).
+    const biblioteca = page.getByRole('region', { name: 'Biblioteca de scripts' })
+    await expect(biblioteca.getByText('Nenhum script na biblioteca ainda.')).toBeVisible()
+  })
+})
+
 test.describe('scripts na ficha do lead', () => {
   test('admin escreve um script da etapa, ve na ficha com a lacuna contada e copia o texto do dominio; vendedor le a biblioteca mas nao escreve', async ({
     browser,
@@ -172,12 +193,22 @@ test.describe('scripts na ficha do lead', () => {
       const paginaVendedor = await contextoVendedor.newPage()
       await aceitarConvite(paginaVendedor, link, 'Vendedor Script E2E', emailVendedor)
 
+      // /scripts redireciona para /disparo — a biblioteca vive la agora.
       await paginaVendedor.goto('/scripts')
+      await expect(paginaVendedor).toHaveURL(/\/disparo$/)
       // Positiva primeiro: a biblioteca carregou de verdade e o script esta la
       // (a policy de leitura e' de todo membro) — nao uma tela quebrada que por
       // acaso tambem nao tem o botao.
-      await expect(paginaVendedor.getByRole('heading', { name: 'Scripts', level: 1 })).toBeVisible()
-      await expect(paginaVendedor.getByText(tituloScript)).toBeVisible()
+      await expect(
+        paginaVendedor.getByRole('heading', { name: 'Disparo de WhatsApp', level: 1 }),
+      ).toBeVisible()
+      // Escopado a regiao da biblioteca: o titulo tambem aparece na area
+      // "Disparar" (Plano 13 Task 7) — o mesmo catalogo em dois lugares da
+      // pagina, de proposito. `getByText` sem escopo bateria em ambos.
+      const bibliotecaVendedor = paginaVendedor.getByRole('region', {
+        name: 'Biblioteca de scripts',
+      })
+      await expect(bibliotecaVendedor.getByText(tituloScript)).toBeVisible()
       // So agora a negativa: nenhum caminho de escrita oferecido.
       await expect(paginaVendedor.getByRole('link', { name: 'Novo script' })).toHaveCount(0)
 
