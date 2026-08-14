@@ -366,7 +366,7 @@ export function PainelScripts({
       ) : scripts.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Nenhum script para esta etapa.{' '}
-          <Link href="/scripts" className="underline">
+          <Link href="/disparo" className="underline">
             Ver a biblioteca de scripts
           </Link>
         </p>

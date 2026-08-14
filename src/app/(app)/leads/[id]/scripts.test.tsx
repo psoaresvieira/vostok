@@ -164,7 +164,7 @@ describe('PainelScripts', () => {
 
     expect(screen.getByText('Nenhum script para esta etapa.')).toBeTruthy()
     const link = screen.getByRole('link', { name: /scripts/i }) as HTMLAnchorElement
-    expect(link.getAttribute('href')).toBe('/scripts')
+    expect(link.getAttribute('href')).toBe('/disparo')
     // A ficha nao cria script — e' so o caminho para a biblioteca.
     expect(screen.queryByRole('button', { name: 'Copiar' })).toBeNull()
   })

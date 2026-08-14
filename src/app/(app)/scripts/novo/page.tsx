@@ -22,7 +22,7 @@ export default async function NovoScriptPage() {
   return (
     <div className="flex flex-col gap-4 p-6">
       <div className="flex items-center gap-3">
-        <Link href="/scripts" className="text-sm underline">
+        <Link href="/disparo" className="text-sm underline">
           Scripts
         </Link>
         <h1 className="text-2xl font-semibold">Novo script</h1>
