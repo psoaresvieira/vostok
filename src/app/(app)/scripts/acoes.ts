@@ -50,7 +50,10 @@ export async function criarScript(d: DadosScript): Promise<Resultado<string>> {
   const r = await contexto.valor.scripts.criar(dados.valor)
   if (!r.ok) return falha(r.erro)
 
-  revalidatePath('/scripts')
+  // Biblioteca vive em /disparo desde a Task 7 (Plano 13); /scripts so
+  // redireciona para la. Revalidar a rota velha nao invalidaria nada que
+  // ainda seja servido.
+  revalidatePath('/disparo')
   return ok(r.valor)
 }
 
@@ -65,7 +68,7 @@ export async function atualizarScript(id: string, d: DadosScript): Promise<Resul
   const r = await contexto.valor.scripts.atualizar(id, dados.valor)
   if (!r.ok) return falha(r.erro)
 
-  revalidatePath('/scripts')
+  revalidatePath('/disparo')
   revalidatePath(`/scripts/${id}`)
   return ok(undefined)
 }
@@ -79,7 +82,7 @@ export async function excluirScript(id: string): Promise<Resultado<void>> {
   const r = await contexto.valor.scripts.excluir(id)
   if (!r.ok) return falha(r.erro)
 
-  revalidatePath('/scripts')
+  revalidatePath('/disparo')
   revalidatePath(`/scripts/${id}`)
   return ok(undefined)
 }

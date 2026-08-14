@@ -181,7 +181,10 @@ export function Editor({
       setErro(mensagemDeErroScript(r.erro))
       return
     }
-    router.push('/scripts')
+    // A biblioteca vive em /disparo desde a Task 7 (Plano 13); /scripts so
+    // redireciona para la, entao mandar para ele so para bater no redirect
+    // no proximo request seria um passo a mais sem motivo.
+    router.push('/disparo')
   }
 
   return (

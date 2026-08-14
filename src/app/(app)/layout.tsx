@@ -2,8 +2,6 @@ import { redirect } from 'next/navigation'
 import { criarStoreDoServidor } from '@/lib/data/supabase'
 import { criarNotificacaoStoreDoServidor } from '@/lib/data/notificacoes'
 import type { Notificacao } from '@/lib/data/notificacoes'
-import { criarTarefaStoreDoServidor } from '@/lib/data/tarefas'
-import { contarUrgentes, FUSO_PADRAO } from '@/lib/domain/tarefa'
 import { Sino } from './sino'
 import { sair } from '../(auth)/acoes'
 
@@ -18,61 +16,31 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     throw new Error(r.erro)
   }
 
-  // Os dois blocos abaixo (sino e badge de tarefas) so precisam de r.valor,
-  // ja resolvido acima, e nao dependem um do outro. Antes rodavam em serie —
-  // criarTarefaStoreDoServidor() (criarClienteServidor() + auth.getUser())
-  // so disparava DEPOIS do round-trip inteiro do sino — somando duas idas ao
-  // servidor extras, em serie, a latencia de toda pagina do app, inclusive
-  // para quem nunca clica em Tarefas. Promise.all os poe em paralelo sem
-  // abrir mao da tolerancia a falha de nenhum dos dois: cada bloco degrada
-  // para o proprio "vazio" checando `.ok`, nunca lanca, e a falha de um
-  // nunca impede o outro nem a pagina. Achado Important 2 do review da
-  // Task 6.
-  const [contextoNotif, contextoTarefas] = await Promise.all([
-    criarNotificacaoStoreDoServidor(),
-    criarTarefaStoreDoServidor(),
-  ])
-
   // Degrada para sino vazio em vez de derrubar a navegacao inteira: este
   // layout envolve TODA pagina do app, e uma falha aqui (banco fora do ar,
   // sessao inconsistente) nao pode impedir quem so queria ver o funil.
   // criarNotificacaoStoreDoServidor() so falha por sem_sessao, e a sessao ja
   // foi confirmada por criarStoreDoServidor() acima — na pratica so falharia
   // numa corrida de logout entre as duas chamadas.
+  //
+  // Ate a Task 8 do Plano 13 (remodelada) este bloco rodava em Promise.all
+  // junto com a consulta de tarefas urgentes que alimentava o badge do link
+  // "Tarefas" do header — a Task 8 removeu o link e o badge (a rota /tarefas
+  // continua de pe, so nao esta mais listada aqui), entao essa segunda
+  // consulta e o paralelismo que ela justificava saíram com ela.
+  const contextoNotif = await criarNotificacaoStoreDoServidor()
+
   let contagemNaoLidas = 0
   let notificacoes: Notificacao[] = []
 
-  // Mesmo padrao tolerante a falha do bloco do sino acima: falha aqui vira
-  // badge zero, nunca derruba a navegacao inteira. Conta SEMPRE as tarefas do
-  // proprio usuario logado (r.valor.usuarioId), nos tres papeis, independente
-  // do filtro que a tela /tarefas esteja exibindo no momento — este layout
-  // envolve toda pagina do app e nao conhece a URL da tela; um badge que
-  // mudasse com o filtro de outra pessoa seria mentira. contarUrgentes recebe
-  // Date[], nao Tarefa[]: e dominio puro e nao conhece o tipo do port.
-  let tarefasUrgentes = 0
-
-  await Promise.all([
-    (async () => {
-      if (!contextoNotif.ok) return
-      const [c, n] = await Promise.all([
-        contextoNotif.valor.naoLidas(),
-        contextoNotif.valor.listar(LIMITE_NOTIFICACOES),
-      ])
-      if (c.ok) contagemNaoLidas = c.valor
-      if (n.ok) notificacoes = n.valor
-    })(),
-    (async () => {
-      if (!contextoTarefas.ok) return
-      const t = await contextoTarefas.valor.minhasAbertas(r.valor.usuarioId)
-      if (t.ok) {
-        tarefasUrgentes = contarUrgentes(
-          t.valor.map((tarefa) => tarefa.venceEm),
-          new Date(),
-          FUSO_PADRAO,
-        )
-      }
-    })(),
-  ])
+  if (contextoNotif.ok) {
+    const [c, n] = await Promise.all([
+      contextoNotif.valor.naoLidas(),
+      contextoNotif.valor.listar(LIMITE_NOTIFICACOES),
+    ])
+    if (c.ok) contagemNaoLidas = c.valor
+    if (n.ok) notificacoes = n.valor
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -82,56 +50,60 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             Vostok
           </span>
           <span className="font-semibold">{r.valor.conta.nome}</span>
-          <a href="/funil" className="text-sm underline">
-            Funil
-          </a>
-          <a href="/metricas" className="text-sm underline">
-            Métricas
-          </a>
-          <a href="/tarefas" className="text-sm underline">
-            Tarefas
-            {tarefasUrgentes > 0 && (
-              // aria-label proprio: sem ele o nome acessivel do link vira so
-              // "Tarefas 2" (o digito cru concatenado ao texto), que nao diz
-              // o que o numero significa. Com o aria-label, o nome acessivel
-              // do <a> passa a ser "Tarefas 2 tarefas urgentes" — continua
-              // comecando por "Tarefas", entao um getByRole por esse
-              // substring (o E2E da Task 7 vai usar algo assim) continua
-              // casando. Achado minor do review da Task 6.
-              <span
-                className="ml-1 rounded-full bg-destructive px-1.5 text-xs leading-4 text-destructive-foreground"
-                aria-label={
-                  tarefasUrgentes === 1 ? '1 tarefa urgente' : `${tarefasUrgentes} tarefas urgentes`
-                }
-              >
-                {tarefasUrgentes}
-              </span>
-            )}
-          </a>
-          {/* Visivel aos tres papeis: a biblioteca de scripts e leitura de
-              todo membro. O que o vendedor nao ve e o "Novo script" dentro da
-              tela, e /scripts/novo responde notFound() para ele.
+          {/* Tres abas, na forma nova da Task 8 (Plano 13 remodelada):
+              Funil, Metricas, Disparo de WPP. Tarefas saiu (link e badge —
+              /tarefas continua de pe, so nao esta mais listada aqui) e
+              Scripts virou Disparo de WPP, que aponta para /disparo.
 
-              O disable abaixo e falso positivo do @next/next, nao licenca para
-              fugir de <Link>: a regra normaliza o href para '/scripts/' (com
-              barra) e compara com o regex da rota dinamica irma,
-              '^/scripts/((?!.+?\..+?).*?)$', cujo `.*?` casa string vazia — ou
-              seja, ela acusa /scripts por causa de /scripts/[id]. As entradas
-              vizinhas (Funil, Metricas, Tarefas) sao <a> pela mesma convencao e
-              so escapam porque nao tem rota [id] ao lado. Trocar so esta por
-              <Link> deixaria uma entrada do header navegando por client-side e
-              as outras nao. */}
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a href="/scripts" className="text-sm underline">
-            Scripts
-          </a>
-          {r.valor.papel === 'admin' && (
-            <a href="/config" className="text-sm underline">
-              Configuração
+              <a> continua deliberado, nao <Link>: /disparo nao tem rota
+              dinamica irma hoje ('/disparo/[algo]' nao existe), entao nenhum
+              dos dois motivos que forcava <a> em "/scripts" (a regra do
+              @next/next contra o par com [id]) se aplica aqui. E' so a mesma
+              convencao dos vizinhos Funil/Metricas — se um dia /disparo/[id]
+              nascer, este comentario e o motivo para reavaliar, do mesmo jeito
+              que "/scripts" precisou do disable. */}
+          <nav aria-label="Navegação principal" className="flex items-center gap-4">
+            <a href="/funil" className="text-sm underline">
+              Funil
             </a>
-          )}
+            <a href="/metricas" className="text-sm underline">
+              Métricas
+            </a>
+            <a href="/disparo" className="text-sm underline">
+              Disparo de WPP
+            </a>
+          </nav>
         </div>
         <div className="flex items-center gap-4">
+          {r.valor.papel === 'admin' && (
+            // Icone, nao texto: a Task 8 encolheu "Configuração" para uma
+            // engrenagem discreta ao lado do sino, admin only. aria-label
+            // proprio porque o SVG nao carrega texto nenhum — sem ele o nome
+            // acessivel do link ficaria vazio. svg com aria-hidden: o rotulo
+            // ja esta no <a>, duplicar no filho so criaria dois anuncios.
+            <a
+              href="/config"
+              aria-label="Configuração"
+              className="rounded p-1 text-muted-foreground hover:text-foreground"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                width="18"
+                height="18"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+              </svg>
+            </a>
+          )}
           <Sino contagem={contagemNaoLidas} notificacoes={notificacoes} />
           <form action={sair}>
             <button type="submit" className="text-sm underline">
