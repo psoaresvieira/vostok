@@ -3,6 +3,7 @@
 import { criarStoreDoServidor } from '@/lib/data/supabase'
 import { contextoDoLead, type ContextoScript } from '@/lib/domain/script'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
+import { codigoDoErroDoPainel } from '@/app/(app)/scripts/erros'
 
 export type LeadParaDisparo = {
   id: string
@@ -38,8 +39,15 @@ export async function buscarLeadsParaDisparo(
   const busca = termo.trim()
   if (busca.length === 0) return ok([])
 
+  // codigoDoErroDoPainel em TODO forward, e nunca o codigo cru: a construcao
+  // do store falha por caminhos de outro vocabulario (`resolverContaAtiva`
+  // devolve a mensagem CRUA do Postgres/PostgREST, ou 'sem_conta'), e as tres
+  // leituras abaixo idem — `listarLeads` encaminha `error.message` do
+  // PostgREST direto, e `pipelinePadrao` pode devolver 'pipeline_nao_encontrado',
+  // que nao esta no mapa de mensagens. Mesma guarda de `codigoDoErroDoTemplate`
+  // em leads/[id]/acoes-whatsapp.ts.
   const contexto = await criarStoreDoServidor()
-  if (!contexto.ok) return falha(contexto.erro)
+  if (!contexto.ok) return falha(codigoDoErroDoPainel(contexto.erro))
   const { store } = contexto.valor
 
   // Os tres independentes: nenhum depende do outro, e todos resolvem a mesma
@@ -49,9 +57,9 @@ export async function buscarLeadsParaDisparo(
     store.pipelinePadrao(),
     store.membros(),
   ])
-  if (!leads.ok) return falha(leads.erro)
-  if (!pipeline.ok) return falha(pipeline.erro)
-  if (!membros.ok) return falha(membros.erro)
+  if (!leads.ok) return falha(codigoDoErroDoPainel(leads.erro))
+  if (!pipeline.ok) return falha(codigoDoErroDoPainel(pipeline.erro))
+  if (!membros.ok) return falha(codigoDoErroDoPainel(membros.erro))
 
   const nomeEtapa = new Map(pipeline.valor.etapas.map((e) => [e.id, e.nome]))
   const nomePessoa = new Map(membros.valor.map((m) => [m.id, m.nome]))

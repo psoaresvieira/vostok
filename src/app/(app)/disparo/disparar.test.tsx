@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor, within, act } from '@testing-library/react'
 import { Disparar, type ScriptParaDisparo } from './disparar'
 import { ok, falha } from '@/lib/domain/resultado'
 import type { Resultado } from '@/lib/domain/resultado'
@@ -109,6 +109,7 @@ async function renderComScriptELeadSelecionados(opts: {
   scripts?: ScriptParaDisparo[]
   leadsEncontrados?: LeadParaDisparo[]
   enviar?: (leadId: string, scriptId: string) => Promise<Resultado<void>>
+  podeEditar?: boolean
 }) {
   const { fn: buscarLeads } = stubRegistrando<[string], LeadParaDisparo[]>(
     ok(opts.leadsEncontrados ?? [lead()]),
@@ -117,6 +118,7 @@ async function renderComScriptELeadSelecionados(opts: {
   render(
     <Disparar
       scripts={opts.scripts ?? [SCRIPT_APROVADO]}
+      podeEditar={opts.podeEditar ?? true}
       buscarLeads={buscarLeads}
       enviar={opts.enviar}
     />,
@@ -134,7 +136,9 @@ describe('Disparar', () => {
     it('recusado, desatualizado e sem template aparecem desabilitados com o motivo; aprovado e selecionavel', async () => {
       const { fn: buscarLeads } = stubRegistrando<[string], LeadParaDisparo[]>(ok([]))
 
-      render(<Disparar scripts={TODOS_OS_SCRIPTS} buscarLeads={buscarLeads} />)
+      // podeEditar=true (gestor/admin): o link para o editor participa
+      // desta asercao — o gate por papel tem teste proprio mais abaixo.
+      render(<Disparar scripts={TODOS_OS_SCRIPTS} podeEditar buscarLeads={buscarLeads} />)
 
       const btnAprovado = screen.getByRole('button', { name: 'Abordagem inicial' })
       expect(btnAprovado.hasAttribute('disabled')).toBe(false)
@@ -156,17 +160,47 @@ describe('Disparar', () => {
       expect(screen.getByText('Sem template — submeta no editor')).toBeTruthy()
 
       // Link para o editor em cada um dos tres desabilitados.
-      expect(screen.getByRole('link', { name: /Script desatualizado/i }) ?? true).toBeTruthy()
+      expect(screen.getByRole('link', { name: /Script desatualizado/i })).toBeTruthy()
     })
 
     it('script aprovado e clicavel: selecionar nao lanca e habilita o Passo 2', () => {
       const { fn: buscarLeads } = stubRegistrando<[string], LeadParaDisparo[]>(ok([]))
 
-      render(<Disparar scripts={[SCRIPT_APROVADO]} buscarLeads={buscarLeads} />)
+      render(<Disparar scripts={[SCRIPT_APROVADO]} podeEditar buscarLeads={buscarLeads} />)
 
       fireEvent.click(screen.getByRole('button', { name: 'Abordagem inicial' }))
 
       expect(screen.getByLabelText('Buscar lead')).toBeTruthy()
+    })
+
+    describe('link para o editor depende do papel (o mesmo gate da biblioteca)', () => {
+      it('vendedor (podeEditar=false) ve o motivo do bloqueio, mas nao o link — /scripts/[id] responde notFound() para ele', () => {
+        const { fn: buscarLeads } = stubRegistrando<[string], LeadParaDisparo[]>(ok([]))
+
+        render(
+          <Disparar
+            scripts={[SCRIPT_DESATUALIZADO]}
+            podeEditar={false}
+            buscarLeads={buscarLeads}
+          />,
+        )
+
+        expect(
+          screen.getByText('O script mudou depois da aprovação. Re-submeta o template para enviar.'),
+        ).toBeTruthy()
+        expect(screen.queryByRole('link', { name: /Script desatualizado/i })).toBeNull()
+      })
+
+      it('gestor/admin (podeEditar=true) ve o link para /scripts/[id]', () => {
+        const { fn: buscarLeads } = stubRegistrando<[string], LeadParaDisparo[]>(ok([]))
+
+        render(
+          <Disparar scripts={[SCRIPT_DESATUALIZADO]} podeEditar buscarLeads={buscarLeads} />,
+        )
+
+        const link = screen.getByRole('link', { name: /Script desatualizado/i })
+        expect(link.getAttribute('href')).toBe('/scripts/script-desatualizado')
+      })
     })
   })
 
@@ -176,7 +210,7 @@ describe('Disparar', () => {
         ok([lead({ id: 'lead-sem-telefone', nome: 'Joao sem telefone', telefoneE164: null })]),
       )
 
-      render(<Disparar scripts={[SCRIPT_APROVADO]} buscarLeads={buscarLeads} />)
+      render(<Disparar scripts={[SCRIPT_APROVADO]} podeEditar buscarLeads={buscarLeads} />)
 
       fireEvent.click(screen.getByRole('button', { name: 'Abordagem inicial' }))
       fireEvent.change(screen.getByLabelText('Buscar lead'), { target: { value: 'joao' } })
@@ -227,14 +261,21 @@ describe('Disparar', () => {
       const { fn: enviar, chamadas } = stubRegistrando<[string, string], void>(ok(undefined))
       await renderComScriptELeadSelecionados({ enviar })
 
-      const botao = screen.getByRole('button', { name: 'Enviar WhatsApp' })
-      fireEvent.click(botao)
-      fireEvent.click(botao)
+      const botao = screen.getByRole('button', { name: 'Enviar WhatsApp' }) as HTMLButtonElement
+      // `.click()` nativo, os DOIS dentro do MESMO `act`, e nao dois
+      // `fireEvent.click` separados: cada `fireEvent.click` ja embrulha o
+      // proprio `act` e flusha o re-render antes do proximo — nesse caso o
+      // segundo clique bateria num botao `disabled={enviando}` e o teste
+      // passaria sem provar nada sobre a ref (`envioEmCurso`), so sobre o
+      // atributo `disabled` do DOM. Os dois cliques dentro de UM `act`
+      // rodam o handler duas vezes ANTES de qualquer re-render — e' esse o
+      // cenario real do risco (duas mensagens cobradas pelo Meta), e so' a
+      // trava sincrona por ref (nao o estado) impede a segunda chamada aqui.
+      await act(async () => {
+        botao.click()
+        botao.click()
+      })
 
-      await waitFor(() => expect(chamadas.length).toBeGreaterThan(0))
-      // Espera qualquer microtask adicional que uma segunda chamada acidental
-      // ainda pudesse enfileirar.
-      await new Promise((r) => setTimeout(r, 0))
       expect(chamadas).toHaveLength(1)
     })
 

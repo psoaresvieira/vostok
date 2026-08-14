@@ -116,7 +116,7 @@ export default async function DisparoPage({
       {/* Disparar (Task 7) acima da biblioteca: escolher script, buscar lead,
           ver a previa e enviar sem abrir a ficha. Sem gate de papel — vendedor
           DISPARA (spec §10), a mesma decisao de enviarWhatsApp. */}
-      <Disparar scripts={paraDisparar} />
+      <Disparar scripts={paraDisparar} podeEditar={podeEscrever} />
 
       {/* Regiao propria, e nao so um <div>: o Passo 1 de Disparar (acima) lista
           os MESMOS titulos de script — sem um landmark nomeado aqui, uma busca

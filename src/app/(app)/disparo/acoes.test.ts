@@ -106,21 +106,52 @@ describe('buscarLeadsParaDisparo', () => {
     })
   })
 
-  it('caso 3 — falha do store propaga', async () => {
+  it('caso 3 — falha de listarLeads NUNCA sobe o texto cru do Postgres', async () => {
     cenarioFeliz()
-    storeMock.listarLeads.mockResolvedValue({ ok: false, erro: 'erro_ao_carregar_leads' })
+    // Mensagem crua de RLS/PostgREST, exatamente como `listarLeads`
+    // (SupabaseCrmStore) devolve em `falha(error.message)` — nao um codigo
+    // que o store nunca emite.
+    storeMock.listarLeads.mockResolvedValue({
+      ok: false,
+      erro: 'permission denied for table leads',
+    })
 
     const r = await buscarLeadsParaDisparo('maria')
 
-    expect(r).toEqual({ ok: false, erro: 'erro_ao_carregar_leads' })
+    // Normalizado pelo mapa de LEITURA (codigoDoErroDoPainel): o texto cru
+    // nunca alcanca quem chama a action.
+    expect(r).toEqual({ ok: false, erro: 'erro_ao_carregar_scripts' })
   })
 
-  it('caso 3b — falha na construcao do store propaga', async () => {
+  it('caso 3b — codigo conhecido da construcao do store atravessa sem alteracao', async () => {
     criarStoreDoServidorMock.mockResolvedValue({ ok: false, erro: 'sem_sessao' })
 
     const r = await buscarLeadsParaDisparo('maria')
 
     expect(r).toEqual({ ok: false, erro: 'sem_sessao' })
+  })
+
+  it('caso 3c — mensagem crua da construcao do store (resolverContaAtiva) tambem normaliza', async () => {
+    criarStoreDoServidorMock.mockResolvedValue({
+      ok: false,
+      erro: 'new row violates row-level security policy for table "memberships"',
+    })
+
+    const r = await buscarLeadsParaDisparo('maria')
+
+    expect(r).toEqual({ ok: false, erro: 'erro_ao_carregar_scripts' })
+  })
+
+  it('caso 3d — pipelinePadrao sem pipeline default nao vaza "pipeline_nao_encontrado" cru', async () => {
+    cenarioFeliz()
+    // Codigo real que pipelinePadrao emite (SupabaseCrmStore) e que NAO esta
+    // no mapa de mensagens — teria que normalizar para o generico, nunca
+    // ecoar como esta.
+    storeMock.pipelinePadrao.mockResolvedValue({ ok: false, erro: 'pipeline_nao_encontrado' })
+
+    const r = await buscarLeadsParaDisparo('maria')
+
+    expect(r).toEqual({ ok: false, erro: 'erro_ao_carregar_scripts' })
   })
 
   it('caso 4 — corte em 10: 12 leads devolvidos, so os 10 primeiros voltam', async () => {

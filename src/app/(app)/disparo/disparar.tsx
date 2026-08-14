@@ -60,10 +60,18 @@ function statusDoScript(s: ScriptParaDisparo): { selecionavel: boolean; motivo: 
  */
 export function Disparar({
   scripts,
+  podeEditar,
   buscarLeads = buscarLeadsParaDisparo,
   enviar = enviarWhatsApp,
 }: {
   scripts: ScriptParaDisparo[]
+  /** Mesmo `papel !== 'vendedor'` que a biblioteca (page.tsx) ja usa para
+   * decidir o link/titulo de `ListaDeScripts` — sem prop nenhuma, SEM
+   * default: `/scripts/[id]` responde notFound() para vendedor (ver
+   * lista.tsx), e oferecer o link aqui seria oferecer um caminho que a
+   * rota nao cumpre — a mesma decisao, so' que duplicada num segundo lugar
+   * da tela que tambem lista script. */
+  podeEditar: boolean
   buscarLeads?: AcaoBuscarLeads
   enviar?: AcaoEnviar
 }) {
@@ -181,7 +189,11 @@ export function Disparar({
                     >
                       {s.titulo}
                     </button>
-                    {!selecionavel && (
+                    {/* podeEditar gateia o link, nunca o motivo: vendedor
+                        precisa saber POR QUE o script esta bloqueado, so
+                        nao ganha um caminho para /scripts/[id] que a rota
+                        recusaria com notFound(). */}
+                    {!selecionavel && podeEditar && (
                       <Link href={`/scripts/${s.id}`} className="text-xs underline">
                         Ver {s.titulo}
                       </Link>
