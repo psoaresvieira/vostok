@@ -103,12 +103,14 @@ export default async function MetricasPage({
         </p>
       ) : (
         <>
+          {/* Trackeamento primeiro (Plano 13): a pergunta "de onde vieram os
+              leads" abre a tela, antes do funil e das etiquetas. */}
+          <Canais raizes={canais} />
           <Funil funil={funil} />
           {/* params completo, nao so `etapa`: o seletor de etapa precisa dos
               demais filtros (dias/de/ate/responsavel) para preserva-los ao
               trocar de etapa — ver urlComEtapa em lib/domain/metricas.ts. */}
           <Etiquetas ranking={ranking} etapas={etapas} escolhida={etapaEscolhida} params={params} />
-          <Canais raizes={canais} />
         </>
       )}
     </div>
