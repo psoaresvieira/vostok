@@ -11,26 +11,26 @@ export function Cartao({ lead, nomeResponsavel }: { lead: Lead; nomeResponsavel:
   const parado = horas >= 72
 
   return (
-    <article className="rounded border bg-card p-3 shadow-sm">
-      <Link href={`/leads/${lead.id}`} className="font-medium hover:underline">
+    <article className="rounded border bg-card p-2 shadow-sm">
+      <Link href={`/leads/${lead.id}`} className="text-sm font-medium hover:underline">
         {lead.nome}
       </Link>
-      <p className="mt-1 text-sm text-muted-foreground">{formatarMoeda(lead.valorCents)}</p>
+      <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+        <span>{formatarMoeda(lead.valorCents)}</span>
+        <span>{nomeResponsavel ?? 'sem responsável'}</span>
+        <span className={parado ? 'font-medium text-destructive' : undefined}>
+          {rotuloTempoNaEtapa(horas)}
+        </span>
+      </div>
       {lead.etiquetas.length > 0 && (
-        <ul className="mt-2 flex flex-wrap gap-1">
+        <ul className="mt-1 flex flex-wrap gap-1">
           {lead.etiquetas.map((e) => (
-            <li key={e.id} className="rounded bg-muted px-1.5 py-0.5 text-xs">
+            <li key={e.id} className="rounded bg-muted px-1 py-0 text-[10px]">
               {e.nome}
             </li>
           ))}
         </ul>
       )}
-      <footer className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-        <span>{nomeResponsavel ?? 'sem responsável'}</span>
-        <span className={parado ? 'font-medium text-destructive' : undefined}>
-          {rotuloTempoNaEtapa(horas)}
-        </span>
-      </footer>
     </article>
   )
 }
