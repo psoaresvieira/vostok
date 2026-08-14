@@ -103,17 +103,38 @@ export function Editor({
   // normalizado (ou o contrario) faria o usuario discordar do que salvou.
   const tags = normalizarTags(tagsTexto.split(','))
 
-  function inserirVariavel(nome: string) {
+  // Enquanto o campo nunca foi focado, o fim do texto e' o unico palpite
+  // honesto: o usuario nao escolheu posicao nenhuma. Depois do primeiro foco
+  // (inclusive o que o efeito acima devolve), vale o cursor de verdade. Um so
+  // criterio para "onde fica o cursor", usado tanto por inserirVariavel quanto
+  // por inserirFormatacao — duplica-lo teria criado um segundo caminho de
+  // insercao que podia divergir do primeiro.
+  function selecaoAtual(): { inicio: number; fim: number } {
     const el = refConteudo.current
-    const tag = `{{${nome}}}`
-    // Enquanto o campo nunca foi focado, o fim do texto e' o unico palpite
-    // honesto: o usuario nao escolheu posicao nenhuma. Depois do primeiro foco
-    // (inclusive o que o efeito acima devolve), vale o cursor de verdade.
     const temCursor = cursorConfiavel.current && el !== null
-    const inicio = temCursor ? el.selectionStart : conteudo.length
-    const fim = temCursor ? el.selectionEnd : conteudo.length
+    return temCursor
+      ? { inicio: el.selectionStart, fim: el.selectionEnd }
+      : { inicio: conteudo.length, fim: conteudo.length }
+  }
+
+  function inserirVariavel(nome: string) {
+    const tag = `{{${nome}}}`
+    const { inicio, fim } = selecaoAtual()
     setConteudo(conteudo.slice(0, inicio) + tag + conteudo.slice(fim))
     setCaret(inicio + tag.length)
+  }
+
+  // Com selecao, o delimitador envolve exatamente o texto selecionado; sem
+  // selecao, insere o par vazio e poe o cursor entre os dois delimitadores
+  // (nao no fim), para o autor digitar na hora sem precisar mover a mao pro
+  // meio.
+  function inserirFormatacao(delimitador: string) {
+    const { inicio, fim } = selecaoAtual()
+    const selecionado = conteudo.slice(inicio, fim)
+    const novo =
+      conteudo.slice(0, inicio) + delimitador + selecionado + delimitador + conteudo.slice(fim)
+    setConteudo(novo)
+    setCaret(inicio === fim ? inicio + delimitador.length : fim + 2 * delimitador.length)
   }
 
   async function salvar() {
@@ -244,6 +265,29 @@ export function Editor({
             rows={16}
             className="rounded border border-border px-2 py-1 font-mono text-sm"
           />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">Formatação:</span>
+          <ul className="flex flex-wrap gap-1">
+            {(
+              [
+                { nome: 'Negrito', delimitador: '*', className: 'font-bold' },
+                { nome: 'Itálico', delimitador: '_', className: 'italic' },
+                { nome: 'Riscado', delimitador: '~', className: 'line-through' },
+              ] as const
+            ).map((f) => (
+              <li key={f.nome}>
+                <button
+                  type="button"
+                  onClick={() => inserirFormatacao(f.delimitador)}
+                  className={`rounded border border-border px-2 py-0.5 text-xs ${f.className}`}
+                >
+                  {f.nome}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div className="flex flex-col gap-1">

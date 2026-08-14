@@ -147,6 +147,42 @@ describe('Editor de script', () => {
     expect(area.value).toBe('{{email}}Texto que ja existia.{{empresa}}')
   })
 
+  it('Caso 3c: Negrito com selecao envolve exatamente a selecao', () => {
+    render(<Editor script={null} etapas={ETAPAS} />)
+
+    const area = conteudoDe('Olá mundo, tudo bem?')
+    // Seleciona exatamente "mundo" (indices 4 a 9).
+    area.selectionStart = 4
+    area.selectionEnd = 9
+
+    fireEvent.click(screen.getByRole('button', { name: 'Negrito' }))
+
+    expect(area.value).toBe('Olá *mundo*, tudo bem?')
+  })
+
+  it('Caso 3d: Negrito sem selecao insere par vazio com o cursor entre os delimitadores', () => {
+    render(<Editor script={null} etapas={ETAPAS} />)
+
+    const area = conteudoDe('Olá , tudo bem?')
+    // Cursor no meio, sem selecao: logo depois de 'Olá ' (4 caracteres).
+    area.selectionStart = 4
+    area.selectionEnd = 4
+
+    fireEvent.click(screen.getByRole('button', { name: 'Negrito' }))
+
+    expect(area.value).toBe('Olá **, tudo bem?')
+    expect(area.selectionStart).toBe(5)
+    expect(area.selectionEnd).toBe(5)
+  })
+
+  it('Caso 3e: os tres botoes de formatacao existem por role/name', () => {
+    render(<Editor script={null} etapas={ETAPAS} />)
+
+    expect(screen.getByRole('button', { name: 'Negrito' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Itálico' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Riscado' })).toBeTruthy()
+  })
+
   it('Caso 4: salvar envia o que foi editado e traduz a recusa pela mensagem do mapa', async () => {
     const criando = stubRegistrando<[DadosScript], string>(ok('script-novo'))
     render(<Editor script={null} etapas={ETAPAS} criar={criando.fn} />)
