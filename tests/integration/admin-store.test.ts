@@ -269,15 +269,15 @@ describe('SupabaseAdminStore', () => {
     expect(doContato).toEqual({ etapaId: contato, leadsNaEtapa: 1, leadsPassaram: 2 })
   })
 
-  it('vendedor nao cria etapa', async () => {
+  it('vendedor cria etapa na propria conta (migration 0025 revogou o admin-only de stages)', async () => {
     const admin = new SupabaseAdminStore(
       await clienteDoUsuario(c.vendedorAId),
       c.accountId,
       c.vendedorAId,
       c.pipelineId,
     )
-    const r = await admin.criarEtapa('Hackeada', 'aberta')
-    expect(r.ok).toBe(false)
+    const r = await admin.criarEtapa('Etapa do vendedor', 'aberta')
+    expect(r.ok).toBe(true)
   })
 
   it('convite pendente aparece na listagem e some ao revogar', async () => {

@@ -81,7 +81,10 @@ describe('0002 — pipeline e criacao de conta', () => {
     expect(etapasVistas).toBe(7)
   })
 
-  it('vendedor nao altera etapas, admin altera', async () => {
+  it('vendedor da mesma conta altera etapas, admin de outra conta nao', async () => {
+    // Migration 0025 (Plano 14) revogou o admin-only da policy de stages:
+    // qualquer membro da conta agora escreve. O caso que sobrevive e o de
+    // isolamento entre contas, nao mais o de papel dentro da conta.
     const ana = await criarUsuario('ana@a.com')
     const vendedor = await criarUsuario('v@a.com')
     const accountId = await comoUsuario(ana, async (c) =>
@@ -95,13 +98,27 @@ describe('0002 — pipeline e criacao de conta', () => {
     )
 
     const alteradasPeloVendedor = await comoUsuario(vendedor, async (c) =>
-      (await c.query(`update public.stages set nome = 'Hackeada' where ordem = 1`)).rowCount,
-    )
-    expect(alteradasPeloVendedor).toBe(0)
-
-    const alteradasPelaAna = await comoUsuario(ana, async (c) =>
       (await c.query(`update public.stages set nome = 'Novo contato' where ordem = 1`)).rowCount,
     )
-    expect(alteradasPelaAna).toBe(1)
+    expect(alteradasPeloVendedor).toBe(1)
+
+    const stageDaContaA = await comoServico(async (c) =>
+      (
+        await c.query<{ id: string }>(
+          `select s.id from public.stages s
+           join public.pipelines p on p.id = s.pipeline_id
+           where p.account_id = $1 and s.ordem = 1`,
+          [accountId],
+        )
+      ).rows[0].id,
+    )
+
+    const outroAdmin = await criarUsuario('outro-admin@b.com')
+    await comoUsuario(outroAdmin, (c) => c.query('select public.criar_conta($1)', ['Conta B']))
+    const alteradasPeloOutroAdmin = await comoUsuario(outroAdmin, async (c) =>
+      (await c.query(`update public.stages set nome = 'Hackeada' where id = $1`, [stageDaContaA]))
+        .rowCount,
+    )
+    expect(alteradasPeloOutroAdmin).toBe(0)
   })
 })
