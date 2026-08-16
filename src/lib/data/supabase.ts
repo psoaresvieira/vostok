@@ -218,7 +218,7 @@ export class SupabaseCrmStore implements CrmStore {
       // Compensacao: a pipeline foi criada por ESTA chamada (id novo, ninguem
       // mais podia estar vendo), entao apaga-la de volta e' seguro — nao
       // existe outro dono que dependa dela existir.
-      await this.cliente.from('pipelines').delete().eq('id', p.id)
+      await this.cliente.from('pipelines').delete().eq('id', p.id).eq('account_id', this.accountId)
       return falha(codigoDoErroPostgres(erroS))
     }
 
