@@ -135,6 +135,33 @@ export class SupabaseCrmStore implements CrmStore {
     })
   }
 
+  // Task 3: implementacao real contra `pipelines`/`stages` no Postgres.
+  async listarPipelines(): Promise<Resultado<Pipeline[]>> {
+    return falha('nao_implementado')
+  }
+
+  // Task 3
+  async pipelinePorId(
+    _pipelineId: string,
+  ): Promise<Resultado<{ pipeline: Pipeline; etapas: Etapa[] }>> {
+    return falha('nao_implementado')
+  }
+
+  // Task 3
+  async criarPipeline(_nome: string, _etapasAbertas: string[]): Promise<Resultado<string>> {
+    return falha('nao_implementado')
+  }
+
+  // Task 3
+  async renomearPipeline(_pipelineId: string, _nome: string): Promise<Resultado<void>> {
+    return falha('nao_implementado')
+  }
+
+  // Task 3
+  async excluirPipeline(_pipelineId: string): Promise<Resultado<void>> {
+    return falha('nao_implementado')
+  }
+
   async motivosPerda(): Promise<Resultado<MotivoPerda[]>> {
     const { data, error } = await this.cliente
       .from('loss_reasons')

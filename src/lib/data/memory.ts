@@ -40,7 +40,10 @@ export class InMemoryCrmStore implements CrmStore {
   private conta: Conta | null = null
   private usuarioAtual = 'user-1'
   private membrosLista: Membro[] = []
-  private pipeline: Pipeline | null = null
+  /** Ordem do array = ordem de criacao (a padrao nasce primeiro no semear).
+   * listarPipelines() reordena so na leitura, poe a padrao na frente. */
+  private pipelines: Pipeline[] = []
+  /** Flat entre todas as pipelines — cada Etapa ja carrega pipelineId. */
   private etapas: Etapa[] = []
   private motivos: MotivoPerda[] = []
   private leads: Lead[] = []
@@ -58,10 +61,11 @@ export class InMemoryCrmStore implements CrmStore {
     this.membrosLista = [
       { id: usuarioId, nome: 'Admin', email: 'admin@teste.com', papel: 'admin' },
     ]
-    this.pipeline = { id: randomUUID(), nome: 'Funil de vendas', isDefault: true }
+    const pipelinePadrao: Pipeline = { id: randomUUID(), nome: 'Funil de vendas', isDefault: true }
+    this.pipelines = [pipelinePadrao]
     this.etapas = ETAPAS_PADRAO.map((e, i) => ({
       id: randomUUID(),
-      pipelineId: this.pipeline!.id,
+      pipelineId: pipelinePadrao.id,
       nome: e.nome,
       ordem: i + 1,
       tipo: e.tipo,
@@ -96,8 +100,76 @@ export class InMemoryCrmStore implements CrmStore {
   }
 
   async pipelinePadrao(): Promise<Resultado<{ pipeline: Pipeline; etapas: Etapa[] }>> {
-    if (!this.pipeline) return falha('pipeline_nao_encontrado')
-    return ok({ pipeline: this.pipeline, etapas: [...this.etapas] })
+    const pipeline = this.pipelines.find((p) => p.isDefault)
+    if (!pipeline) return falha('pipeline_nao_encontrado')
+    return this.pipelinePorId(pipeline.id)
+  }
+
+  async listarPipelines(): Promise<Resultado<Pipeline[]>> {
+    const padrao = this.pipelines.filter((p) => p.isDefault)
+    const demais = this.pipelines.filter((p) => !p.isDefault)
+    return ok([...padrao, ...demais])
+  }
+
+  async pipelinePorId(
+    pipelineId: string,
+  ): Promise<Resultado<{ pipeline: Pipeline; etapas: Etapa[] }>> {
+    const pipeline = this.pipelines.find((p) => p.id === pipelineId)
+    if (!pipeline) return falha('pipeline_nao_encontrado')
+    const etapas = this.etapas
+      .filter((e) => e.pipelineId === pipelineId)
+      .sort((a, b) => a.ordem - b.ordem)
+    return ok({ pipeline, etapas })
+  }
+
+  async criarPipeline(nome: string, etapasAbertas: string[]): Promise<Resultado<string>> {
+    const id = randomUUID()
+    this.pipelines.push({ id, nome, isDefault: false })
+    const abertas: Etapa[] = etapasAbertas.map((nomeEtapa, i) => ({
+      id: randomUUID(),
+      pipelineId: id,
+      nome: nomeEtapa,
+      ordem: i + 1,
+      tipo: 'aberta',
+      slaHoras: null,
+    }))
+    const encerramento: Etapa[] = [
+      {
+        id: randomUUID(),
+        pipelineId: id,
+        nome: 'Ganho',
+        ordem: abertas.length + 1,
+        tipo: 'ganho',
+        slaHoras: null,
+      },
+      {
+        id: randomUUID(),
+        pipelineId: id,
+        nome: 'Perdido',
+        ordem: abertas.length + 2,
+        tipo: 'perdido',
+        slaHoras: null,
+      },
+    ]
+    this.etapas.push(...abertas, ...encerramento)
+    return ok(id)
+  }
+
+  async renomearPipeline(pipelineId: string, nome: string): Promise<Resultado<void>> {
+    const pipeline = this.pipelines.find((p) => p.id === pipelineId)
+    if (!pipeline) return falha('pipeline_nao_encontrado')
+    pipeline.nome = nome
+    return ok(undefined)
+  }
+
+  async excluirPipeline(pipelineId: string): Promise<Resultado<void>> {
+    const pipeline = this.pipelines.find((p) => p.id === pipelineId)
+    if (!pipeline) return falha('pipeline_nao_encontrado')
+    if (pipeline.isDefault) return falha('pipeline_padrao_nao_exclui')
+    if (this.leads.some((l) => l.pipelineId === pipelineId)) return falha('pipeline_com_leads')
+    this.pipelines = this.pipelines.filter((p) => p.id !== pipelineId)
+    this.etapas = this.etapas.filter((e) => e.pipelineId !== pipelineId)
+    return ok(undefined)
   }
 
   async motivosPerda(): Promise<Resultado<MotivoPerda[]>> {
@@ -106,6 +178,9 @@ export class InMemoryCrmStore implements CrmStore {
 
   async listarLeads(filtro: FiltroLeads): Promise<Resultado<Lead[]>> {
     let saida = [...this.leads]
+    if (filtro.pipelineId) {
+      saida = saida.filter((l) => l.pipelineId === filtro.pipelineId)
+    }
     if (filtro.responsavelId) {
       saida = saida.filter((l) => l.responsavelId === filtro.responsavelId)
     }
