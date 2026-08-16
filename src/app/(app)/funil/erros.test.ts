@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mensagemDeErro, codigoEtiquetasSalvas } from './erros'
+import { mensagemDeErro, codigoEtiquetasSalvas, mensagemDePipeline } from './erros'
 import { FALHA_DE_CONEXAO } from '@/lib/ui/acao'
 
 describe('mensagemDeErro', () => {
@@ -42,5 +42,33 @@ describe('movimento que falhou com as etiquetas ja salvas', () => {
         'As etiquetas foram salvas, mas o lead continua na etapa anterior.',
       )
     }
+  })
+})
+
+describe('mensagemDePipeline', () => {
+  it('traduz os codigos conhecidos das actions de pipeline', () => {
+    expect(mensagemDePipeline('pipeline_nao_encontrado')).toBe(
+      'Essa pipeline não existe mais. Recarregue a página.',
+    )
+    expect(mensagemDePipeline('pipeline_padrao_nao_exclui')).toBe(
+      'A pipeline padrão não pode ser excluída.',
+    )
+    expect(mensagemDePipeline('pipeline_com_leads')).toBe(
+      'Essa pipeline ainda tem leads. Mova ou exclua os leads antes.',
+    )
+    expect(mensagemDePipeline('nome_obrigatorio')).toBe('Dê um nome antes de salvar.')
+    expect(mensagemDePipeline('etapas_minimo_uma')).toBe(
+      'Adicione ao menos uma etapa aberta.',
+    )
+  })
+
+  it('tem mensagem propria para a falha de transporte', () => {
+    expect(mensagemDePipeline(FALHA_DE_CONEXAO)).toBe(
+      'Não conseguimos falar com o servidor. Verifique sua conexão e tente de novo.',
+    )
+  })
+
+  it('devolve o codigo cru quando nao conhece a mensagem', () => {
+    expect(mensagemDePipeline('coisa_estranha')).toBe('coisa_estranha')
   })
 })
