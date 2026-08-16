@@ -40,8 +40,9 @@ não há estado de seleção no cliente. Parâmetro apontando para pipeline
 inexistente ou de outra conta: a página cai na padrão (mesmo comportamento de
 filtro inválido, sem erro).
 
-Os filtros existentes preservam o parâmetro `pipeline` ao navegar (hoje eles
-montam a query string do zero).
+Os filtros existentes já preservam a query string ao navegar (montam
+`URLSearchParams` a partir da atual), então o parâmetro `pipeline` sobrevive
+às trocas de filtro sem mudança neles.
 
 ## UI
 
@@ -80,8 +81,17 @@ Migration nova (`0025_pipelines_por_membro.sql`):
 - Troca as políticas de escrita de `pipelines` e `stages`: de
   `papel_na_conta(...) = 'admin'` para `is_member_of(...)`. Leitura já é por
   membro; não muda.
-- Sem coluna nova, sem RPC nova: criação de pipeline + etapas é feita pelo
-  store com inserts diretos (mesma camada que já escreve stages hoje).
+- As regras de exclusão moram na **policy de delete**, não só no store: com a
+  escrita aberta a membros, um membro chamando PostgREST direto poderia
+  excluir pipeline com leads (e `leads.pipeline_id` cascateia). A policy nega
+  delete de `is_default` e de pipeline com leads. O teste de leads usa um
+  helper `pipeline_tem_leads(uuid)` `security definer` — subquery de `leads`
+  dentro da policy rodaria sob a RLS do chamador, e a RLS de leads do
+  vendedor esconderia leads de colegas (guarda 5): o vendedor conseguiria
+  excluir pipeline com leads dos outros. O helper novo entra na catraca de
+  grants da 0024 (revoke de PUBLIC, grant a `authenticated`, mapa do teste).
+- Sem coluna nova: criação de pipeline + etapas é feita pelo store com
+  inserts diretos (mesma camada que já escreve stages hoje).
 - Conferir contra o checklist de guardas silenciosas do Supabase antes de
   finalizar (grants, search_path, security definer, revokes).
 
@@ -121,7 +131,7 @@ ingestão continuam usando.
   ao quadro e filtra leads por `pipelineId`.
 - **Novo lead (acoes.ts):** `criarLeadAction` recebe a pipeline ativa (campo
   no form) e cria o lead na primeira etapa aberta **dela**, não da padrão.
-  Pipeline inválida no form falha com `pipeline_nao_encontrada` (sem
+  Pipeline inválida no form falha com `pipeline_nao_encontrado` (sem
   fallback silencioso: id inválido aqui só acontece se a pipeline foi
   excluída no meio, e criar o lead noutra pipeline seria surpresa pior que o
   erro).
@@ -132,8 +142,9 @@ ingestão continuam usando.
 
 ## Erros (códigos novos)
 
-`pipeline_nao_encontrada`, `pipeline_padrao_nao_exclui`,
-`pipeline_com_leads`, `nome_obrigatorio`, `etapas_minimo_uma` — mapeados para
+`pipeline_padrao_nao_exclui`, `pipeline_com_leads`, `nome_obrigatorio`,
+`etapas_minimo_uma` — novos; pipeline inexistente reusa o código
+`pipeline_nao_encontrado` que já existe no backend. Todos mapeados para
 frases em pt-BR no padrão das telas existentes (dicionário local, nunca erro
 cru na tela).
 
