@@ -18,9 +18,10 @@ import { montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario
  * papel e' o proprio ponto do plano: qualquer membro gerencia etapas.
  */
 
-/** Segunda conta, so para ter um id de etapa que a conta do cenario nao
- * enxerga — mesmo padrao de `outraConta` em pipelines-store.test.ts. */
-async function outraConta(email: string): Promise<{ etapaId: string }> {
+/** Segunda conta, so para ter um id de etapa (e o pipeline dela) que a conta
+ * do cenario nao enxerga — mesmo padrao de `outraConta` em
+ * pipelines-store.test.ts. */
+async function outraConta(email: string): Promise<{ etapaId: string; pipelineId: string }> {
   const userId = await criarUsuario(email)
   const accountId = await comoUsuario(
     userId,
@@ -28,16 +29,16 @@ async function outraConta(email: string): Promise<{ etapaId: string }> {
       (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['Outra'])).rows[0]
         .id,
   )
-  const etapaId = await comoServico(async (cli) => {
-    const r = await cli.query<{ id: string }>(
-      `select s.id from public.stages s
+  const { etapaId, pipelineId } = await comoServico(async (cli) => {
+    const r = await cli.query<{ id: string; pipeline_id: string }>(
+      `select s.id, s.pipeline_id from public.stages s
        join public.pipelines p on p.id = s.pipeline_id
        where p.account_id = $1 order by s.ordem limit 1`,
       [accountId],
     )
-    return r.rows[0].id
+    return { etapaId: r.rows[0].id, pipelineId: r.rows[0].pipeline_id }
   })
-  return { etapaId }
+  return { etapaId, pipelineId }
 }
 
 describe('SupabaseEtapaStore', () => {
@@ -334,6 +335,54 @@ describe('SupabaseEtapaStore', () => {
           ).rows[0]?.ordem,
       )
       expect(doColega).toBe(8)
+    })
+
+    /**
+     * Terceira emenda (Task 2, plano 2026-08-17): o caso acima (23503) so
+     * acontece DURANTE a corrida — pipeline ainda visivel no `with check`,
+     * apagada so' depois, na checagem da FK. Com o delete ja COMMITADO antes
+     * do insert comecar, a recusa vem antes: o proprio `with check` da RLS
+     * (is_member_of(conta_do_pipeline(id-morto)) = false) nunca deixa a
+     * linha entrar, e o Postgres estoura 42501 com a mensagem crua "new row
+     * violates row-level security policy for table \"stages\"". O mesmo
+     * caminho cobre um pipelineId forjado de outra conta — o segundo caso
+     * abaixo.
+     */
+    it('pipeline excluida (commit) antes do insert: nao_encontrado, nao a mensagem crua da RLS', async () => {
+      const pipelineId = await comoUsuario(c.vendedorAId, async (cli) => {
+        const r = await cli.query<{ id: string }>(
+          `insert into public.pipelines (account_id, nome, is_default)
+           values ($1, 'Funil efemero', false) returning id`,
+          [c.accountId],
+        )
+        return r.rows[0].id
+      })
+      await comoUsuario(c.vendedorAId, (cli) =>
+        cli.query('delete from public.pipelines where id = $1', [pipelineId]),
+      )
+
+      const etapas = new SupabaseEtapaStore(await clienteDoUsuario(c.vendedorAId), pipelineId)
+      const r = await etapas.criarEtapa('Negociação', 'aberta')
+
+      expect(r.ok).toBe(false)
+      if (!r.ok) {
+        expect(r.erro).toBe('nao_encontrado')
+        // a mensagem crua da RLS nunca pode chegar na tela
+        expect(r.erro).not.toMatch(/row-level security/)
+      }
+    })
+
+    it('pipelineId de outra conta: nao_encontrado, nao a mensagem crua da RLS (fail-closed)', async () => {
+      const { pipelineId: pipelineDeFora } = await outraConta('vendedor@outra-criar-etapa.com')
+
+      const etapas = new SupabaseEtapaStore(await clienteDoUsuario(c.vendedorAId), pipelineDeFora)
+      const r = await etapas.criarEtapa('Negociação', 'aberta')
+
+      expect(r.ok).toBe(false)
+      if (!r.ok) {
+        expect(r.erro).toBe('nao_encontrado')
+        expect(r.erro).not.toMatch(/row-level security/)
+      }
     })
   })
 })

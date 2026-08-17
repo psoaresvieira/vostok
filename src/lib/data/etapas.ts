@@ -82,6 +82,15 @@ export class SupabaseEtapaStore implements EtapaStore {
       // ja instrui "recarregue a pagina e tente de novo", que e' exatamente a
       // saida — na releitura o max ja inclui a etapa do colega.
       if (error.code === '23505') return falha('ordem_invalida')
+      // 42501: terceira emenda pos-review-final. O caso realista de pipeline
+      // excluida COMMITADA em outra aba nem chega na FK — morre antes no
+      // `with check` da RLS (is_member_of(conta_do_pipeline(id-morto)) =
+      // false), e o Postgres estoura a mensagem crua "new row violates
+      // row-level security policy...". O MESMO with check e o MESMO caminho
+      // tambem recusam um pipelineId forjado de outra conta — aqui
+      // nao_encontrado e' o fail-closed certo, mesma convencao das RPCs
+      // (excluir_etapa/reordenar_etapas): nao vaza se o id e' real ou nao.
+      if (error.code === '42501') return falha('nao_encontrado')
       return falha(error.message)
     }
     return ok(data.id)
