@@ -55,7 +55,7 @@
   13. **prosecdef dos helpers** — `etapa_tem_leads`, `etapa_ultima_do_tipo`, `etapa_imutaveis_ok`, `pipeline_tem_leads` e `resumo_etapas` com `prosecdef = true`; `excluir_etapa` e `reordenar_etapas` com `prosecdef = false` (continuam invoker — trocar isso desligaria a RLS de stages dentro delas).
   14. *(emenda 2026-08-17)* **delete em LOTE das abertas é abortado** — `delete from stages where pipeline_id = $1 and tipo = 'aberta'` por vendedor estoura `ultima_etapa_do_tipo` (P0001) e TODAS as etapas continuam lá (statement inteiro desfeito). Fica vermelho sem o trigger de statement: a policy linha-a-linha deixa o lote passar.
   15. *(emenda 2026-08-17)* **excluir a pipeline inteira continua passando** — vendedor cria pipeline nova (sem leads) e a deleta; o cascade apaga as stages sem disparar a guarda (a condição "pipeline ainda existe" do trigger). Fica vermelho se o trigger não checar a existência da pipeline.
-  16. *(emenda 2026-08-17)* **etapa_imutaveis_ok é fail-closed para não-membro** — admin da conta B chama o helper com a etapa da conta A e os valores CERTOS de tipo/pipeline: resposta `false` (a constante que recusa), não `true`. Fica vermelho com o corpo sem `is_member_of` (que devolvia o booleano real — oráculo cross-account).
+  16. *(emenda 2026-08-17)* **etapa_imutaveis_ok é fail-closed para não-membro** — admin da conta B chama o helper com a etapa da conta A e os valores CERTOS de tipo/pipeline: resposta `false` (a constante que recusa), não `true`. Fica vermelho com o corpo sem `is_member_of` (que devolvia o booleano real — oráculo cross-account). *(segunda emenda, review final)* Sub-caso: **id inexistente responde a mesma constante `false`, não null** — fica vermelho sem o `coalesce` (null distinguia "é uma stage" de "não é").
 - [ ] **Step 2: Rodar e ver RED.** `npm run test:integration -- 0026` — casos 2, 3, 4, 6, 7, 8*, 10, 11 e metade do 13 vermelhos (8 hoje falha porque vendedor leva `sem_permissao` antes de chegar à guarda). Registrar quais casos já passam pelo comportamento atual.
 - [ ] **Step 3: Escrever a migration — SQL literal:**
 
@@ -133,7 +133,10 @@ $$;
 -- booleano REAL para nao-membro, confirmando tipo e par stage/pipeline de
 -- etapa alheia — achado do review da Task 1, emenda de 2026-08-17). Para
 -- nao-membro a resposta agora e' a constante false, que no with check
--- recusa.
+-- recusa. O coalesce(false) cobre id inexistente com a MESMA constante
+-- (segunda emenda, review final: null vs false distinguia "esse uuid e'
+-- uma stage" para nao-membro — os outros helpers ja respondiam constante
+-- ate para id inexistente, este era o unico que nao).
 create or replace function public.etapa_imutaveis_ok(
   p_stage_id uuid,
   p_tipo public.stage_tipo,
@@ -145,11 +148,13 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.is_member_of(public.conta_do_pipeline(s.pipeline_id))
-     and s.tipo = p_tipo
-     and s.pipeline_id = p_pipeline_id
-    from public.stages s
-   where s.id = p_stage_id;
+  select coalesce(
+    (select public.is_member_of(public.conta_do_pipeline(s.pipeline_id))
+        and s.tipo = p_tipo
+        and s.pipeline_id = p_pipeline_id
+       from public.stages s
+      where s.id = p_stage_id),
+    false);
 $$;
 
 -- Guarda 7: default ACL da EXECUTE a PUBLIC em funcao nova. Revoke + grant
@@ -460,6 +465,7 @@ export async function criarEtapaStoreDoServidor(
 
 **Invariantes:**
 - Os cinco corpos são MUDANÇA DE ENDEREÇO, não de comportamento: copiar de `SupabaseAdminStore` (admin.ts) junto com `codigoDoErroDeEtapa`, `CODIGOS_CONHECIDOS_DE_ETAPA` e o tratamento `23503 → etapa_tem_leads` de `excluirEtapa`. O `pipelineId` do construtor é usado por `criarEtapa` (insert) e `resumoEtapas` (RPC) exatamente como hoje.
+- *(emenda pós-review-final, 2026-08-17 — exceção deliberada à cláusula acima)* `criarEtapa` era o único dos cinco que devolvia `falha(error.message)` cru, e a superfície nova (todo membro, toda pipeline, abas concorrentes) torna dois caminhos alcançáveis pela tela: pipeline excluída em outra aba (FK 23503 → mensagem crua do Postgres) e dois membros adicionando ao mesmo tempo (índice único de ordem, 23505 → "duplicate key..." cru). Traduzir em `criarEtapa`: `23503 → falha('nao_encontrado')` e `23505 → falha('ordem_invalida')` — ambos já mapeados em `mensagemDeEtapa` com frases que instruem "recarregue/tente de novo", nenhum código novo. Violava a constraint "nunca erro cru na tela"; o defeito era de origem no admin.ts, mas lá a exposição era admin-only na pipeline padrão.
 - `criarEtapaStoreDoServidor(pipelineId)`: sessão via `cliente.auth.getUser()` → `falha('sem_sessao')` se ausente; **sem checagem de papel e sem resolução de pipeline** — pipeline de outra conta morre na RLS/RPC (mesmo padrão de `acoes-pipelines.ts`: cliente manda ids, o banco decide).
 - `admin.ts` encolhe: `AdminStore` perde os cinco métodos e o tipo `ResumoEtapa`; `SupabaseAdminStore` perde os corpos, o parâmetro `pipelineId` do construtor, `codigoDoErroDeEtapa` e `CODIGOS_CONHECIDOS_DE_ETAPA`; `criarAdminStoreDoServidor` perde a query de `pipelines` (`is_default = true`) e o código de falha `pipeline_nao_encontrado`. Motivos, convites e membros ficam intactos.
 - Encolher `admin.ts` quebra a compilação de quem usa os métodos removidos — cobrir TODOS os sítios que os nomeiam (lição do plano-assimetrico): `config/acoes.ts` (as quatro actions de etapa), `config/page.tsx` (`resumoEtapas`, `pipeline.valor.etapas`, `<Etapas>`), `config/etapas.tsx` (import de `ResumoEtapa`). Nesta task, o mínimo que compila: remover as quatro actions de etapa de `config/acoes.ts`, e em `config/page.tsx` remover a chamada `resumoEtapas()`, a busca `pipelinePadrao()` e a linha `<Etapas ...>`; `config/etapas.tsx` e o teste dele serão MOVIDOS na Task 4 — até lá, trocar o import de `ResumoEtapa` para `@/lib/data/etapas` (o arquivo antigo continua no lugar, compilando, só que órfão de página).

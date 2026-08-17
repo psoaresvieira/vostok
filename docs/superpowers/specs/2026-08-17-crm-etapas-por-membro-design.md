@@ -131,10 +131,15 @@ Conferir contra o checklist de guardas silenciosas antes de finalizar
   etapa saem do `AdminStore` — `criarEtapa`, `renomearEtapa`,
   `excluirEtapa`, `reordenarEtapas`, `resumoEtapas` — parametrizados por
   `pipelineId` no construtor, **sem exigência de papel** no resolvedor
-  (`criarEtapaStoreDoServidor(pipelineId)`: sessão + conta ativa; id de
-  pipeline de outra conta morre na RLS/RPC, não em código de autorização
-  novo). Tradução de erros (`codigoDoErroDeEtapa`, 23503→`etapa_tem_leads`)
-  vai junto.
+  (`criarEtapaStoreDoServidor(pipelineId)`: só sessão — sem resolução de
+  conta ativa, texto corrigido por emenda; id de pipeline de outra conta
+  morre na RLS/RPC, não em código de autorização novo). Tradução de erros
+  (`codigoDoErroDeEtapa`, 23503→`etapa_tem_leads`) vai junto. *(emenda
+  pós-review-final)* `criarEtapa` ganha a tradução que faltava — era o
+  único método devolvendo erro cru do Postgres, alcançável pela tela nova:
+  `23503 → nao_encontrado` (pipeline sumiu noutra aba) e `23505 →
+  ordem_invalida` (dois membros adicionando ao mesmo tempo colidem no
+  índice único de ordem).
 - **`AdminStore` encolhe**: perde os cinco métodos e a resolução de
   pipeline padrão no `criarAdminStoreDoServidor` (o parâmetro `pipelineId`
   do construtor morre). Motivos, convites e membros ficam.
