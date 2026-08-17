@@ -68,3 +68,26 @@ const MENSAGENS_PIPELINE: Record<string, string> = {
 export function mensagemDePipeline(codigo: string): string {
   return MENSAGENS_PIPELINE[codigo] ?? codigo
 }
+
+// Mensagens dos codigos de erro que as actions de acoes-etapas.ts podem
+// devolver. Mapa local, nao entrada em MENSAGENS_ERRO nem em
+// MENSAGENS_PIPELINE — mesmo motivo dos dois mapas acima: vocabularios de
+// actions distintas nao se misturam so por estarem no mesmo arquivo.
+// sem_permissao tem frase propria aqui: "Só administradores..." (a de
+// config/erros.ts) ficou falsa depois que etapas passaram a ser editadas
+// direto no funil, sem exigir papel de admin.
+const MENSAGENS_ETAPA: Record<string, string> = {
+  nome_obrigatorio: 'Dê um nome antes de salvar.',
+  ordem_invalida: 'A nova ordem não corresponde às etapas deste funil. Recarregue a página e tente de novo.',
+  nao_encontrado: 'Esse item não existe mais. Recarregue a página.',
+  etapa_nao_encontrada: 'Essa etapa não existe mais. Recarregue a página.',
+  etapa_tem_leads: 'Há leads nesta etapa. Mova-os antes de excluí-la.',
+  ultima_etapa_do_tipo: 'Esta é a última etapa deste tipo — o funil precisa de pelo menos uma.',
+  sem_permissao: 'Sua sessão não tem acesso a este funil. Recarregue a página.',
+  sem_sessao: 'Sua sessão expirou. Entre novamente.',
+  [FALHA_DE_CONEXAO]: MENSAGEM_FALHA_DE_CONEXAO,
+}
+
+export function mensagemDeEtapa(codigo: string): string {
+  return MENSAGENS_ETAPA[codigo] ?? codigo
+}
