@@ -66,7 +66,24 @@ export class SupabaseEtapaStore implements EtapaStore {
       })
       .select('id')
       .single()
-    if (error) return falha(error.message)
+    if (error) {
+      // Emenda pos-review-final: este era o unico dos cinco metodos que
+      // devolvia a mensagem crua do Postgres, e a superficie nova (todo
+      // membro, toda pipeline, abas concorrentes) tornou dois SQLSTATEs
+      // alcancaveis pela tela. Ambos so' aparecem DURANTE uma corrida — com
+      // ela resolvida, este mesmo caminho devolve outra coisa.
+      //
+      // 23503: a pipeline foi excluida em outra aba entre o `with check` da
+      // RLS (que ainda a enxergou) e a checagem da FK. Para quem esta na tela
+      // e' "esse funil nao existe mais" — nao_encontrado ja diz "recarregue".
+      if (error.code === '23503') return falha('nao_encontrado')
+      // 23505: dois membros adicionando etapa ao mesmo tempo leem o mesmo max
+      // de ordem e colidem no indice unico (pipeline_id, ordem). ordem_invalida
+      // ja instrui "recarregue a pagina e tente de novo", que e' exatamente a
+      // saida — na releitura o max ja inclui a etapa do colega.
+      if (error.code === '23505') return falha('ordem_invalida')
+      return falha(error.message)
+    }
     return ok(data.id)
   }
 

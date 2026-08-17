@@ -21,7 +21,7 @@ import { PreviaSegmentos } from '@/app/(app)/scripts/previa'
 import { enviarWhatsApp } from './acoes-whatsapp'
 
 /** Quanto tempo o "Copiado ✓" / "Enviado ✓" fica visivel antes de sumir
- * sozinho — mesma duracao e mesmo motivo do "Salvo ✓" de config/etapas.tsx: um
+ * sozinho — mesma duracao e mesmo motivo do "Salvo ✓" de funil/etapas.tsx: um
  * sinal transitorio que fica colado na tela passa a acompanhar eventos que nao
  * sao dele. */
 const DURACAO_FEEDBACK_MS = 2_500
@@ -250,7 +250,7 @@ function ItemScript({
             onClick={() => {
               // Um erro de tentativa anterior nao pode sobreviver a abertura de
               // um dialogo novo, como se fizesse parte dele — mesma disciplina
-              // de reportarErro em config/etapas.tsx.
+              // de reportarErro em funil/etapas.tsx.
               setErroEnvio(null)
               setConfirmando(true)
             }}

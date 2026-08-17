@@ -338,6 +338,17 @@ describe('0026 — etapas por membro, guardas na RLS de stages e helpers fail-cl
       // Valores errados tambem: a resposta e constante, nao discrimina nada.
       expect(await imutaveisOk(outra.adminId, novo, 'ganho', c.pipelineId)).toBe(false)
 
+      // Segunda emenda (review final): id que nao e' stage nenhuma tem que
+      // responder a MESMA constante. Sem o coalesce o select nao casava linha
+      // e devolvia null — e null vs false distinguia "esse uuid e' uma stage"
+      // de "nao e'", que e' o mesmo oraculo por outra porta. Os outros helpers
+      // (caso 15) ja respondiam constante ate para id inexistente.
+      const inexistente = '00000000-0000-0000-0000-0000000000ff'
+      expect(await imutaveisOk(outra.adminId, inexistente, 'aberta', c.pipelineId)).toBe(false)
+      // e nem para MEMBRO o helper pode devolver null: no `with check` null
+      // recusa igual, mas o valor tem que ser o mesmo dos outros helpers.
+      expect(await imutaveisOk(c.vendedorAId, inexistente, 'aberta', c.pipelineId)).toBe(false)
+
       // Controle: para um membro o helper continua respondendo o booleano real
       // — senao o fail-closed teria virado um `false` cego que quebraria todo
       // update de etapa (o caso 1 tambem pegaria, mas aqui fica explicito).

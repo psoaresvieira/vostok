@@ -113,7 +113,7 @@ describe('PainelScripts', () => {
     expect(escritos[0]).toBe(TEXTO_ESPERADO)
     expect(escritos[0]).not.toContain('sem valor')
 
-    // Feedback transitorio, padrao do "Salvo ✓" de config/etapas.tsx.
+    // Feedback transitorio, padrao do "Salvo ✓" de funil/etapas.tsx.
     expect(await screen.findByText('Copiado ✓')).toBeTruthy()
     // O nome acessivel do botao NAO muda com o feedback: quem navega por
     // teclado nao pode perder o alvo depois de usa-lo uma vez.

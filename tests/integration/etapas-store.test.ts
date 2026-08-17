@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { SupabaseEtapaStore } from '@/lib/data/etapas'
-import { comoServico, comoUsuario, criarUsuario, limparBanco } from './helpers/db'
+import {
+  abrirSessaoUsuario,
+  comoServico,
+  comoUsuario,
+  criarUsuario,
+  esperarBloqueioEm,
+  limparBanco,
+} from './helpers/db'
 import { clienteDoUsuario } from './helpers/cliente'
 import { montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario'
 
@@ -239,5 +246,94 @@ describe('SupabaseEtapaStore', () => {
           .nome,
     )
     expect(intacta).toBe('Novo lead')
+  })
+
+  /**
+   * Emenda pos-review-final: criarEtapa era o unico dos cinco metodos que
+   * devolvia `falha(error.message)` cru. Os dois casos abaixo sao os SQLSTATEs
+   * que a tela nova (todo membro, toda pipeline, abas concorrentes) alcanca —
+   * ambos encenados com uma segunda sessao de transacao aberta, porque em
+   * ambos o erro so' existe DURANTE a corrida: resolvida a corrida, o mesmo
+   * caminho devolve outra coisa.
+   */
+  describe('criarEtapa traduz o SQLSTATE em vez de vazar a mensagem do Postgres', () => {
+    it('pipeline apagada em outra aba no meio do insert: nao_encontrado, nao a mensagem da FK', async () => {
+      // A pipeline tem que sumir DEPOIS que o `with check` da RLS a enxergou e
+      // ANTES da checagem da FK — e' o unico arranjo que produz 23503. Com o
+      // delete ja commitado a recusa vem antes, do proprio `with check`
+      // (42501), e nunca chega na FK.
+      const pipelineId = await comoUsuario(c.vendedorAId, async (cli) => {
+        const r = await cli.query<{ id: string }>(
+          `insert into public.pipelines (account_id, nome, is_default)
+           values ($1, 'Funil recem-criado', false) returning id`,
+          [c.accountId],
+        )
+        return r.rows[0].id
+      })
+      const etapas = new SupabaseEtapaStore(await clienteDoUsuario(c.vendedorAId), pipelineId)
+
+      const outraAba = await abrirSessaoUsuario(c.vendedorAId)
+      try {
+        await outraAba.cliente.query('delete from public.pipelines where id = $1', [pipelineId])
+
+        // Sem await: o insert do store precisa ficar PENDURADO no lock da
+        // linha de pipelines que a outra aba esta apagando.
+        const pendente = etapas.criarEtapa('Negociação', 'aberta')
+        await esperarBloqueioEm('stages')
+        await outraAba.encerrar('commit')
+
+        const r = await pendente
+        expect(r.ok).toBe(false)
+        if (!r.ok) {
+          expect(r.erro).toBe('nao_encontrado')
+          // a mensagem crua do Postgres nunca pode chegar na tela
+          expect(r.erro).not.toContain('foreign key')
+        }
+      } finally {
+        await outraAba.encerrar('rollback')
+      }
+    })
+
+    it('dois membros adicionando ao mesmo tempo colidem na ordem: ordem_invalida, nao "duplicate key"', async () => {
+      const etapas = new SupabaseEtapaStore(await clienteDoUsuario(c.vendedorAId), c.pipelineId)
+
+      const colega = await abrirSessaoUsuario(c.vendedorBId)
+      try {
+        // O colega grava a etapa dele em max+1 e NAO commita: a linha existe
+        // para o indice unico, mas e' invisivel para a leitura de max do
+        // store — que por isso mira exatamente a mesma ordem.
+        await colega.cliente.query(
+          `insert into public.stages (pipeline_id, nome, tipo, ordem)
+           select $1, 'Do colega', 'aberta', coalesce(max(ordem), 0) + 1
+             from public.stages where pipeline_id = $1`,
+          [c.pipelineId],
+        )
+
+        const pendente = etapas.criarEtapa('Negociação', 'aberta')
+        await esperarBloqueioEm('stages')
+        await colega.encerrar('commit')
+
+        const r = await pendente
+        expect(r.ok).toBe(false)
+        if (!r.ok) {
+          expect(r.erro).toBe('ordem_invalida')
+          expect(r.erro).not.toContain('duplicate key')
+        }
+      } finally {
+        await colega.encerrar('rollback')
+      }
+
+      // e a etapa do colega, que ganhou a corrida, ficou inteira
+      const doColega = await comoServico(
+        async (cli) =>
+          (
+            await cli.query(
+              `select ordem from public.stages where pipeline_id = $1 and nome = 'Do colega'`,
+              [c.pipelineId],
+            )
+          ).rows[0]?.ordem,
+      )
+      expect(doColega).toBe(8)
+    })
   })
 })

@@ -71,7 +71,10 @@ $$;
 -- booleano REAL para nao-membro, confirmando tipo e par stage/pipeline de
 -- etapa alheia — achado do review da Task 1, emenda de 2026-08-17). Para
 -- nao-membro a resposta agora e' a constante false, que no with check
--- recusa.
+-- recusa. O coalesce(false) cobre id inexistente com a MESMA constante
+-- (segunda emenda, review final: null vs false distinguia "esse uuid e'
+-- uma stage" para nao-membro — os outros helpers ja respondiam constante
+-- ate para id inexistente, este era o unico que nao).
 create or replace function public.etapa_imutaveis_ok(
   p_stage_id uuid,
   p_tipo public.stage_tipo,
@@ -83,11 +86,13 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.is_member_of(public.conta_do_pipeline(s.pipeline_id))
-     and s.tipo = p_tipo
-     and s.pipeline_id = p_pipeline_id
-    from public.stages s
-   where s.id = p_stage_id;
+  select coalesce(
+    (select public.is_member_of(public.conta_do_pipeline(s.pipeline_id))
+        and s.tipo = p_tipo
+        and s.pipeline_id = p_pipeline_id
+       from public.stages s
+      where s.id = p_stage_id),
+    false);
 $$;
 
 -- Guarda 7: default ACL da EXECUTE a PUBLIC em funcao nova. Revoke + grant
