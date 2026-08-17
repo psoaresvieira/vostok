@@ -55,7 +55,10 @@
 -- Plano 14: qualquer membro cria, renomeia e exclui pipelines (decisao de
 -- produto, 2026-08-16). As regras de exclusao moram AQUI, nao so no store:
 -- com a escrita aberta a membros, PostgREST direto alcanca o delete, e
--- leads.pipeline_id cascateia.
+-- leads.pipeline_id NAO cascateia (a FK em 0003_leads.sql nao tem on delete,
+-- entao o default e' NO ACTION) — sem a policy, apagar uma pipeline com leads
+-- estouraria 23503 (violacao de FK) crua atraves do PostgREST em vez de uma
+-- recusa limpa. A policy e' o lugar certo pra essa recusa.
 
 -- Guarda 5 (memoria supabase-guardas-silenciosas): subquery de leads dentro
 -- da policy rodaria sob a RLS do CHAMADOR, e a RLS de leads esconde leads de

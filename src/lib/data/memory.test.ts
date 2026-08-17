@@ -450,4 +450,107 @@ describe('InMemoryCrmStore', () => {
     if (!semFiltro.ok) throw new Error(semFiltro.erro)
     expect(semFiltro.valor.map((l) => l.leadId).sort()).toEqual([a.valor, b.valor].sort())
   })
+
+  describe('multiplas pipelines', () => {
+    it('criar monta Ganho/Perdido ao final', async () => {
+      const criado = await store.criarPipeline('Outbound', ['Prospecção', 'Contato'])
+      if (!criado.ok) throw new Error(criado.erro)
+
+      const r = await store.pipelinePorId(criado.valor)
+      if (!r.ok) throw new Error(r.erro)
+      expect(r.valor.pipeline.nome).toBe('Outbound')
+      expect(r.valor.etapas.map((e) => [e.nome, e.ordem, e.tipo])).toEqual([
+        ['Prospecção', 1, 'aberta'],
+        ['Contato', 2, 'aberta'],
+        ['Ganho', 3, 'ganho'],
+        ['Perdido', 4, 'perdido'],
+      ])
+    })
+
+    it('listar poe a padrao primeiro', async () => {
+      const a = await store.criarPipeline('Outbound', ['Prospecção'])
+      const b = await store.criarPipeline('Inbound', ['Contato'])
+      if (!a.ok || !b.ok) throw new Error('falha ao criar')
+
+      const r = await store.listarPipelines()
+      if (!r.ok) throw new Error(r.erro)
+      expect(r.valor[0].isDefault).toBe(true)
+      expect(r.valor.slice(1).map((p) => p.id)).toEqual([a.valor, b.valor])
+    })
+
+    it('excluir recusa a padrao', async () => {
+      const p = await store.pipelinePadrao()
+      if (!p.ok) throw new Error(p.erro)
+
+      const r = await store.excluirPipeline(p.valor.pipeline.id)
+      expect(r).toEqual({ ok: false, erro: 'pipeline_padrao_nao_exclui' })
+    })
+
+    it('excluir recusa pipeline com lead', async () => {
+      const criado = await store.criarPipeline('Outbound', ['Prospecção'])
+      if (!criado.ok) throw new Error(criado.erro)
+      const nova = await store.pipelinePorId(criado.valor)
+      if (!nova.ok) throw new Error(nova.erro)
+
+      await store.criarLead({
+        ...novoLead('Ana'),
+        pipelineId: nova.valor.pipeline.id,
+        stageId: nova.valor.etapas[0].id,
+      })
+
+      const r = await store.excluirPipeline(criado.valor)
+      expect(r).toEqual({ ok: false, erro: 'pipeline_com_leads' })
+    })
+
+    it('excluir pipeline vazia some da lista', async () => {
+      const criado = await store.criarPipeline('Outbound', ['Prospecção'])
+      if (!criado.ok) throw new Error(criado.erro)
+
+      const r = await store.excluirPipeline(criado.valor)
+      expect(r.ok).toBe(true)
+
+      const lista = await store.listarPipelines()
+      if (!lista.ok) throw new Error(lista.erro)
+      expect(lista.valor.map((p) => p.id)).not.toContain(criado.valor)
+
+      const buscada = await store.pipelinePorId(criado.valor)
+      expect(buscada).toEqual({ ok: false, erro: 'pipeline_nao_encontrado' })
+    })
+
+    it('listarLeads filtra por pipelineId', async () => {
+      const p = await store.pipelinePadrao()
+      if (!p.ok) throw new Error(p.erro)
+      const criado = await store.criarPipeline('Outbound', ['Prospecção'])
+      if (!criado.ok) throw new Error(criado.erro)
+      const nova = await store.pipelinePorId(criado.valor)
+      if (!nova.ok) throw new Error(nova.erro)
+
+      await store.criarLead({
+        ...novoLead('Ana'),
+        pipelineId: p.valor.pipeline.id,
+        stageId: p.valor.etapas[0].id,
+      })
+      await store.criarLead({
+        ...novoLead('Bruno'),
+        pipelineId: nova.valor.pipeline.id,
+        stageId: nova.valor.etapas[0].id,
+      })
+
+      const r = await store.listarLeads({ pipelineId: nova.valor.pipeline.id })
+      if (!r.ok) throw new Error(r.erro)
+      expect(r.valor.map((l) => l.nome)).toEqual(['Bruno'])
+    })
+
+    it('renomear reflete em listarPipelines', async () => {
+      const criado = await store.criarPipeline('Outbound', ['Prospecção'])
+      if (!criado.ok) throw new Error(criado.erro)
+
+      const r = await store.renomearPipeline(criado.valor, 'Outbound v2')
+      expect(r.ok).toBe(true)
+
+      const lista = await store.listarPipelines()
+      if (!lista.ok) throw new Error(lista.erro)
+      expect(lista.valor.find((p) => p.id === criado.valor)?.nome).toBe('Outbound v2')
+    })
+  })
 })

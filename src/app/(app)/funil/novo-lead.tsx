@@ -17,15 +17,21 @@ const MENSAGENS: Record<string, string> = {
   // funil/erros.ts e config/erros.ts ja usam para o mesmo codigo.
   responsavel_invalido:
     'Esse responsável não faz parte da sua conta. Recarregue a página e escolha de novo.',
+  // Achado 1 do review final do Plano 14: criarLeadAction pode devolver isto
+  // se a pipeline foi apagada por outra aba/usuario no meio do fluxo. Mesma
+  // frase que MENSAGENS_PIPELINE usa em funil/erros.ts para o mesmo codigo.
+  pipeline_nao_encontrado: 'Essa pipeline não existe mais. Recarregue a página.',
   [FALHA_DE_CONEXAO]: MENSAGEM_FALHA_DE_CONEXAO,
 }
 
 export function NovoLead({
   membros,
   podeEscolherResponsavel,
+  pipelineId,
 }: {
   membros: Membro[]
   podeEscolherResponsavel: boolean
+  pipelineId: string
 }) {
   const [aberto, setAberto] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -67,6 +73,7 @@ export function NovoLead({
       <div className="surface w-full max-w-md rounded p-5">
         <h2 className="mb-3 text-lg font-semibold">Novo lead</h2>
         <form action={salvar} className="flex flex-col gap-2">
+          <input type="hidden" name="pipelineId" value={pipelineId} />
           <input name="nome" placeholder="nome" required className="rounded border p-2" />
           <input
             name="telefone"

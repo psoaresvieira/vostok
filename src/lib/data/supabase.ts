@@ -135,6 +135,149 @@ export class SupabaseCrmStore implements CrmStore {
     })
   }
 
+  // Padrao primeiro, demais por data de criacao — mesmo criterio do
+  // InMemoryCrmStore, aqui expresso como ORDER BY do Postgres.
+  async listarPipelines(): Promise<Resultado<Pipeline[]>> {
+    const { data, error } = await this.cliente
+      .from('pipelines')
+      .select('id, nome, is_default')
+      .eq('account_id', this.accountId)
+      .order('is_default', { ascending: false })
+      .order('criado_em', { ascending: true })
+    if (error) return falha(error.message)
+    return ok((data ?? []).map((p) => ({ id: p.id, nome: p.nome, isDefault: p.is_default })))
+  }
+
+  async pipelinePorId(
+    pipelineId: string,
+  ): Promise<Resultado<{ pipeline: Pipeline; etapas: Etapa[] }>> {
+    // .eq('account_id', ...) explicito, alem da RLS: se a RLS de pipelines um
+    // dia afrouxar (ou for contornada por engano), este recorte ainda
+    // devolve pipeline_nao_encontrado para id de outra conta, em vez de
+    // vazar a pipeline alheia.
+    const { data: p, error: erroP } = await this.cliente
+      .from('pipelines')
+      .select('id, nome, is_default')
+      .eq('id', pipelineId)
+      .eq('account_id', this.accountId)
+      .maybeSingle()
+    if (erroP) return falha(erroP.message)
+    if (!p) return falha('pipeline_nao_encontrado')
+
+    const { data: s, error: erroS } = await this.cliente
+      .from('stages')
+      .select('id, pipeline_id, nome, ordem, tipo, sla_horas')
+      .eq('pipeline_id', p.id)
+      .order('ordem')
+    if (erroS) return falha(erroS.message)
+
+    return ok({
+      pipeline: { id: p.id, nome: p.nome, isDefault: p.is_default },
+      etapas: (s ?? []).map((e) => ({
+        id: e.id,
+        pipelineId: e.pipeline_id,
+        nome: e.nome,
+        ordem: e.ordem,
+        tipo: e.tipo,
+        slaHoras: e.sla_horas,
+      })),
+    })
+  }
+
+  async criarPipeline(nome: string, etapasAbertas: string[]): Promise<Resultado<string>> {
+    const { data: p, error: erroP } = await this.cliente
+      .from('pipelines')
+      .insert({ account_id: this.accountId, nome, is_default: false })
+      .select('id')
+      .single()
+    if (erroP) return falha(codigoDoErroPostgres(erroP))
+
+    const linhas = [
+      ...etapasAbertas.map((nomeEtapa, i) => ({
+        pipeline_id: p.id,
+        nome: nomeEtapa,
+        ordem: i + 1,
+        tipo: 'aberta' as const,
+      })),
+      {
+        pipeline_id: p.id,
+        nome: 'Ganho',
+        ordem: etapasAbertas.length + 1,
+        tipo: 'ganho' as const,
+      },
+      {
+        pipeline_id: p.id,
+        nome: 'Perdido',
+        ordem: etapasAbertas.length + 2,
+        tipo: 'perdido' as const,
+      },
+    ]
+
+    const { error: erroS } = await this.cliente.from('stages').insert(linhas)
+    if (erroS) {
+      // Compensacao: a pipeline foi criada por ESTA chamada (id novo, ninguem
+      // mais podia estar vendo), entao apaga-la de volta e' seguro — nao
+      // existe outro dono que dependa dela existir.
+      await this.cliente.from('pipelines').delete().eq('id', p.id).eq('account_id', this.accountId)
+      return falha(codigoDoErroPostgres(erroS))
+    }
+
+    return ok(p.id)
+  }
+
+  async renomearPipeline(pipelineId: string, nome: string): Promise<Resultado<void>> {
+    const { data, error } = await this.cliente
+      .from('pipelines')
+      .update({ nome })
+      .eq('id', pipelineId)
+      .eq('account_id', this.accountId)
+      .select('id')
+    if (error) return falha(codigoDoErroPostgres(error))
+    if (!data || data.length === 0) return falha('pipeline_nao_encontrado')
+    return ok(undefined)
+  }
+
+  async excluirPipeline(pipelineId: string): Promise<Resultado<void>> {
+    const { data: p, error: erroP } = await this.cliente
+      .from('pipelines')
+      .select('id, is_default')
+      .eq('id', pipelineId)
+      .eq('account_id', this.accountId)
+      .maybeSingle()
+    if (erroP) return falha(erroP.message)
+    if (!p) return falha('pipeline_nao_encontrado')
+    if (p.is_default) return falha('pipeline_padrao_nao_exclui')
+
+    // pipeline_tem_leads (0025) e' security definer de proposito: um SELECT
+    // comum aqui rodaria sob a RLS do CHAMADOR, que esconde leads de colegas
+    // de um vendedor — a contagem daria 0, a policy de delete barraria do
+    // mesmo jeito (ela usa o mesmo helper), e cairiamos no guard de baixo com
+    // pipeline_nao_encontrado, uma mentira: a pipeline continua la, so' tem
+    // leads que este chamador nao enxerga.
+    const { data: temLeads, error: erroL } = await this.cliente.rpc('pipeline_tem_leads', {
+      p_pipeline_id: pipelineId,
+    })
+    if (erroL) return falha(erroL.message)
+    if (temLeads) return falha('pipeline_com_leads')
+
+    // As checagens acima ja garantem is_default=false e zero leads a esta
+    // vista, mas a policy de delete (pipelines_membro_delete) reconfere as
+    // duas coisas por baixo com um helper security definer que enxerga TODA
+    // a conta — inclusive leads de colegas que a RLS deste chamador esconde.
+    // Se essa segunda checagem negar, o delete abaixo afeta 0 linhas: sem o
+    // guard seguinte isso viraria sucesso silencioso mentindo que a pipeline
+    // sumiu.
+    const { data: apagada, error: erroD } = await this.cliente
+      .from('pipelines')
+      .delete()
+      .eq('id', pipelineId)
+      .eq('account_id', this.accountId)
+      .select('id')
+    if (erroD) return falha(erroD.message)
+    if (!apagada || apagada.length === 0) return falha('pipeline_nao_encontrado')
+    return ok(undefined)
+  }
+
   async motivosPerda(): Promise<Resultado<MotivoPerda[]>> {
     const { data, error } = await this.cliente
       .from('loss_reasons')
@@ -153,6 +296,7 @@ export class SupabaseCrmStore implements CrmStore {
       .eq('account_id', this.accountId)
       .order('criado_em', { ascending: false })
 
+    if (filtro.pipelineId) q = q.eq('pipeline_id', filtro.pipelineId)
     if (filtro.responsavelId) q = q.eq('responsavel_id', filtro.responsavelId)
     if (filtro.origem) q = q.eq('origem', filtro.origem)
     if (filtro.desde) q = q.gte('criado_em', filtro.desde.toISOString())

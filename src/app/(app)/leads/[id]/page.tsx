@@ -87,7 +87,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
 
   const [pipeline, membros, eventos, etiquetas, motivos, tarefaStore, scriptStore] =
     await Promise.all([
-      store.pipelinePadrao(),
+      store.pipelinePorId(lead.valor.pipelineId),
       store.membros(),
       store.eventosDoLead(id),
       store.etiquetasDaConta(),
@@ -134,7 +134,14 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="mx-auto grid max-w-4xl gap-6 p-6 md:grid-cols-[1fr_1.2fr]">
       <section className="flex flex-col gap-3">
-        <Link href="/funil" className="text-sm underline">
+        <Link
+          href={
+            pipeline.valor.pipeline.isDefault
+              ? '/funil'
+              : `/funil?pipeline=${pipeline.valor.pipeline.id}`
+          }
+          className="text-sm underline"
+        >
           ← voltar ao funil
         </Link>
         <h1 className="text-2xl font-semibold">{lead.valor.nome}</h1>

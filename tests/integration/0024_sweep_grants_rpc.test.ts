@@ -61,6 +61,9 @@ const MAPA: Record<string, Privilegios> = {
     authenticated: true,
   },
   'move_lead_stage(uuid,uuid,uuid)': { anon: false, authenticated: true },
+  // Guarda de delete da policy pipelines_membro_delete (migration 0025):
+  // definer para enxergar leads de colegas que a RLS do chamador esconderia.
+  'pipeline_tem_leads(uuid)': { anon: false, authenticated: true },
   'reivindicar_fonte_meta(text,uuid,text,text,text,uuid)': { anon: false, authenticated: true },
   'reordenar_etapas(uuid[])': { anon: false, authenticated: true },
   'resumo_etapas(uuid)': { anon: false, authenticated: true },

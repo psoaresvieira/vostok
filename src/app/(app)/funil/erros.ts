@@ -50,3 +50,21 @@ export function mensagemDeErro(codigo: string): string {
   }
   return MENSAGENS_ERRO[codigo] ?? codigo
 }
+
+// Mensagens dos codigos de erro que as actions de acoes-pipelines.ts (Task 4)
+// podem devolver. Mapa local e nao entrada em MENSAGENS_ERRO: aquele mapa e
+// consultado por mensagemDeErro/codigoEtiquetasSalvas para o vocabulario de
+// lead/movimento, e misturar os dois so por estarem no mesmo arquivo
+// confundiria qual action cada codigo pertence.
+const MENSAGENS_PIPELINE: Record<string, string> = {
+  pipeline_nao_encontrado: 'Essa pipeline não existe mais. Recarregue a página.',
+  pipeline_padrao_nao_exclui: 'A pipeline padrão não pode ser excluída.',
+  pipeline_com_leads: 'Essa pipeline ainda tem leads. Mova ou exclua os leads antes.',
+  nome_obrigatorio: 'Dê um nome antes de salvar.',
+  etapas_minimo_uma: 'Adicione ao menos uma etapa aberta.',
+  [FALHA_DE_CONEXAO]: MENSAGEM_FALHA_DE_CONEXAO,
+}
+
+export function mensagemDePipeline(codigo: string): string {
+  return MENSAGENS_PIPELINE[codigo] ?? codigo
+}

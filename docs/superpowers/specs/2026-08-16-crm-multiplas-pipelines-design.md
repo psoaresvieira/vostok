@@ -83,8 +83,11 @@ Migration nova (`0025_pipelines_por_membro.sql`):
   membro; não muda.
 - As regras de exclusão moram na **policy de delete**, não só no store: com a
   escrita aberta a membros, um membro chamando PostgREST direto poderia
-  excluir pipeline com leads (e `leads.pipeline_id` cascateia). A policy nega
-  delete de `is_default` e de pipeline com leads. O teste de leads usa um
+  excluir pipeline com leads. `leads.pipeline_id` NÃO cascateia (a FK em
+  `0003_leads.sql` não tem `on delete`, então o default é `NO ACTION`) — sem a
+  policy, o delete estouraria 23503 (violação de FK) cru pelo PostgREST em vez
+  de uma recusa limpa. A policy nega delete de `is_default` e de pipeline com
+  leads. O teste de leads usa um
   helper `pipeline_tem_leads(uuid)` `security definer` — subquery de `leads`
   dentro da policy rodaria sob a RLS do chamador, e a RLS de leads do
   vendedor esconderia leads de colegas (guarda 5): o vendedor conseguiria

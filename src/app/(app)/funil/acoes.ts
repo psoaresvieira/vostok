@@ -49,7 +49,16 @@ export async function criarLeadAction(formData: FormData): Promise<Resultado<str
   })
   if (!parsed.success) return falha(parsed.error.issues[0].message)
 
-  const pipeline = await store.pipelinePadrao()
+  // pipelineId presente: o lead nasce na primeira etapa ABERTA daquela
+  // pipeline, nunca da padrao. Pipeline inexistente devolve o codigo do
+  // store direto (pipeline_nao_encontrado) — sem fallback silencioso para a
+  // padrao, que esconderia do usuario que o id que ele mandou nao existe.
+  // Campo ausente: comportamento de sempre, pipeline padrao da conta.
+  const pipelineIdBruto = formData.get('pipelineId')
+  const pipelineId = typeof pipelineIdBruto === 'string' ? pipelineIdBruto.trim() : ''
+  const pipeline = pipelineId
+    ? await store.pipelinePorId(pipelineId)
+    : await store.pipelinePadrao()
   if (!pipeline.ok) return falha(pipeline.erro)
   const primeira = pipeline.valor.etapas.find((e) => e.tipo === 'aberta')
   if (!primeira) return falha('pipeline_sem_etapa_aberta')

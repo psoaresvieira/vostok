@@ -17,6 +17,7 @@ export type FiltroLeads = {
   origem?: Lead['origem'] | null
   desde?: Date | null
   busca?: string | null
+  pipelineId?: string | null
 }
 
 export type FiltroMetricas = {
@@ -32,6 +33,11 @@ export interface CrmStore {
   contaAtiva(): Promise<Resultado<Conta | null>>
   membros(): Promise<Resultado<Membro[]>>
   pipelinePadrao(): Promise<Resultado<{ pipeline: Pipeline; etapas: Etapa[] }>>
+  listarPipelines(): Promise<Resultado<Pipeline[]>>
+  pipelinePorId(pipelineId: string): Promise<Resultado<{ pipeline: Pipeline; etapas: Etapa[] }>>
+  criarPipeline(nome: string, etapasAbertas: string[]): Promise<Resultado<string>>
+  renomearPipeline(pipelineId: string, nome: string): Promise<Resultado<void>>
+  excluirPipeline(pipelineId: string): Promise<Resultado<void>>
   motivosPerda(): Promise<Resultado<MotivoPerda[]>>
 
   listarLeads(filtro: FiltroLeads): Promise<Resultado<Lead[]>>
