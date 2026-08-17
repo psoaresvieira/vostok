@@ -73,6 +73,14 @@ const MAPA: Record<string, Privilegios> = {
   'compartilha_conta(uuid)': { anon: false, authenticated: true },
   'conta_do_pipeline(uuid)': { anon: false, authenticated: true },
   'e_membro_da_conta(uuid,uuid)': { anon: false, authenticated: true },
+  // Guardas das policies de stages (migration 0026): definer pelos dois
+  // motivos da guarda 5 — subquery de stages dentro de policy de stages
+  // recursaria, e contagem de leads sob a RLS do chamador mentiria. Os tres
+  // sao fail-closed para nao-membro, entao o EXECUTE de `authenticated` nao
+  // vira sonda cross-account.
+  'etapa_imutaveis_ok(uuid,stage_tipo,uuid)': { anon: false, authenticated: true },
+  'etapa_tem_leads(uuid)': { anon: false, authenticated: true },
+  'etapa_ultima_do_tipo(uuid)': { anon: false, authenticated: true },
   'is_member_of(uuid)': { anon: false, authenticated: true },
   'papel_na_conta(uuid)': { anon: false, authenticated: true },
   'pode_ver_lead(uuid,uuid)': { anon: false, authenticated: true },
