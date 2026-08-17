@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { falha, type Resultado } from '@/lib/domain/resultado'
+import { type Resultado } from '@/lib/domain/resultado'
 import type { Etapa, StageTipo } from '@/lib/domain/tipos'
 import type { ResumoEtapa } from '@/lib/data/etapas'
 import { chamarAcao } from '@/lib/ui/acao'
@@ -18,16 +18,16 @@ import { mensagemDeErro } from './erros'
  * pagina real alcanca este componente hoje.
  */
 async function criarEtapaIndisponivel(): Promise<Resultado<void>> {
-  return falha('acao_indisponivel')
+  throw new Error('etapas.tsx orfao ate a Task 4 do Plano 15 religar as actions do funil')
 }
-async function renomearEtapaIndisponivel(): Promise<Resultado<void>> {
-  return falha('acao_indisponivel')
+async function renomearEtapaIndisponivel(_etapaId: string, _nome: string): Promise<Resultado<void>> {
+  throw new Error('etapas.tsx orfao ate a Task 4 do Plano 15 religar as actions do funil')
 }
-async function excluirEtapaIndisponivel(): Promise<Resultado<void>> {
-  return falha('acao_indisponivel')
+async function excluirEtapaIndisponivel(_etapaId: string): Promise<Resultado<void>> {
+  throw new Error('etapas.tsx orfao ate a Task 4 do Plano 15 religar as actions do funil')
 }
 async function reordenarEtapasIndisponivel(): Promise<Resultado<void>> {
-  return falha('acao_indisponivel')
+  throw new Error('etapas.tsx orfao ate a Task 4 do Plano 15 religar as actions do funil')
 }
 
 /** Quanto tempo o "Salvo ✓" fica visivel antes de sumir sozinho. */
