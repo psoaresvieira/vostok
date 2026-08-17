@@ -23,9 +23,11 @@ const MENSAGENS: Record<string, string> = {
 export function NovoLead({
   membros,
   podeEscolherResponsavel,
+  pipelineId,
 }: {
   membros: Membro[]
   podeEscolherResponsavel: boolean
+  pipelineId: string
 }) {
   const [aberto, setAberto] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -67,6 +69,7 @@ export function NovoLead({
       <div className="surface w-full max-w-md rounded p-5">
         <h2 className="mb-3 text-lg font-semibold">Novo lead</h2>
         <form action={salvar} className="flex flex-col gap-2">
+          <input type="hidden" name="pipelineId" value={pipelineId} />
           <input name="nome" placeholder="nome" required className="rounded border p-2" />
           <input
             name="telefone"
