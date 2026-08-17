@@ -95,7 +95,8 @@ review do Plano 14 pegou em `excluirPipeline`.
   sozinha **não segura delete em lote**: o `using` avalia linha a linha
   contra o snapshot do statement, então `delete ... where tipo = 'aberta'`
   apaga todas as abertas num statement só. Entra um **trigger de statement**
-  (`after delete ... referencing old table`, o segundo trigger do repo) que
+  (`after delete ... referencing old table`, o primeiro trigger de
+  statement do repo) que
   aborta com `ultima_etapa_do_tipo` se alguma pipeline afetada ficou sem
   etapas de um tipo que tinha — exceto quando a própria pipeline sumiu no
   mesmo statement (o cascade legítimo de `excluirPipeline`). E
