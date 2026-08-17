@@ -92,6 +92,35 @@ describe('SupabaseCrmStore — multiplas pipelines', () => {
       expect(r).toEqual({ ok: false, erro: 'pipeline_com_leads' })
     })
 
+    // Achado 2 do review final do Plano 14: a pre-checagem de excluirPipeline
+    // contava leads com um SELECT comum, que roda sob a RLS do CHAMADOR — um
+    // vendedor nao enxerga leads de colegas, entao a contagem dava 0, a
+    // policy (helper security definer) barrava o delete do mesmo jeito, e o
+    // store devolvia pipeline_nao_encontrado (mentira: a pipeline continua
+    // la). Mesmo padrao de fixture do caso 6 de 0025_pipelines_por_membro:
+    // lead plantado via comoServico, ignorando RLS, pertencendo a outro
+    // vendedor.
+    it('recusa com pipeline_com_leads mesmo quando o lead pertence so a um colega (RLS do chamador nao pode mascarar a contagem)', async () => {
+      const cliente = await clienteDoUsuario(c.vendedorAId)
+      const store = new SupabaseCrmStore(cliente, c.accountId, c.vendedorAId)
+
+      const criado = await store.criarPipeline('Outbound', ['Prospecção'])
+      if (!criado.ok) throw new Error(criado.erro)
+      const nova = await store.pipelinePorId(criado.valor)
+      if (!nova.ok) throw new Error(nova.erro)
+
+      await comoServico((cli) =>
+        cli.query(
+          `insert into public.leads (account_id, nome, pipeline_id, stage_id, responsavel_id)
+           values ($1, 'Lead do vendedor B', $2, $3, $4)`,
+          [c.accountId, nova.valor.pipeline.id, nova.valor.etapas[0].id, c.vendedorBId],
+        ),
+      )
+
+      const r = await store.excluirPipeline(criado.valor)
+      expect(r).toEqual({ ok: false, erro: 'pipeline_com_leads' })
+    })
+
     it('exclui pipeline vazia com sucesso e ela some da listagem', async () => {
       const cliente = await clienteDoUsuario(c.vendedorAId)
       const store = new SupabaseCrmStore(cliente, c.accountId, c.vendedorAId)

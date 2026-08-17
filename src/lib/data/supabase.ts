@@ -248,12 +248,17 @@ export class SupabaseCrmStore implements CrmStore {
     if (!p) return falha('pipeline_nao_encontrado')
     if (p.is_default) return falha('pipeline_padrao_nao_exclui')
 
-    const { count, error: erroL } = await this.cliente
-      .from('leads')
-      .select('id', { count: 'exact', head: true })
-      .eq('pipeline_id', pipelineId)
+    // pipeline_tem_leads (0025) e' security definer de proposito: um SELECT
+    // comum aqui rodaria sob a RLS do CHAMADOR, que esconde leads de colegas
+    // de um vendedor — a contagem daria 0, a policy de delete barraria do
+    // mesmo jeito (ela usa o mesmo helper), e cairiamos no guard de baixo com
+    // pipeline_nao_encontrado, uma mentira: a pipeline continua la, so' tem
+    // leads que este chamador nao enxerga.
+    const { data: temLeads, error: erroL } = await this.cliente.rpc('pipeline_tem_leads', {
+      p_pipeline_id: pipelineId,
+    })
     if (erroL) return falha(erroL.message)
-    if ((count ?? 0) > 0) return falha('pipeline_com_leads')
+    if (temLeads) return falha('pipeline_com_leads')
 
     // As checagens acima ja garantem is_default=false e zero leads a esta
     // vista, mas a policy de delete (pipelines_membro_delete) reconfere as

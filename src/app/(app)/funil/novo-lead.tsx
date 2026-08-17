@@ -17,6 +17,10 @@ const MENSAGENS: Record<string, string> = {
   // funil/erros.ts e config/erros.ts ja usam para o mesmo codigo.
   responsavel_invalido:
     'Esse responsável não faz parte da sua conta. Recarregue a página e escolha de novo.',
+  // Achado 1 do review final do Plano 14: criarLeadAction pode devolver isto
+  // se a pipeline foi apagada por outra aba/usuario no meio do fluxo. Mesma
+  // frase que MENSAGENS_PIPELINE usa em funil/erros.ts para o mesmo codigo.
+  pipeline_nao_encontrado: 'Essa pipeline não existe mais. Recarregue a página.',
   [FALHA_DE_CONEXAO]: MENSAGEM_FALHA_DE_CONEXAO,
 }
 

@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { NovoLead } from './novo-lead'
-import { ok } from '@/lib/domain/resultado'
+import { ok, falha } from '@/lib/domain/resultado'
 
 // Mesmo motivo de disparar.test.tsx: o cleanup automatico do
 // @testing-library/react so se registra com globals: true, e este
@@ -38,5 +38,26 @@ describe('NovoLead — pipeline ativa', () => {
     await waitFor(() => expect(criarLeadActionMock).toHaveBeenCalledTimes(1))
     const [formData] = criarLeadActionMock.mock.calls[0] as [FormData]
     expect(formData.get('pipelineId')).toBe('abc')
+  })
+
+  // Achado 1 do review final do Plano 14: criarLeadAction pode devolver
+  // pipeline_nao_encontrado (pipeline apagada por outra aba/usuario no meio
+  // do fluxo), mas o MENSAGENS local nao tinha esse codigo — MENSAGENS[r.erro]
+  // ?? r.erro deixava o codigo cru vazar pra tela, violando "nunca erro cru
+  // na tela". Mesma frase que MENSAGENS_PIPELINE ja usa em funil/erros.ts.
+  it('caso 2 — pipeline_nao_encontrado vira mensagem amigavel, nao o codigo cru', async () => {
+    criarLeadActionMock.mockResolvedValue(falha('pipeline_nao_encontrado'))
+    verificarDuplicadosMock.mockResolvedValue(ok([]))
+
+    render(<NovoLead membros={[]} podeEscolherResponsavel={false} pipelineId="abc" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Novo lead' }))
+    fireEvent.change(screen.getByPlaceholderText('nome'), { target: { value: 'Maria' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('Essa pipeline não existe mais. Recarregue a página.')).toBeTruthy(),
+    )
+    expect(screen.queryByText('pipeline_nao_encontrado')).toBeNull()
   })
 })
