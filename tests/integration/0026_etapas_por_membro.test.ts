@@ -76,6 +76,13 @@ async function linhaDaEtapa(
   })
 }
 
+async function contarEtapas(pipelineId: string): Promise<number> {
+  return comoServico(async (cli) => {
+    const r = await cli.query('select 1 from public.stages where pipeline_id = $1', [pipelineId])
+    return r.rowCount ?? 0
+  })
+}
+
 async function ordensDoPipeline(pipelineId: string): Promise<Map<string, number>> {
   return comoServico(async (cli) => {
     const r = await cli.query<{ id: string; ordem: number }>(
@@ -110,6 +117,22 @@ async function sonda(
 ): Promise<boolean> {
   return comoUsuario(userId, async (cli) => {
     const r = await cli.query<{ v: boolean }>(`select public.${funcao}($1) as v`, [id])
+    return r.rows[0].v
+  })
+}
+
+/** Chama `etapa_imutaveis_ok` na pele de um usuario (tres argumentos). */
+async function imutaveisOk(
+  userId: string,
+  stageId: string,
+  tipo: string,
+  pipelineId: string,
+): Promise<boolean | null> {
+  return comoUsuario(userId, async (cli) => {
+    const r = await cli.query<{ v: boolean | null }>(
+      'select public.etapa_imutaveis_ok($1, $2::public.stage_tipo, $3) as v',
+      [stageId, tipo, pipelineId],
+    )
     return r.rows[0].v
   })
 }
@@ -211,6 +234,61 @@ describe('0026 — etapas por membro, guardas na RLS de stages e helpers fail-cl
       expect(rowCount).toBe(1)
       expect(await stageExiste(proposta)).toBe(false)
     })
+
+    it('Caso 14: delete em LOTE das abertas e abortado e nenhuma etapa some', async () => {
+      // Emenda de 2026-08-17 (achado do review da Task 1). A policy sozinha nao
+      // segura o lote: o `using` avalia linha a linha contra o snapshot do
+      // statement, entao cada uma das cinco 'aberta' ainda ve as outras quatro
+      // vivas, `etapa_ultima_do_tipo` da false para todas, e o statement apaga
+      // as cinco de uma vez — a pipeline fica sem 'aberta' e a ingestao
+      // Meta/Google nao tem mais onde por lead. Quem barra e o trigger de
+      // statement, que ve o estado FINAL: erro nomeado (P0001) e statement
+      // inteiro desfeito.
+      const antes = await contarEtapas(c.pipelineId)
+
+      const erro = await erroDe(() =>
+        comoUsuario(c.vendedorAId, (cli) =>
+          cli.query(`delete from public.stages where pipeline_id = $1 and tipo = 'aberta'`, [
+            c.pipelineId,
+          ]),
+        ),
+      )
+
+      expect(erro).not.toBeNull()
+      expect(erro!.code).toBe('P0001')
+      expect(erro!.message).toMatch(/ultima_etapa_do_tipo/)
+      expect(await contarEtapas(c.pipelineId)).toBe(antes)
+    })
+
+    it('Caso 15: excluir a pipeline inteira continua passando (o cascade nao dispara a guarda)', async () => {
+      // Emenda de 2026-08-17. O contrapeso do caso 14: o cascade da 0002 apaga
+      // TODAS as stages da pipeline num statement so, exatamente a forma que o
+      // trigger aborta — o que o deixa passar e a condicao "a pipeline ainda
+      // existe". Sem essa condicao, ninguem mais consegue excluir pipeline.
+      const { pipelineId, stageIds } = await comoUsuario(c.vendedorAId, async (cli) => {
+        const p = await cli.query<{ id: string }>(
+          `insert into public.pipelines (account_id, nome) values ($1, 'Pipeline descartavel') returning id`,
+          [c.accountId],
+        )
+        const s = await cli.query<{ id: string }>(
+          `insert into public.stages (pipeline_id, nome, ordem, tipo)
+           values ($1, 'Aberta 1', 1, 'aberta'), ($1, 'Ganho', 2, 'ganho') returning id`,
+          [p.rows[0].id],
+        )
+        return { pipelineId: p.rows[0].id, stageIds: s.rows.map((r) => r.id) }
+      })
+
+      const rowCount = await comoUsuario(c.vendedorAId, async (cli) => {
+        const r = await cli.query('delete from public.pipelines where id = $1', [pipelineId])
+        return r.rowCount
+      })
+
+      expect(rowCount).toBe(1)
+      expect(await contarEtapas(pipelineId)).toBe(0)
+      for (const id of stageIds) {
+        expect(await stageExiste(id)).toBe(false)
+      }
+    })
   })
 
   describe('sondas fail-closed', () => {
@@ -243,6 +321,28 @@ describe('0026 — etapas por membro, guardas na RLS de stages e helpers fail-cl
       expect(await sonda(outra.adminId, 'pipeline_tem_leads', inexistente)).toBe(true)
       expect(await sonda(outra.adminId, 'etapa_tem_leads', inexistente)).toBe(true)
       expect(await sonda(outra.adminId, 'etapa_ultima_do_tipo', inexistente)).toBe(true)
+    })
+
+    it('Caso 16: etapa_imutaveis_ok e fail-closed para nao-membro', async () => {
+      // Emenda de 2026-08-17 (achado do review da Task 1). O helper tambem e
+      // um boolean exposto por PostgREST: sem `is_member_of` por dentro ele
+      // devolvia o booleano REAL para nao-membro, confirmando o tipo de uma
+      // etapa alheia e o par etapa/pipeline. A resposta para quem nao e membro
+      // tem que ser a constante que RECUSA (false no `with check`).
+      const outra = await segundaConta('Conta B', 'admin-b-16@b.com')
+      const novo = etapa(c, 'Novo lead')
+
+      // Valores CERTOS: e assim que o oraculo vazava — o "true" seria a
+      // confirmacao. Fail-closed devolve false do mesmo jeito.
+      expect(await imutaveisOk(outra.adminId, novo, 'aberta', c.pipelineId)).toBe(false)
+      // Valores errados tambem: a resposta e constante, nao discrimina nada.
+      expect(await imutaveisOk(outra.adminId, novo, 'ganho', c.pipelineId)).toBe(false)
+
+      // Controle: para um membro o helper continua respondendo o booleano real
+      // — senao o fail-closed teria virado um `false` cego que quebraria todo
+      // update de etapa (o caso 1 tambem pegaria, mas aqui fica explicito).
+      expect(await imutaveisOk(c.vendedorAId, novo, 'aberta', c.pipelineId)).toBe(true)
+      expect(await imutaveisOk(c.vendedorAId, novo, 'ganho', c.pipelineId)).toBe(false)
     })
   })
 
@@ -357,14 +457,19 @@ describe('0026 — etapas por membro, guardas na RLS de stages e helpers fail-cl
   })
 
   describe('prosecdef', () => {
-    it('Caso 13: helpers e resumo_etapas sao definer; excluir/reordenar continuam invoker', async () => {
+    it('Caso 13: helpers, guarda e resumo_etapas sao definer; excluir/reordenar continuam invoker', async () => {
       // Trocar as duas RPCs para definer desligaria a RLS de stages dentro
-      // delas e qualquer membro apagaria etapa de outra conta.
+      // delas e qualquer membro apagaria etapa de outra conta. A guarda de
+      // statement (emenda de 2026-08-17) tem que ser definer pelo motivo
+      // oposto: ela le pipelines e stages da conta inteira para saber se
+      // sobrou etapa do tipo — sob a RLS do chamador a leitura mentiria e o
+      // lote passaria.
       const esperado: Record<string, boolean> = {
         etapa_imutaveis_ok: true,
         etapa_tem_leads: true,
         etapa_ultima_do_tipo: true,
         excluir_etapa: false,
+        guarda_ultima_etapa_do_tipo: true,
         pipeline_tem_leads: true,
         reordenar_etapas: false,
         resumo_etapas: true,

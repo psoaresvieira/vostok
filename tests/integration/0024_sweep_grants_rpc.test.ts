@@ -90,6 +90,9 @@ const MAPA: Record<string, Privilegios> = {
   // Internas: trigger nao checa EXECUTE ao disparar, e helper chamado dentro
   // de definer roda como a dona (postgres). Nenhum cliente executa direto.
   'backfill_snapshot_etapas()': { anon: false, authenticated: false },
+  // Trigger de statement da 0026 (emenda de 2026-08-17): fecha o delete em
+  // LOTE de etapas, que a policy linha-a-linha deixava passar.
+  'guarda_ultima_etapa_do_tipo()': { anon: false, authenticated: false },
   'handle_new_user()': { anon: false, authenticated: false },
   'hash_segredo(text)': { anon: false, authenticated: false },
   'segredo_confere(text)': { anon: false, authenticated: false },

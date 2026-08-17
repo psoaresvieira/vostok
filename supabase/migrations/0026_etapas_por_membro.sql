@@ -66,7 +66,12 @@ $$;
 -- NOVA; esta funcao le a tabela sob o snapshot do statement, que ainda ve a
 -- versao antiga — e' exatamente a comparacao old vs new que a policy nao
 -- sabe escrever sozinha. Linha inexistente (id trocado no proprio update)
--- devolve null, e null no with check recusa.
+-- devolve null, e null no with check recusa. O is_member_of na frente e'
+-- o fail-closed: sem ele a funcao era um oraculo cross-account (devolvia o
+-- booleano REAL para nao-membro, confirmando tipo e par stage/pipeline de
+-- etapa alheia — achado do review da Task 1, emenda de 2026-08-17). Para
+-- nao-membro a resposta agora e' a constante false, que no with check
+-- recusa.
 create or replace function public.etapa_imutaveis_ok(
   p_stage_id uuid,
   p_tipo public.stage_tipo,
@@ -78,7 +83,9 @@ stable
 security definer
 set search_path = public
 as $$
-  select s.tipo = p_tipo and s.pipeline_id = p_pipeline_id
+  select public.is_member_of(public.conta_do_pipeline(s.pipeline_id))
+     and s.tipo = p_tipo
+     and s.pipeline_id = p_pipeline_id
     from public.stages s
    where s.id = p_stage_id;
 $$;
@@ -117,6 +124,54 @@ create policy stages_membro_delete on public.stages
     public.is_member_of(public.conta_do_pipeline(pipeline_id))
     and not public.etapa_ultima_do_tipo(id)
   );
+
+-- A policy sozinha NAO segura delete em LOTE (achado do review da Task 1,
+-- emenda de 2026-08-17): o using avalia linha a linha contra o snapshot do
+-- statement, entao num "delete ... where tipo = 'aberta'" cada uma das N
+-- abertas ainda ve as outras N-1 vivas, todas passam juntas, e a pipeline
+-- fica sem etapa 'aberta' num unico statement cru — exatamente o dano que
+-- este arquivo diz prevenir. O trigger de statement abaixo fecha o lote:
+-- roda DEPOIS do delete, ve o estado final, e aborta se alguma pipeline
+-- afetada ficou sem etapas de um tipo que ela tinha. A condicao "pipeline
+-- ainda existe" deixa passar o cascade legitimo de excluir a pipeline
+-- inteira (on delete cascade da 0002). Corrida entre dois deletes
+-- concorrentes de etapas irmas continua teoricamente possivel (cada
+-- trigger ve o uncommitted do outro como vivo) — estritamente melhor que
+-- antes, registrado, fora de escopo fechar.
+create or replace function public.guarda_ultima_etapa_do_tipo()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if exists (
+    select 1
+      from (select distinct a.pipeline_id, a.tipo from apagadas a) x
+     where exists (select 1 from public.pipelines p where p.id = x.pipeline_id)
+       and not exists (
+         select 1
+           from public.stages s
+          where s.pipeline_id = x.pipeline_id
+            and s.tipo = x.tipo
+       )
+  ) then
+    raise exception 'ultima_etapa_do_tipo';
+  end if;
+  return null;
+end;
+$$;
+
+-- Guarda 7: funcao interna (trigger nao checa EXECUTE ao disparar) — revoke
+-- sem grant nenhum, e entrada { anon: false, authenticated: false } no mapa
+-- da 0024.
+revoke execute on function public.guarda_ultima_etapa_do_tipo() from public;
+
+create trigger stages_guarda_ultima_do_tipo
+  after delete on public.stages
+  referencing old table as apagadas
+  for each statement
+  execute function public.guarda_ultima_etapa_do_tipo();
 
 -- RPCs abertas a membro. Mesmas assinaturas — create or replace substitui
 -- (guarda 3 nao se aplica). Continuam SECURITY INVOKER (excluir/reordenar):
