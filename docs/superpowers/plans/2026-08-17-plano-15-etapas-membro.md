@@ -53,6 +53,9 @@
   11. **resumo_etapas por vendedor conta a conta inteira** — lead do colega na etapa; `resumo_etapas` chamado por `vendedorAId` devolve `leads_na_etapa = 1` para ela. Vermelho hoje: invoker + RLS de leads escondem o lead do colega (o caso que discrimina o definer).
   12. **resumo_etapas por não-membro devolve vazio** — admin da conta B com a pipeline da conta A → zero linhas, sem erro.
   13. **prosecdef dos helpers** — `etapa_tem_leads`, `etapa_ultima_do_tipo`, `etapa_imutaveis_ok`, `pipeline_tem_leads` e `resumo_etapas` com `prosecdef = true`; `excluir_etapa` e `reordenar_etapas` com `prosecdef = false` (continuam invoker — trocar isso desligaria a RLS de stages dentro delas).
+  14. *(emenda 2026-08-17)* **delete em LOTE das abertas é abortado** — `delete from stages where pipeline_id = $1 and tipo = 'aberta'` por vendedor estoura `ultima_etapa_do_tipo` (P0001) e TODAS as etapas continuam lá (statement inteiro desfeito). Fica vermelho sem o trigger de statement: a policy linha-a-linha deixa o lote passar.
+  15. *(emenda 2026-08-17)* **excluir a pipeline inteira continua passando** — vendedor cria pipeline nova (sem leads) e a deleta; o cascade apaga as stages sem disparar a guarda (a condição "pipeline ainda existe" do trigger). Fica vermelho se o trigger não checar a existência da pipeline.
+  16. *(emenda 2026-08-17)* **etapa_imutaveis_ok é fail-closed para não-membro** — admin da conta B chama o helper com a etapa da conta A e os valores CERTOS de tipo/pipeline: resposta `false` (a constante que recusa), não `true`. Fica vermelho com o corpo sem `is_member_of` (que devolvia o booleano real — oráculo cross-account).
 - [ ] **Step 2: Rodar e ver RED.** `npm run test:integration -- 0026` — casos 2, 3, 4, 6, 7, 8*, 10, 11 e metade do 13 vermelhos (8 hoje falha porque vendedor leva `sem_permissao` antes de chegar à guarda). Registrar quais casos já passam pelo comportamento atual.
 - [ ] **Step 3: Escrever a migration — SQL literal:**
 
@@ -125,7 +128,12 @@ $$;
 -- NOVA; esta funcao le a tabela sob o snapshot do statement, que ainda ve a
 -- versao antiga — e' exatamente a comparacao old vs new que a policy nao
 -- sabe escrever sozinha. Linha inexistente (id trocado no proprio update)
--- devolve null, e null no with check recusa.
+-- devolve null, e null no with check recusa. O is_member_of na frente e'
+-- o fail-closed: sem ele a funcao era um oraculo cross-account (devolvia o
+-- booleano REAL para nao-membro, confirmando tipo e par stage/pipeline de
+-- etapa alheia — achado do review da Task 1, emenda de 2026-08-17). Para
+-- nao-membro a resposta agora e' a constante false, que no with check
+-- recusa.
 create or replace function public.etapa_imutaveis_ok(
   p_stage_id uuid,
   p_tipo public.stage_tipo,
@@ -137,7 +145,9 @@ stable
 security definer
 set search_path = public
 as $$
-  select s.tipo = p_tipo and s.pipeline_id = p_pipeline_id
+  select public.is_member_of(public.conta_do_pipeline(s.pipeline_id))
+     and s.tipo = p_tipo
+     and s.pipeline_id = p_pipeline_id
     from public.stages s
    where s.id = p_stage_id;
 $$;
@@ -176,6 +186,54 @@ create policy stages_membro_delete on public.stages
     public.is_member_of(public.conta_do_pipeline(pipeline_id))
     and not public.etapa_ultima_do_tipo(id)
   );
+
+-- A policy sozinha NAO segura delete em LOTE (achado do review da Task 1,
+-- emenda de 2026-08-17): o using avalia linha a linha contra o snapshot do
+-- statement, entao num "delete ... where tipo = 'aberta'" cada uma das N
+-- abertas ainda ve as outras N-1 vivas, todas passam juntas, e a pipeline
+-- fica sem etapa 'aberta' num unico statement cru — exatamente o dano que
+-- este arquivo diz prevenir. O trigger de statement abaixo fecha o lote:
+-- roda DEPOIS do delete, ve o estado final, e aborta se alguma pipeline
+-- afetada ficou sem etapas de um tipo que ela tinha. A condicao "pipeline
+-- ainda existe" deixa passar o cascade legitimo de excluir a pipeline
+-- inteira (on delete cascade da 0002). Corrida entre dois deletes
+-- concorrentes de etapas irmas continua teoricamente possivel (cada
+-- trigger ve o uncommitted do outro como vivo) — estritamente melhor que
+-- antes, registrado, fora de escopo fechar.
+create or replace function public.guarda_ultima_etapa_do_tipo()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if exists (
+    select 1
+      from (select distinct a.pipeline_id, a.tipo from apagadas a) x
+     where exists (select 1 from public.pipelines p where p.id = x.pipeline_id)
+       and not exists (
+         select 1
+           from public.stages s
+          where s.pipeline_id = x.pipeline_id
+            and s.tipo = x.tipo
+       )
+  ) then
+    raise exception 'ultima_etapa_do_tipo';
+  end if;
+  return null;
+end;
+$$;
+
+-- Guarda 7: funcao interna (trigger nao checa EXECUTE ao disparar) — revoke
+-- sem grant nenhum, e entrada { anon: false, authenticated: false } no mapa
+-- da 0024.
+revoke execute on function public.guarda_ultima_etapa_do_tipo() from public;
+
+create trigger stages_guarda_ultima_do_tipo
+  after delete on public.stages
+  referencing old table as apagadas
+  for each statement
+  execute function public.guarda_ultima_etapa_do_tipo();
 
 -- RPCs abertas a membro. Mesmas assinaturas — create or replace substitui
 -- (guarda 3 nao se aplica). Continuam SECURITY INVOKER (excluir/reordenar):
@@ -354,7 +412,7 @@ as $$
 $$;
 ```
 
-- [ ] **Step 4:** Atualizar o mapa de grants em `tests/integration/0024_sweep_grants_rpc.test.ts` — três entradas novas no bloco de helpers de RLS, com grant exatamente `{ anon: false, authenticated: true }`: `'etapa_imutaveis_ok(uuid,stage_tipo,uuid)'`, `'etapa_tem_leads(uuid)'`, `'etapa_ultima_do_tipo(uuid)'`. A grafia da assinatura é a de `oid::regprocedure::text` — se o caso 1 reprovar por diferença de grafia (ex.: o enum qualificado), copiar a grafia exata que o próprio assert imprime.
+- [ ] **Step 4:** Atualizar o mapa de grants em `tests/integration/0024_sweep_grants_rpc.test.ts` — três entradas novas no bloco de helpers de RLS, com grant exatamente `{ anon: false, authenticated: true }`: `'etapa_imutaveis_ok(uuid,stage_tipo,uuid)'`, `'etapa_tem_leads(uuid)'`, `'etapa_ultima_do_tipo(uuid)'`; e uma no bloco de internas, `'guarda_ultima_etapa_do_tipo()'` com `{ anon: false, authenticated: false }` (emenda de 2026-08-17). A grafia da assinatura é a de `oid::regprocedure::text` — se o caso 1 reprovar por diferença de grafia (ex.: o enum qualificado), copiar a grafia exata que o próprio assert imprime.
 - [ ] **Step 5:** Atualizar `0018_excluir_reordenar_etapas.test.ts`, citando a migration 0026 em comentário nos três: **Caso 4** (vendedor recusado em `excluir_etapa` com `sem_permissao`) agora afirma o oposto — vendedor exclui etapa vazia com sucesso; **Caso 9** (vendedor recusado em `reordenar_etapas`) — vendedor reordena com sucesso; **Caso 12** (as três funções invoker) — `excluir_etapa` e `reordenar_etapas` com `prosecdef = false`, `resumo_etapas` com `prosecdef = true`.
 - [ ] **Step 6:** `npm run db:reset` e `npm run test:integration` inteiro. Esperado: 0026 verde, 0018 verde com os casos atualizados, 0024 verde com o mapa novo, 0025 verde intacta. `admin-store.test.ts` ainda passa (as chamadas de admin continuam válidas — membro inclui admin). Qualquer outro teste que afirme "vendedor não mexe em etapa" está afirmando comportamento revogado: atualizar citando a 0026.
 - [ ] **Step 7:** Checklist de guardas silenciosas, dizendo em voz alta: (1) nenhum `is distinct from` novo; (2) os helpers definer só leem — nada a reafirmar; `resumo_etapas` definer reafirma membership por dentro (a cláusula `is_member_of` no where É a reafirmação); (3) todas as assinaturas idênticas às anteriores — `create or replace` substitui, sem sobrecarga; (5) definer em `resumo_etapas` é deliberado e os casos 11/12 da 0026 são o teste de discriminação; (6) nenhuma tabela nova; (7) coberto no Step 4.

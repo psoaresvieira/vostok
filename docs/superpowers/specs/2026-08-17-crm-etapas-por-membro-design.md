@@ -91,6 +91,16 @@ review do Plano 14 pegou em `excluirPipeline`.
   PostgREST cru vira no-op silencioso de 0 linhas (semântica de using em
   delete). Etapa com leads dentro não precisa de guarda na policy: a FK
   `leads.stage_id` é `NOT NULL`/`NO ACTION` e estoura 23503 antes.
+- *(emenda de 2026-08-17, achado do review da Task 1)* A policy de delete
+  sozinha **não segura delete em lote**: o `using` avalia linha a linha
+  contra o snapshot do statement, então `delete ... where tipo = 'aberta'`
+  apaga todas as abertas num statement só. Entra um **trigger de statement**
+  (`after delete ... referencing old table`, o segundo trigger do repo) que
+  aborta com `ultima_etapa_do_tipo` se alguma pipeline afetada ficou sem
+  etapas de um tipo que tinha — exceto quando a própria pipeline sumiu no
+  mesmo statement (o cascade legítimo de `excluirPipeline`). E
+  `etapa_imutaveis_ok` também ganha `is_member_of` (fail-closed): sem ele,
+  devolvia o booleano real para não-membro — oráculo cross-account.
 
 ### RPCs (recriadas na 0026)
 
