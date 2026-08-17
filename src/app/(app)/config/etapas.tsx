@@ -1,17 +1,34 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { Resultado } from '@/lib/domain/resultado'
+import { falha, type Resultado } from '@/lib/domain/resultado'
 import type { Etapa, StageTipo } from '@/lib/domain/tipos'
-import type { ResumoEtapa } from '@/lib/data/admin'
-import {
-  criarEtapaAction,
-  renomearEtapaAction,
-  excluirEtapaAction,
-  reordenarEtapasAction,
-} from './acoes'
+import type { ResumoEtapa } from '@/lib/data/etapas'
 import { chamarAcao } from '@/lib/ui/acao'
 import { mensagemDeErro } from './erros'
+
+/**
+ * Task 2 do Plano 15: as quatro actions de etapa sairam de config/acoes.ts —
+ * o AdminStore perdeu os metodos de etapa (foram para SupabaseEtapaStore,
+ * por pipeline). Este componente ficou orfao de pagina (config/page.tsx nao
+ * o renderiza mais) e migra para funil/etapas.tsx na Task 4, la' recebendo
+ * as actions de verdade de funil/acoes-etapas.ts (Task 3), com pipelineId.
+ * Os quatro stubs abaixo so existem para o arquivo e o teste dele
+ * continuarem compilando ate la' — nenhum teste os exercita, e nenhuma
+ * pagina real alcanca este componente hoje.
+ */
+async function criarEtapaIndisponivel(): Promise<Resultado<void>> {
+  return falha('acao_indisponivel')
+}
+async function renomearEtapaIndisponivel(): Promise<Resultado<void>> {
+  return falha('acao_indisponivel')
+}
+async function excluirEtapaIndisponivel(): Promise<Resultado<void>> {
+  return falha('acao_indisponivel')
+}
+async function reordenarEtapasIndisponivel(): Promise<Resultado<void>> {
+  return falha('acao_indisponivel')
+}
 
 /** Quanto tempo o "Salvo ✓" fica visivel antes de sumir sozinho. */
 const DURACAO_SALVO_MS = 2_500
@@ -29,8 +46,8 @@ function mensagemMoverLeads(n: number): string {
 export function Etapas({
   etapas,
   resumo,
-  renomear = renomearEtapaAction,
-  excluir = excluirEtapaAction,
+  renomear = renomearEtapaIndisponivel,
+  excluir = excluirEtapaIndisponivel,
 }: {
   etapas: Etapa[]
   resumo: ResumoEtapa[]
@@ -86,7 +103,7 @@ export function Etapas({
     if (destino < 0 || destino >= etapas.length) return
     const ids = etapas.map((e) => e.id)
     ;[ids[indice], ids[destino]] = [ids[destino], ids[indice]]
-    const r = await chamarAcao(reordenarEtapasAction(ids))
+    const r = await chamarAcao(reordenarEtapasIndisponivel())
     if (!r.ok) reportarErro(mensagemDeErro(r.erro))
   }
 
@@ -187,7 +204,7 @@ export function Etapas({
         <button
           type="button"
           onClick={async () => {
-            const r = await chamarAcao(criarEtapaAction(nome, tipo))
+            const r = await chamarAcao(criarEtapaIndisponivel())
             if (!r.ok) reportarErro(mensagemDeErro(r.erro))
             else {
               setErro(null)

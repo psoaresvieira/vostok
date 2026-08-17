@@ -47,7 +47,6 @@ describe('0005 — convite vinculado ao email', () => {
       await clienteDoUsuario(c.adminId, 'admin@a.com'),
       c.accountId,
       c.adminId,
-      c.pipelineId,
     )
     const r = await admin.convidar(email, papel)
     if (!r.ok) throw new Error(r.erro)

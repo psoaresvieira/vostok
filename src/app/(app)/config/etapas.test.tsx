@@ -5,7 +5,7 @@ import { Etapas } from './etapas'
 import { ok, falha } from '@/lib/domain/resultado'
 import type { Resultado } from '@/lib/domain/resultado'
 import type { Etapa } from '@/lib/domain/tipos'
-import type { ResumoEtapa } from '@/lib/data/admin'
+import type { ResumoEtapa } from '@/lib/data/etapas'
 
 // O cleanup automatico do @testing-library/react so se registra quando
 // globals: true esta ligado, e este vitest.config nao liga de proposito — o

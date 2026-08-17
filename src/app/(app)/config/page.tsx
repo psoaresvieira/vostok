@@ -4,7 +4,6 @@ import { criarStoreDoServidor } from '@/lib/data/supabase'
 import { criarAdminStoreDoServidor } from '@/lib/data/admin'
 import { criarFonteStoreDoServidor } from '@/lib/data/fontes'
 import { criarWhatsAppStoreDoServidor } from '@/lib/data/whatsapp'
-import { Etapas } from './etapas'
 import { Motivos } from './motivos'
 import { Usuarios } from './usuarios'
 import { Integracoes } from './integracoes'
@@ -32,33 +31,25 @@ export default async function ConfigPage({
   const fonteContexto = await criarFonteStoreDoServidor()
   if (!fonteContexto.ok) throw new Error(fonteContexto.erro)
 
-  // Estrutural do bloco de Integracoes, como fonteContexto/adminContexto: throw,
-  // nao degradacao — diferente de resumoEtapas, a conexao do WhatsApp nao tem
-  // um "estado sem numero" que faca sentido fingir quando a busca falha.
+  // Estrutural do bloco de Integracoes, como fonteContexto/adminContexto:
+  // throw, nao degradacao — a conexao do WhatsApp nao tem um "estado sem
+  // numero" que faca sentido fingir quando a busca falha.
   const whatsappContexto = await criarWhatsAppStoreDoServidor()
   if (!whatsappContexto.ok) throw new Error(whatsappContexto.erro)
 
   const { store } = contexto.valor
-  const [pipeline, membros, convites, fontes, entregas, resumoDeEtapas, conexaoWhatsApp] =
-    await Promise.all([
-      store.pipelinePadrao(),
-      store.membros(),
-      adminContexto.valor.admin.convitesPendentes(),
-      fonteContexto.valor.fontes.listar(),
-      fonteContexto.valor.fontes.entregasRecentes(LIMITE_ENTREGAS),
-      adminContexto.valor.admin.resumoEtapas(),
-      whatsappContexto.valor.whatsapp.atual(),
-    ])
-  if (!pipeline.ok) throw new Error(pipeline.erro)
+  const [membros, convites, fontes, entregas, conexaoWhatsApp] = await Promise.all([
+    store.membros(),
+    adminContexto.valor.admin.convitesPendentes(),
+    fonteContexto.valor.fontes.listar(),
+    fonteContexto.valor.fontes.entregasRecentes(LIMITE_ENTREGAS),
+    whatsappContexto.valor.whatsapp.atual(),
+  ])
   if (!membros.ok) throw new Error(membros.erro)
   if (!convites.ok) throw new Error(convites.erro)
   if (!fontes.ok) throw new Error(fontes.erro)
   if (!entregas.ok) throw new Error(entregas.erro)
   if (!conexaoWhatsApp.ok) throw new Error(conexaoWhatsApp.erro)
-  // resumoEtapas() alimenta so o dialogo de exclusao com numeros — nao e
-  // dado estrutural da config. Falha aqui degrada para diálogo sem numero
-  // (ver Etapas), nunca derruba a pagina inteira.
-  const resumo = resumoDeEtapas.ok ? resumoDeEtapas.valor : []
 
   // store.motivosPerda() so devolve ativos, que e o certo para o modal de perda.
   // A configuracao precisa dos inativos tambem, para poder reativar.
@@ -75,7 +66,6 @@ export default async function ConfigPage({
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-8 p-6">
       <h1 className="text-2xl font-semibold">Configuração</h1>
-      <Etapas etapas={pipeline.valor.etapas} resumo={resumo} />
       <Motivos motivos={motivos.valor} />
       <Usuarios membros={membros.valor} convites={convites.valor} origem={origem} />
       <Integracoes
