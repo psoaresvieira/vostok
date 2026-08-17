@@ -73,6 +73,14 @@ const MAPA: Record<string, Privilegios> = {
   'compartilha_conta(uuid)': { anon: false, authenticated: true },
   'conta_do_pipeline(uuid)': { anon: false, authenticated: true },
   'e_membro_da_conta(uuid,uuid)': { anon: false, authenticated: true },
+  // Guardas das policies de stages (migration 0026): definer pelos dois
+  // motivos da guarda 5 — subquery de stages dentro de policy de stages
+  // recursaria, e contagem de leads sob a RLS do chamador mentiria. Os tres
+  // sao fail-closed para nao-membro, entao o EXECUTE de `authenticated` nao
+  // vira sonda cross-account.
+  'etapa_imutaveis_ok(uuid,stage_tipo,uuid)': { anon: false, authenticated: true },
+  'etapa_tem_leads(uuid)': { anon: false, authenticated: true },
+  'etapa_ultima_do_tipo(uuid)': { anon: false, authenticated: true },
   'is_member_of(uuid)': { anon: false, authenticated: true },
   'papel_na_conta(uuid)': { anon: false, authenticated: true },
   'pode_ver_lead(uuid,uuid)': { anon: false, authenticated: true },
@@ -82,6 +90,9 @@ const MAPA: Record<string, Privilegios> = {
   // Internas: trigger nao checa EXECUTE ao disparar, e helper chamado dentro
   // de definer roda como a dona (postgres). Nenhum cliente executa direto.
   'backfill_snapshot_etapas()': { anon: false, authenticated: false },
+  // Trigger de statement da 0026 (emenda de 2026-08-17): fecha o delete em
+  // LOTE de etapas, que a policy linha-a-linha deixava passar.
+  'guarda_ultima_etapa_do_tipo()': { anon: false, authenticated: false },
   'handle_new_user()': { anon: false, authenticated: false },
   'hash_segredo(text)': { anon: false, authenticated: false },
   'segredo_confere(text)': { anon: false, authenticated: false },

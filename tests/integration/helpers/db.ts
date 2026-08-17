@@ -35,22 +35,7 @@ export async function comoUsuario<T>(
   const client = new Client({ connectionString: CONN })
   await client.connect()
   try {
-    const dono = await client.query<{ email: string | null }>(
-      'select email from auth.users where id = $1',
-      [userId],
-    )
-    await client.query('begin')
-    await client.query('set local role authenticated')
-    await client.query(
-      `select set_config('request.jwt.claims', $1, true)`,
-      [
-        JSON.stringify({
-          sub: userId,
-          role: 'authenticated',
-          email: dono.rows[0]?.email ?? undefined,
-        }),
-      ],
-    )
+    await abrirTransacaoDoUsuario(client, userId)
     const r = await fn(client)
     await client.query('commit')
     return r
@@ -60,6 +45,97 @@ export async function comoUsuario<T>(
   } finally {
     await client.end()
   }
+}
+
+/** Abre a transacao e veste o usuario. Extraido de comoUsuario porque
+ * abrirSessaoUsuario precisa do mesmo preambulo sem o commit no fim. */
+async function abrirTransacaoDoUsuario(client: Client, userId: string): Promise<void> {
+  const dono = await client.query<{ email: string | null }>(
+    'select email from auth.users where id = $1',
+    [userId],
+  )
+  await client.query('begin')
+  await client.query('set local role authenticated')
+  await client.query(
+    `select set_config('request.jwt.claims', $1, true)`,
+    [
+      JSON.stringify({
+        sub: userId,
+        role: 'authenticated',
+        email: dono.rows[0]?.email ?? undefined,
+      }),
+    ],
+  )
+}
+
+export type SessaoAberta = {
+  /** Conexao crua com a transacao ABERTA, na pele do usuario. */
+  cliente: Client
+  /** Fecha a transacao e devolve a conexao. Idempotente. */
+  encerrar: (acao: 'commit' | 'rollback') => Promise<void>
+}
+
+/**
+ * Igual a comoUsuario, mas devolve a transacao ABERTA em vez de commitar no
+ * fim do callback. Existe para os testes de corrida entre duas sessoes: a
+ * escrita fica pendurada aqui, invisivel para qualquer outra conexao, enquanto
+ * uma SEGUNDA sessao (o supabase-js falando por PostgREST) tenta a escrita
+ * conflitante e BLOQUEIA; so entao `encerrar('commit')` solta o conflito e a
+ * segunda sessao recebe o SQLSTATE real (23505 no indice unico de ordem, 23503
+ * na FK de pipeline). Sem manter a transacao aberta essas corridas nao teriam
+ * como ser encenadas de forma deterministica.
+ *
+ * Quem chama e' responsavel por chamar `encerrar` — de preferencia num
+ * `finally`, senao a transacao segura locks e o proximo `limparBanco` trava.
+ */
+export async function abrirSessaoUsuario(userId: string): Promise<SessaoAberta> {
+  const client = new Client({ connectionString: CONN })
+  await client.connect()
+  try {
+    await abrirTransacaoDoUsuario(client, userId)
+  } catch (e) {
+    await client.end()
+    throw e
+  }
+
+  let fechada = false
+  return {
+    cliente: client,
+    encerrar: async (acao) => {
+      if (fechada) return
+      fechada = true
+      try {
+        await client.query(acao)
+      } finally {
+        await client.end()
+      }
+    },
+  }
+}
+
+/**
+ * Espera ate uma sessao ficar PARADA esperando por lock — o sinal de que a
+ * escrita concorrente ja chegou no conflito e nao passou dele. E' o que torna
+ * as corridas deterministicas: sem isso, commitar cedo demais deixaria a outra
+ * sessao ler o estado ja resolvido e nunca colidir. Estoura se o bloqueio nao
+ * acontecer, para o teste falhar em vez de virar verde por engano.
+ */
+export async function esperarBloqueioEm(tabela: string, tentativas = 200): Promise<void> {
+  for (let i = 0; i < tentativas; i++) {
+    const bloqueada = await comoServico(async (c) => {
+      const r = await c.query(
+        `select 1 from pg_stat_activity
+          where wait_event_type = 'Lock'
+            and pid <> pg_backend_pid()
+            and query ilike $1`,
+        [`%${tabela}%`],
+      )
+      return (r.rowCount ?? 0) > 0
+    })
+    if (bloqueada) return
+    await new Promise((resolver) => setTimeout(resolver, 25))
+  }
+  throw new Error(`nenhuma sessao ficou bloqueada em ${tabela} — a corrida nao foi encenada`)
 }
 
 export async function criarUsuario(email: string): Promise<string> {

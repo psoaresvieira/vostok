@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import { SupabaseAdminStore } from '@/lib/data/admin'
 import { comoServico, comoUsuario, criarUsuario, limparBanco } from './helpers/db'
-import { montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario'
+import { montarCenario, type Cenario } from './helpers/cenario'
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321'
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -30,262 +30,11 @@ describe('SupabaseAdminStore', () => {
     c = await montarCenario()
   })
 
-  it('admin cria etapa no fim do funil', async () => {
-    const admin = new SupabaseAdminStore(
-      await clienteDoUsuario(c.adminId),
-      c.accountId,
-      c.adminId,
-      c.pipelineId,
-    )
-    const r = await admin.criarEtapa('Negociação', 'aberta')
-    if (!r.ok) throw new Error(r.erro)
-
-    const { total, criada, maiorOrdem } = await comoServico(async (cli) => {
-      const t = await cli.query(
-        'select count(*)::int as n, max(ordem)::int as maior from public.stages where pipeline_id = $1',
-        [c.pipelineId],
-      )
-      const e = await cli.query(
-        'select nome, tipo, ordem from public.stages where id = $1',
-        [r.valor],
-      )
-      return { total: t.rows[0].n, maiorOrdem: t.rows[0].maior, criada: e.rows[0] }
-    })
-    expect(total).toBe(8)
-    expect(criada.nome).toBe('Negociação')
-    expect(criada.tipo).toBe('aberta')
-    // "no fim do funil": nenhuma etapa fica depois dela
-    expect(criada.ordem).toBe(maiorOrdem)
-    expect(criada.ordem).toBe(8)
-  })
-
-  it('reordenar etapas nao viola o indice unico de ordem', async () => {
-    const admin = new SupabaseAdminStore(
-      await clienteDoUsuario(c.adminId),
-      c.accountId,
-      c.adminId,
-      c.pipelineId,
-    )
-    const invertida = [...c.etapas].reverse().map((e) => e.id)
-
-    const r = await admin.reordenarEtapas(invertida)
-    expect(r.ok).toBe(true)
-
-    const linhas = await comoServico(async (cli) =>
-      (
-        await cli.query(
-          'select nome, ordem from public.stages where pipeline_id = $1 order by ordem',
-          [c.pipelineId],
-        )
-      ).rows,
-    )
-    const nomes = linhas.map((x) => x.nome)
-    expect(nomes[0]).toBe('Perdido')
-    expect(nomes[6]).toBe('Novo lead')
-    expect(nomes).toEqual([...c.etapas].reverse().map((e) => e.nome))
-    // a ordem tem que voltar compacta: linha parada na faixa de estacionamento
-    // (1000+) passaria despercebida se so olhassemos os nomes.
-    expect(linhas.map((x) => x.ordem)).toEqual([1, 2, 3, 4, 5, 6, 7])
-  })
-
-  it('reordenar com lista que nao e permutacao exata e recusado sem mexer na ordem', async () => {
-    const admin = new SupabaseAdminStore(
-      await clienteDoUsuario(c.adminId),
-      c.accountId,
-      c.adminId,
-      c.pipelineId,
-    )
-    const ids = c.etapas.map((e) => e.id)
-    const ordemOriginal = async () =>
-      comoServico(async (cli) =>
-        (
-          await cli.query(
-            'select nome, ordem from public.stages where pipeline_id = $1 order by ordem',
-            [c.pipelineId],
-          )
-        ).rows,
-      )
-    const antes = await ordemOriginal()
-
-    const parcial = await admin.reordenarEtapas([ids[6], ids[5]])
-    expect(parcial.ok).toBe(false)
-    if (!parcial.ok) expect(parcial.erro).toBe('ordem_invalida')
-
-    const repetida = await admin.reordenarEtapas([ids[0], ids[0], ...ids.slice(1, 6)])
-    expect(repetida.ok).toBe(false)
-    if (!repetida.ok) expect(repetida.erro).toBe('ordem_invalida')
-
-    const deOutroFunil = await admin.reordenarEtapas([
-      ...ids.slice(1),
-      '00000000-0000-0000-0000-000000000001',
-    ])
-    expect(deOutroFunil.ok).toBe(false)
-    if (!deOutroFunil.ok) expect(deOutroFunil.erro).toBe('ordem_invalida')
-
-    // nada escrito: nem posicao trocada, nem linha estacionada em 1000+
-    expect(await ordemOriginal()).toEqual(antes)
-
-    // e a reordenacao legitima seguinte continua funcionando
-    const valida = await admin.reordenarEtapas([...ids].reverse())
-    expect(valida.ok).toBe(true)
-  })
-
-  it('excluir etapa vazia devolve ok e a etapa some', async () => {
-    const admin = new SupabaseAdminStore(
-      await clienteDoUsuario(c.adminId),
-      c.accountId,
-      c.adminId,
-      c.pipelineId,
-    )
-    const proposta = etapa(c, 'Proposta')
-
-    const r = await admin.excluirEtapa(proposta)
-    expect(r.ok).toBe(true)
-
-    const existe = await comoServico(
-      async (cli) =>
-        (await cli.query('select 1 from public.stages where id = $1', [proposta])).rowCount,
-    )
-    expect(existe).toBe(0)
-  })
-
-  it('excluir etapa com lead dentro devolve falha etapa_tem_leads', async () => {
-    const admin = new SupabaseAdminStore(
-      await clienteDoUsuario(c.adminId),
-      c.accountId,
-      c.adminId,
-      c.pipelineId,
-    )
-    const contato = etapa(c, 'Contato feito')
-    await criarLead(c, 'Lead preso', c.vendedorAId, contato)
-
-    const r = await admin.excluirEtapa(contato)
-    expect(r.ok).toBe(false)
-    // codigo conhecido, nao a mensagem crua do Postgres
-    if (!r.ok) expect(r.erro).toBe('etapa_tem_leads')
-  })
-
-  it('excluir etapa cuja guarda nao enxerga lead de outra conta (FK 23503) tambem devolve falha etapa_tem_leads', async () => {
-    const admin = new SupabaseAdminStore(
-      await clienteDoUsuario(c.adminId),
-      c.accountId,
-      c.adminId,
-      c.pipelineId,
-    )
-
-    // Etapa descartavel do pipeline da conta A. Tipo 'aberta': ha varias
-    // etapas 'aberta' no seed, entao a guarda de "ultima etapa do tipo" nao
-    // barra a exclusao antes de chegarmos na guarda de leads.
-    const etapaDescartavel = await comoServico(async (cli) => {
-      const r = await cli.query<{ id: string }>(
-        `insert into public.stages (pipeline_id, nome, ordem, tipo)
-         values ($1, 'Descartavel', 90, 'aberta') returning id`,
-        [c.pipelineId],
-      )
-      return r.rows[0].id
-    })
-
-    // Uma segunda conta, so para ter um account_id valido e distinto.
-    const outroAdmin = await criarUsuario('admin-23503@outra.com')
-    const outraConta = await comoUsuario(outroAdmin, async (cli) =>
-      (
-        await cli.query<{ id: string }>('select public.criar_conta($1) as id', ['Outra 23503'])
-      ).rows[0].id,
-    )
-
-    // Lead da conta B apontando para uma etapa da conta A: nada no schema
-    // impede isso (leads nao tem FK composta account+stage), e e exatamente
-    // o que aconteceria se um lead entrasse na etapa entre a contagem da
-    // guarda de excluir_etapa e o delete. Para o admin da conta A a RLS de
-    // leads_select esconde essa linha (is_member_of(account_id) falha para a
-    // conta B), entao a guarda de "tem lead" conta zero — mas a FK de
-    // leads.stage_id nao respeita RLS, e o delete da etapa estoura 23503.
-    await comoServico((cli) =>
-      cli.query(
-        `insert into public.leads (account_id, nome, pipeline_id, stage_id)
-         values ($1, 'Lead invisivel para a conta A', $2, $3)`,
-        [outraConta, c.pipelineId, etapaDescartavel],
-      ),
-    )
-
-    const r = await admin.excluirEtapa(etapaDescartavel)
-    expect(r.ok).toBe(false)
-    // codigo conhecido, nunca a mensagem crua da violacao de FK do Postgres
-    if (!r.ok) expect(r.erro).toBe('etapa_tem_leads')
-
-    const existe = await comoServico(
-      async (cli) =>
-        (await cli.query('select 1 from public.stages where id = $1', [etapaDescartavel]))
-          .rowCount,
-    )
-    expect(existe).toBe(1)
-  })
-
-  it('excluir a ultima etapa do tipo ganho devolve falha ultima_etapa_do_tipo', async () => {
-    const admin = new SupabaseAdminStore(
-      await clienteDoUsuario(c.adminId),
-      c.accountId,
-      c.adminId,
-      c.pipelineId,
-    )
-    const ganho = etapa(c, 'Ganho')
-
-    const r = await admin.excluirEtapa(ganho)
-    expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.erro).toBe('ultima_etapa_do_tipo')
-  })
-
-  it('resumoEtapas conta leads parados e leads que passaram, mesmo cenario do caso 11 da 0018', async () => {
-    const admin = new SupabaseAdminStore(
-      await clienteDoUsuario(c.adminId),
-      c.accountId,
-      c.adminId,
-      c.pipelineId,
-    )
-    const novo = etapa(c, 'Novo lead')
-    const contato = etapa(c, 'Contato feito')
-    const qualificacao = etapa(c, 'Qualificação')
-
-    // Lead 1 fica parado em "Contato feito".
-    await criarLead(c, 'Lead parado', c.vendedorAId, novo)
-    const parado = await criarLead(c, 'Lead parado 2', c.vendedorAId, novo)
-    await comoUsuario(c.vendedorAId, (cli) =>
-      cli.query('select public.move_lead_stage($1, $2)', [parado, contato]),
-    )
-
-    // Lead 2 passa por "Contato feito" e segue ate "Qualificacao".
-    const passante = await criarLead(c, 'Lead passante', c.vendedorAId, novo)
-    await comoUsuario(c.vendedorAId, (cli) =>
-      cli.query('select public.move_lead_stage($1, $2)', [passante, contato]),
-    )
-    await comoUsuario(c.vendedorAId, (cli) =>
-      cli.query('select public.move_lead_stage($1, $2)', [passante, qualificacao]),
-    )
-
-    const r = await admin.resumoEtapas()
-    if (!r.ok) throw new Error(r.erro)
-
-    const doContato = r.valor.find((x) => x.etapaId === contato)
-    expect(doContato).toEqual({ etapaId: contato, leadsNaEtapa: 1, leadsPassaram: 2 })
-  })
-
-  it('vendedor cria etapa na propria conta (migration 0025 revogou o admin-only de stages)', async () => {
-    const admin = new SupabaseAdminStore(
-      await clienteDoUsuario(c.vendedorAId),
-      c.accountId,
-      c.vendedorAId,
-      c.pipelineId,
-    )
-    const r = await admin.criarEtapa('Etapa do vendedor', 'aberta')
-    expect(r.ok).toBe(true)
-  })
-
   it('convite pendente aparece na listagem e some ao revogar', async () => {
     const admin = new SupabaseAdminStore(
       await clienteDoUsuario(c.adminId),
       c.accountId,
       c.adminId,
-      c.pipelineId,
     )
     const criado = await admin.convidar('novo@exemplo.com', 'vendedor')
     if (!criado.ok) throw new Error(criado.erro)
@@ -310,7 +59,6 @@ describe('SupabaseAdminStore', () => {
       await clienteDoUsuario(c.adminId),
       c.accountId,
       c.adminId,
-      c.pipelineId,
     )
     // Conta vizinha, com admin proprio. Sob RLS os ids abaixo nao casam com
     // nenhuma linha visivel, e "zero linhas" nao e error no PostgREST.
@@ -318,13 +66,10 @@ describe('SupabaseAdminStore', () => {
     const outraConta = await comoUsuario(outroAdmin, async (cli) =>
       (await cli.query<{ id: string }>('select public.criar_conta($1) as id', ['Outra'])).rows[0].id,
     )
-    const { etapaDeFora, motivoDeFora, conviteDeFora } = await comoServico(async (cli) => {
-      const e = await cli.query<{ id: string }>(
-        `select s.id from public.stages s
-         join public.pipelines p on p.id = s.pipeline_id
-         where p.account_id = $1 order by s.ordem limit 1`,
-        [outraConta],
-      )
+    // Os casos de etapa deste teste (renomearEtapa em id de outra conta)
+    // MUDARAM para etapas-store.test.ts na Task 2 do Plano 15 — mesmo
+    // racional, agora contra SupabaseEtapaStore.
+    const { motivoDeFora, conviteDeFora } = await comoServico(async (cli) => {
       const m = await cli.query<{ id: string }>(
         'select id from public.loss_reasons where account_id = $1 limit 1',
         [outraConta],
@@ -335,12 +80,8 @@ describe('SupabaseAdminStore', () => {
          returning id`,
         [outraConta, outroAdmin],
       )
-      return { etapaDeFora: e.rows[0].id, motivoDeFora: m.rows[0].id, conviteDeFora: i.rows[0].id }
+      return { motivoDeFora: m.rows[0].id, conviteDeFora: i.rows[0].id }
     })
-
-    const renomeada = await admin.renomearEtapa(etapaDeFora, 'Invadida')
-    expect(renomeada.ok).toBe(false)
-    if (!renomeada.ok) expect(renomeada.erro).toBe('nao_encontrado')
 
     const alternado = await admin.alternarMotivo(motivoDeFora, false)
     expect(alternado.ok).toBe(false)
@@ -352,8 +93,6 @@ describe('SupabaseAdminStore', () => {
 
     // e nada da conta vizinha foi tocado
     const intacto = await comoServico(async (cli) => ({
-      etapa: (await cli.query('select nome from public.stages where id = $1', [etapaDeFora]))
-        .rows[0].nome,
       motivo: (await cli.query('select ativo from public.loss_reasons where id = $1', [motivoDeFora]))
         .rows[0].ativo,
       convites: (
@@ -362,7 +101,6 @@ describe('SupabaseAdminStore', () => {
         ])
       ).rows[0].n,
     }))
-    expect(intacto.etapa).toBe('Novo lead')
     expect(intacto.motivo).toBe(true)
     expect(intacto.convites).toBe(1)
   })
@@ -372,7 +110,6 @@ describe('SupabaseAdminStore', () => {
       await clienteDoUsuario(c.adminId),
       c.accountId,
       c.adminId,
-      c.pipelineId,
     )
     const r = await admin.alternarMotivo(c.motivoId, false)
     expect(r.ok).toBe(true)
@@ -393,7 +130,6 @@ describe('SupabaseAdminStore', () => {
       await clienteDoUsuario(c.adminId),
       c.accountId,
       c.adminId,
-      c.pipelineId,
     )
     await admin.alternarMotivo(c.motivoId, false)
 

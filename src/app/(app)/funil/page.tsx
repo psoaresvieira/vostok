@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation'
 import { criarStoreDoServidor } from '@/lib/data/supabase'
+import { criarEtapaStoreDoServidor } from '@/lib/data/etapas'
 import type { CrmStore } from '@/lib/data/store'
 import type { Lead } from '@/lib/domain/tipos'
 import { BarraPipelines } from './barra-pipelines'
 import { NovaPipeline } from './nova-pipeline'
+import { EditarEtapas } from './etapas'
 import { Filtros } from './filtros'
 import { NovoLead } from './novo-lead'
 import { Quadro } from './quadro'
@@ -56,6 +58,15 @@ export default async function FunilPage({
   const etiquetas = await store.etiquetasDaConta()
   if (!etiquetas.ok) throw new Error(etiquetas.erro)
 
+  // resumoEtapas() alimenta so o dialogo de exclusao dentro de EditarEtapas
+  // com numeros — nao e dado estrutural do funil. Qualquer falha (store ou
+  // RPC) degrada para [] em vez de derrubar a pagina inteira: mesmo racional
+  // que config/page.tsx aplicava antes de Task 5 (Plano 15) mover as etapas
+  // para ca.
+  const etapaStore = await criarEtapaStoreDoServidor(pipeline.valor.pipeline.id)
+  const resumo = etapaStore.ok ? await etapaStore.valor.etapas.resumoEtapas() : null
+  const resumoEtapas = resumo && resumo.ok ? resumo.valor : []
+
   // Serializa os searchParams tal como chegaram (menos undefined, que
   // URLSearchParams nao aceita) — BarraPipelines parte daqui para montar o
   // href de cada item preservando os demais filtros.
@@ -73,6 +84,11 @@ export default async function FunilPage({
         />
         <div className="border-r border-border p-2">
           <NovaPipeline />
+          <EditarEtapas
+            pipelineId={pipeline.valor.pipeline.id}
+            etapas={pipeline.valor.etapas}
+            resumo={resumoEtapas}
+          />
         </div>
       </div>
       <div className="flex flex-1 flex-col">

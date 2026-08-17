@@ -103,18 +103,23 @@ describe('0018 — excluir_etapa, reordenar_etapas e resumo_etapas', () => {
       expect(await stageExiste(ganho)).toBe(true)
     })
 
-    it('Caso 4: vendedor e recusado com sem_permissao — a mesma chamada que funciona para o admin', async () => {
+    it('Caso 4: vendedor exclui etapa vazia — a mesma chamada que funciona para o admin', async () => {
+      // A migration 0026 (Plano 15) abriu excluir_etapa a qualquer membro: o
+      // sem_permissao que este caso afirmava era comportamento revogado. As
+      // guardas de negocio (leads dentro, ultima do tipo) seguem valendo — ver
+      // os casos 2 e 3 aqui e os 8 e 9 da 0026.
       const stageId = await criarEtapaDescartavel(c)
 
-      await expect(
-        comoUsuario(c.vendedorAId, (cli) => cli.query('select public.excluir_etapa($1)', [stageId])),
-      ).rejects.toThrow(/sem_permissao/)
-      expect(await stageExiste(stageId)).toBe(true)
-
-      await comoUsuario(c.adminId, (cli) =>
+      await comoUsuario(c.vendedorAId, (cli) =>
         cli.query('select public.excluir_etapa($1)', [stageId]),
       )
       expect(await stageExiste(stageId)).toBe(false)
+
+      const outroStageId = await criarEtapaDescartavel(c)
+      await comoUsuario(c.adminId, (cli) =>
+        cli.query('select public.excluir_etapa($1)', [outroStageId]),
+      )
+      expect(await stageExiste(outroStageId)).toBe(false)
     })
 
     it('Caso 5: admin de outra conta recebe etapa_nao_encontrada — nao "sem permissao"', async () => {
@@ -186,19 +191,22 @@ describe('0018 — excluir_etapa, reordenar_etapas e resumo_etapas', () => {
       expect(depois).toEqual(antes)
     })
 
-    it('Caso 9: vendedor e recusado com sem_permissao', async () => {
-      const antes = await ordensDoPipeline(c.pipelineId)
+    it('Caso 9: vendedor reordena — a mesma chamada que funciona para o admin', async () => {
+      // A migration 0026 (Plano 15) abriu reordenar_etapas a qualquer membro: o
+      // sem_permissao que este caso afirmava era comportamento revogado. As
+      // validacoes de permutacao (casos 7, 8, 10 e 13) seguem valendo.
       const idsOriginais = [...c.etapas].sort((a, b) => a.ordem - b.ordem).map((e) => e.id)
       const novaOrdem = [idsOriginais[1], idsOriginais[0], ...idsOriginais.slice(2)]
 
-      await expect(
-        comoUsuario(c.vendedorAId, (cli) =>
-          cli.query('select public.reordenar_etapas($1::uuid[])', [novaOrdem]),
-        ),
-      ).rejects.toThrow(/sem_permissao/)
+      await comoUsuario(c.vendedorAId, (cli) =>
+        cli.query('select public.reordenar_etapas($1::uuid[])', [novaOrdem]),
+      )
 
       const depois = await ordensDoPipeline(c.pipelineId)
-      expect(depois).toEqual(antes)
+      expect(depois.get(idsOriginais[1])).toBe(1)
+      expect(depois.get(idsOriginais[0])).toBe(2)
+      const valores = [...depois.values()].sort((a, b) => a - b)
+      expect(valores).toEqual([1, 2, 3, 4, 5, 6, 7])
     })
 
     it('Caso 10: ids de outra conta sao recusados com ordem_invalida', async () => {
@@ -285,18 +293,27 @@ describe('0018 — excluir_etapa, reordenar_etapas e resumo_etapas', () => {
   })
 
   describe('prosecdef', () => {
-    it('Caso 12: as tres funcoes sao security invoker (prosecdef = false)', async () => {
-      const linhas = await comoServico(async (cli) => {
-        const r = await cli.query<{ proname: string; prosecdef: boolean }>(
-          `select proname, prosecdef from pg_proc
-            where proname in ('excluir_etapa', 'reordenar_etapas', 'resumo_etapas')`,
-        )
-        return r.rows
-      })
-      expect(linhas).toHaveLength(3)
-      for (const linha of linhas) {
-        expect(linha.prosecdef).toBe(false)
+    it('Caso 12: excluir_etapa e reordenar_etapas sao invoker; resumo_etapas e definer', async () => {
+      // A migration 0026 (Plano 15) trocou resumo_etapas para definer com
+      // guarda de membership por dentro: o dialogo de exclusao mostra as
+      // contagens a qualquer membro, e sob a RLS do vendedor elas esconderiam
+      // leads de colegas (casos 11 e 12 da 0026). As outras duas continuam
+      // invoker — definer desligaria a RLS de stages dentro delas.
+      const esperado: Record<string, boolean> = {
+        excluir_etapa: false,
+        reordenar_etapas: false,
+        resumo_etapas: true,
       }
+      const efetivo = await comoServico(async (cli) => {
+        const r = await cli.query<{ proname: string; prosecdef: boolean }>(
+          `select p.proname, p.prosecdef from pg_proc p
+             join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public'
+              and p.proname in ('excluir_etapa', 'reordenar_etapas', 'resumo_etapas')`,
+        )
+        return Object.fromEntries(r.rows.map((linha) => [linha.proname, linha.prosecdef]))
+      })
+      expect(efetivo).toEqual(esperado)
     })
   })
 })

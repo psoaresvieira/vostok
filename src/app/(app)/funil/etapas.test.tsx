@@ -1,24 +1,56 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
-import { Etapas } from './etapas'
 import { ok, falha } from '@/lib/domain/resultado'
 import type { Resultado } from '@/lib/domain/resultado'
 import type { Etapa } from '@/lib/domain/tipos'
-import type { ResumoEtapa } from '@/lib/data/admin'
+import type { ResumoEtapa } from '@/lib/data/etapas'
 
 // O cleanup automatico do @testing-library/react so se registra quando
 // globals: true esta ligado, e este vitest.config nao liga de proposito — o
 // repo importa helper de teste explicitamente em todo lugar. Sem o registro
 // manual abaixo, o document do jsdom persiste entre os it() deste arquivo e,
 // do segundo render() em diante, as consultas acham no velho ou estouram
-// "multiple elements found". Copiado de tarefas.test.tsx (Task 5 do Plano 7).
+// "multiple elements found". Copiado de config/etapas.test.tsx (arquivo de
+// origem deste, ate a Task 4 do Plano 15 mover para funil/).
 afterEach(cleanup)
+
+/**
+ * criarEtapaAction e reordenarEtapasAction sao importadas direto por
+ * etapas.tsx (nao por prop injetavel — so' renomear/excluir continuam
+ * injetaveis, mesmo desenho do componente de origem). Mockar o modulo
+ * './acoes-etapas' e' o jeito de capturar o pipelineId na frente, sem
+ * levantar o Supabase de verdade — mesmo padrao de novo-lead.test.tsx
+ * mockando './acoes'.
+ */
+const criarEtapaActionMock = vi.fn()
+const reordenarEtapasActionMock = vi.fn()
+
+vi.mock('./acoes-etapas', () => ({
+  criarEtapaAction: (...args: unknown[]) => criarEtapaActionMock(...args),
+  reordenarEtapasAction: (...args: unknown[]) => reordenarEtapasActionMock(...args),
+  // renomearEtapaAction/excluirEtapaAction sao os defaults das props
+  // renomear/excluir — todo teste abaixo os substitui, entao um default que
+  // estoura avisa alto se algum teste esquecer de injetar o stub.
+  renomearEtapaAction: () => {
+    throw new Error('teste esqueceu de injetar a prop renomear')
+  },
+  excluirEtapaAction: () => {
+    throw new Error('teste esqueceu de injetar a prop excluir')
+  },
+}))
+
+import { EditarEtapas } from './etapas'
+
+beforeEach(() => {
+  criarEtapaActionMock.mockReset().mockResolvedValue(ok(undefined))
+  reordenarEtapasActionMock.mockReset().mockResolvedValue(ok(undefined))
+})
 
 function etapa(overrides: Partial<Etapa> = {}): Etapa {
   return {
     id: 'e-1',
-    pipelineId: 'p-1',
+    pipelineId: 'pip-1',
     nome: 'Contato inicial',
     ordem: 1,
     tipo: 'aberta',
@@ -40,13 +72,77 @@ function stubRegistrando<A extends unknown[], T>(
   return { fn, chamadas }
 }
 
-describe('Etapas', () => {
+function abrirPainel() {
+  fireEvent.click(screen.getByRole('button', { name: 'Editar etapas' }))
+}
+
+describe('EditarEtapas', () => {
+  it('caso 1 — fechado por padrao e abre no clique', () => {
+    const e = etapa({ id: 'e-1', nome: 'Contato inicial' })
+    render(<EditarEtapas pipelineId="pip-1" etapas={[e]} resumo={[]} />)
+
+    const botao = screen.getByRole('button', { name: 'Editar etapas' })
+    expect(botao.getAttribute('aria-expanded')).toBe('false')
+    // Fechado: o input de renomear (o conteudo do painel) nao esta no DOM —
+    // nao basta estar escondido por CSS, senao o teste passaria com o painel
+    // sempre montado atras de um `hidden`.
+    expect(screen.queryByDisplayValue('Contato inicial')).toBeNull()
+
+    fireEvent.click(botao)
+
+    expect(botao.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByDisplayValue('Contato inicial')).toBeTruthy()
+  })
+
+  it('caso 2 — as actions recebem o pipelineId na frente', async () => {
+    const a = etapa({ id: 'e-1', nome: 'Etapa A', ordem: 1 })
+    const b = etapa({ id: 'e-2', nome: 'Etapa B', ordem: 2 })
+    const { fn: renomear, chamadas: chamadasRenomear } = stubRegistrando<
+      [string, string, string],
+      void
+    >(ok(undefined))
+
+    render(
+      <EditarEtapas pipelineId="pip-1" etapas={[a, b]} resumo={[]} renomear={renomear} />,
+    )
+    abrirPainel()
+
+    const campo = screen.getByDisplayValue('Etapa A')
+    fireEvent.change(campo, { target: { value: 'Etapa A renomeada' } })
+    fireEvent.blur(campo)
+    await waitFor(() =>
+      expect(chamadasRenomear).toEqual([['pip-1', 'e-1', 'Etapa A renomeada']]),
+    )
+
+    // "subir" da segunda linha troca as duas de lugar.
+    fireEvent.click(screen.getAllByRole('button', { name: 'subir' })[1])
+    await waitFor(() =>
+      expect(reordenarEtapasActionMock).toHaveBeenCalledWith('pip-1', ['e-2', 'e-1']),
+    )
+  })
+
+  it('caso 3 — recusa mostra a frase do dicionario do funil, nunca o codigo cru', async () => {
+    const e = etapa({ id: 'e-4', nome: 'Fechado', tipo: 'ganho' })
+    const resumo: ResumoEtapa[] = [{ etapaId: 'e-4', leadsNaEtapa: 0, leadsPassaram: 8 }]
+    const { fn: excluir } = stubRegistrando<[string, string], void>(falha('ultima_etapa_do_tipo'))
+
+    render(<EditarEtapas pipelineId="pip-1" etapas={[e]} resumo={resumo} excluir={excluir} />)
+    abrirPainel()
+
+    fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
+    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
+
+    expect(await screen.findByText('Esta é a última etapa do tipo ganho.')).toBeTruthy()
+    expect(screen.queryByText('ultima_etapa_do_tipo')).toBeNull()
+  })
+
   it('o dialogo mostra o numero de leads que passaram antes de confirmar', () => {
     const e = etapa({ id: 'e-1', nome: 'Engano' })
     const resumo: ResumoEtapa[] = [{ etapaId: 'e-1', leadsNaEtapa: 0, leadsPassaram: 12 }]
-    const { fn: excluir, chamadas } = stubRegistrando<[string], void>(ok(undefined))
+    const { fn: excluir, chamadas } = stubRegistrando<[string, string], void>(ok(undefined))
 
-    render(<Etapas etapas={[e]} resumo={resumo} excluir={excluir} />)
+    render(<EditarEtapas pipelineId="pip-1" etapas={[e]} resumo={resumo} excluir={excluir} />)
+    abrirPainel()
 
     fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
 
@@ -62,29 +158,48 @@ describe('Etapas', () => {
     const resumoSingular: ResumoEtapa[] = [
       { etapaId: 'e-1s', leadsNaEtapa: 0, leadsPassaram: 1 },
     ]
-    const singular = stubRegistrando<[string], void>(ok(undefined))
-    render(<Etapas etapas={[eSingular]} resumo={resumoSingular} excluir={singular.fn} />)
+    const singular = stubRegistrando<[string, string], void>(ok(undefined))
+    render(
+      <EditarEtapas
+        pipelineId="pip-1"
+        etapas={[eSingular]}
+        resumo={resumoSingular}
+        excluir={singular.fn}
+      />,
+    )
+    abrirPainel()
     fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
     const dialogoSingular = screen.getByRole('dialog')
     expect(dialogoSingular.textContent).toContain('1 lead já passou por ela.')
     expect(dialogoSingular.textContent).not.toContain('1 leads')
   })
 
-  it('confirmar chama a acao com o id certo; cancelar nao chama nada', () => {
+  it('confirmar chama a acao com o pipelineId e o id certos; cancelar nao chama nada', () => {
     const e = etapa({ id: 'e-2', nome: 'Proposta enviada' })
     const resumo: ResumoEtapa[] = [{ etapaId: 'e-2', leadsNaEtapa: 0, leadsPassaram: 5 }]
 
     // Confirma.
-    const confirmando = stubRegistrando<[string], void>(ok(undefined))
-    render(<Etapas etapas={[e]} resumo={resumo} excluir={confirmando.fn} />)
+    const confirmando = stubRegistrando<[string, string], void>(ok(undefined))
+    render(
+      <EditarEtapas
+        pipelineId="pip-1"
+        etapas={[e]}
+        resumo={resumo}
+        excluir={confirmando.fn}
+      />,
+    )
+    abrirPainel()
     fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
     fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
-    expect(confirmando.chamadas).toEqual([['e-2']])
+    expect(confirmando.chamadas).toEqual([['pip-1', 'e-2']])
     cleanup()
 
     // Cancela.
-    const cancelando = stubRegistrando<[string], void>(ok(undefined))
-    render(<Etapas etapas={[e]} resumo={resumo} excluir={cancelando.fn} />)
+    const cancelando = stubRegistrando<[string, string], void>(ok(undefined))
+    render(
+      <EditarEtapas pipelineId="pip-1" etapas={[e]} resumo={resumo} excluir={cancelando.fn} />,
+    )
+    abrirPainel()
     fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
     fireEvent.click(screen.getByRole('button', { name: /cancelar/i }))
     expect(cancelando.chamadas).toHaveLength(0)
@@ -94,9 +209,10 @@ describe('Etapas', () => {
   it('recusa etapa_tem_leads mostra a mensagem com o numero de leads na etapa', async () => {
     const e = etapa({ id: 'e-3', nome: 'Negociação' })
     const resumo: ResumoEtapa[] = [{ etapaId: 'e-3', leadsNaEtapa: 3, leadsPassaram: 20 }]
-    const { fn: excluir } = stubRegistrando<[string], void>(falha('etapa_tem_leads'))
+    const { fn: excluir } = stubRegistrando<[string, string], void>(falha('etapa_tem_leads'))
 
-    render(<Etapas etapas={[e]} resumo={resumo} excluir={excluir} />)
+    render(<EditarEtapas pipelineId="pip-1" etapas={[e]} resumo={resumo} excluir={excluir} />)
+    abrirPainel()
 
     fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
     fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
@@ -109,8 +225,18 @@ describe('Etapas', () => {
     const resumoSingular: ResumoEtapa[] = [
       { etapaId: 'e-3s', leadsNaEtapa: 1, leadsPassaram: 1 },
     ]
-    const { fn: excluirSingular } = stubRegistrando<[string], void>(falha('etapa_tem_leads'))
-    render(<Etapas etapas={[eSingular]} resumo={resumoSingular} excluir={excluirSingular} />)
+    const { fn: excluirSingular } = stubRegistrando<[string, string], void>(
+      falha('etapa_tem_leads'),
+    )
+    render(
+      <EditarEtapas
+        pipelineId="pip-1"
+        etapas={[eSingular]}
+        resumo={resumoSingular}
+        excluir={excluirSingular}
+      />,
+    )
+    abrirPainel()
     fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
     fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
 
@@ -125,12 +251,13 @@ describe('Etapas', () => {
     // enxerga o lead novo. Compor a frase com o resumo defasado renderizaria
     // "Mova os 0 leads desta etapa antes de exclui-la." — contradiz a propria
     // recusa. So compoe o numero quando ele e maior que zero; caso contrario
-    // cai no texto generico de config/erros.ts.
+    // cai no texto generico de funil/erros.ts (mensagemDeEtapa).
     const e = etapa({ id: 'e-9', nome: 'Qualificação' })
     const resumo: ResumoEtapa[] = [{ etapaId: 'e-9', leadsNaEtapa: 0, leadsPassaram: 4 }]
-    const { fn: excluir } = stubRegistrando<[string], void>(falha('etapa_tem_leads'))
+    const { fn: excluir } = stubRegistrando<[string, string], void>(falha('etapa_tem_leads'))
 
-    render(<Etapas etapas={[e]} resumo={resumo} excluir={excluir} />)
+    render(<EditarEtapas pipelineId="pip-1" etapas={[e]} resumo={resumo} excluir={excluir} />)
+    abrirPainel()
 
     fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
     fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
@@ -141,25 +268,13 @@ describe('Etapas', () => {
     expect(screen.queryByText(/0 lead/)).toBeNull()
   })
 
-  it('recusa ultima_etapa_do_tipo mostra o tipo da etapa', async () => {
-    const e = etapa({ id: 'e-4', nome: 'Fechado', tipo: 'ganho' })
-    const resumo: ResumoEtapa[] = [{ etapaId: 'e-4', leadsNaEtapa: 0, leadsPassaram: 8 }]
-    const { fn: excluir } = stubRegistrando<[string], void>(falha('ultima_etapa_do_tipo'))
-
-    render(<Etapas etapas={[e]} resumo={resumo} excluir={excluir} />)
-
-    fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
-    fireEvent.click(screen.getByRole('button', { name: /confirmar/i }))
-
-    expect(await screen.findByText('Esta é a última etapa do tipo ganho.')).toBeTruthy()
-  })
-
   it('renomear com sucesso mostra a confirmacao de salvo; com falha, nao', async () => {
     const e = etapa({ id: 'e-5', nome: 'Contato inicial' })
 
     // Sucesso.
-    const sucesso = stubRegistrando<[string, string], void>(ok(undefined))
-    render(<Etapas etapas={[e]} resumo={[]} renomear={sucesso.fn} />)
+    const sucesso = stubRegistrando<[string, string, string], void>(ok(undefined))
+    render(<EditarEtapas pipelineId="pip-1" etapas={[e]} resumo={[]} renomear={sucesso.fn} />)
+    abrirPainel()
     const campoSucesso = screen.getByDisplayValue('Contato inicial')
     fireEvent.change(campoSucesso, { target: { value: 'Primeiro contato' } })
     fireEvent.blur(campoSucesso)
@@ -167,8 +282,9 @@ describe('Etapas', () => {
     cleanup()
 
     // Falha.
-    const falhando = stubRegistrando<[string, string], void>(falha('nao_encontrado'))
-    render(<Etapas etapas={[e]} resumo={[]} renomear={falhando.fn} />)
+    const falhando = stubRegistrando<[string, string, string], void>(falha('nao_encontrado'))
+    render(<EditarEtapas pipelineId="pip-1" etapas={[e]} resumo={[]} renomear={falhando.fn} />)
+    abrirPainel()
     const campoFalha = screen.getByDisplayValue('Contato inicial')
     fireEvent.change(campoFalha, { target: { value: 'Outro nome' } })
     fireEvent.blur(campoFalha)
@@ -183,10 +299,19 @@ describe('Etapas', () => {
     // como se os dois fizessem parte do mesmo evento.
     const a = etapa({ id: 'e-6', nome: 'Etapa A' })
     const b = etapa({ id: 'e-7', nome: 'Etapa B', tipo: 'ganho' })
-    const renomear = stubRegistrando<[string, string], void>(ok(undefined))
-    const excluir = stubRegistrando<[string], void>(falha('ultima_etapa_do_tipo'))
+    const renomear = stubRegistrando<[string, string, string], void>(ok(undefined))
+    const excluir = stubRegistrando<[string, string], void>(falha('ultima_etapa_do_tipo'))
 
-    render(<Etapas etapas={[a, b]} resumo={[]} renomear={renomear.fn} excluir={excluir.fn} />)
+    render(
+      <EditarEtapas
+        pipelineId="pip-1"
+        etapas={[a, b]}
+        resumo={[]}
+        renomear={renomear.fn}
+        excluir={excluir.fn}
+      />,
+    )
+    abrirPainel()
 
     const campo = screen.getByDisplayValue('Etapa A')
     fireEvent.change(campo, { target: { value: 'Etapa A renomeada' } })
@@ -209,23 +334,24 @@ describe('Etapas', () => {
     // deixa a chamada "em voo" tempo suficiente para o segundo clique
     // acontecer enquanto o botao deveria estar desabilitado.
     const e = etapa({ id: 'e-8', nome: 'Intermediaria' })
-    const chamadas: string[] = []
+    const chamadas: [string, string][] = []
     let liberar: (r: Resultado<void>) => void = () => {}
-    const excluir = (id: string): Promise<Resultado<void>> => {
-      chamadas.push(id)
+    const excluir = (pipelineId: string, id: string): Promise<Resultado<void>> => {
+      chamadas.push([pipelineId, id])
       return new Promise((resolve) => {
         liberar = resolve
       })
     }
 
-    render(<Etapas etapas={[e]} resumo={[]} excluir={excluir} />)
+    render(<EditarEtapas pipelineId="pip-1" etapas={[e]} resumo={[]} excluir={excluir} />)
+    abrirPainel()
     fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
     const confirmar = screen.getByRole('button', { name: /confirmar/i }) as HTMLButtonElement
 
     fireEvent.click(confirmar)
     expect(confirmar.disabled).toBe(true)
     fireEvent.click(confirmar)
-    expect(chamadas).toEqual(['e-8'])
+    expect(chamadas).toEqual([['pip-1', 'e-8']])
 
     liberar(ok(undefined))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
