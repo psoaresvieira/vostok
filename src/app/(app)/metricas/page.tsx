@@ -12,8 +12,10 @@ import { Filtros } from './filtros'
 // das Server Actions do funil (nome_obrigatorio, ordem_invalida etc, a
 // maioria irrelevante aqui) e seus fallbacks devolvem o codigo cru quando nao
 // encontram traducao — o oposto do que esta tela exige (nunca mostrar texto
-// cru na tela). Copiar so a mensagem de pipeline_nao_encontrado, em vez de
-// importar o modulo inteiro, evita acoplar metricas ao funil.
+// cru na tela). A frase de pipeline_nao_encontrado abaixo e' PROPRIA desta
+// tela, nao copiada: a de funil/erros.ts diz "recarregue a pagina", que aqui
+// nao resolve nada — nao "deduplicar" sem notar que os textos divergem de
+// proposito.
 const MENSAGENS: Record<string, string> = {
   periodo_invalido: 'O período escolhido é inválido: a data inicial tem que vir antes da final.',
   // pipelinePadrao() (supabase.ts, memory.ts, admin.ts) so devolve este

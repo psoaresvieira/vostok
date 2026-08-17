@@ -137,9 +137,11 @@ Conferir contra o checklist de guardas silenciosas antes de finalizar
   (`codigoDoErroDeEtapa`, 23503→`etapa_tem_leads`) vai junto. *(emenda
   pós-review-final)* `criarEtapa` ganha a tradução que faltava — era o
   único método devolvendo erro cru do Postgres, alcançável pela tela nova:
-  `23503 → nao_encontrado` (pipeline sumiu noutra aba) e `23505 →
-  ordem_invalida` (dois membros adicionando ao mesmo tempo colidem no
-  índice único de ordem).
+  `23503 → nao_encontrado` (delete concorrente não-commitado da pipeline),
+  `23505 → ordem_invalida` (dois membros adicionando ao mesmo tempo colidem
+  no índice único de ordem) e `42501 → nao_encontrado` (o caso realista de
+  pipeline excluída commitada noutra aba morre no with check da RLS antes
+  da FK; cobre também pipelineId forjado de outra conta, fail-closed).
 - **`AdminStore` encolhe**: perde os cinco métodos e a resolução de
   pipeline padrão no `criarAdminStoreDoServidor` (o parâmetro `pipelineId`
   do construtor morre). Motivos, convites e membros ficam.
