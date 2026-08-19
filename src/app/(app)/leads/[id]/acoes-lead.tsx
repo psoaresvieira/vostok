@@ -53,7 +53,7 @@ export function AcoesLead({
               setPedido({ leadId: lead.id, nomeLead: lead.nome, destino })
             }
           }}
-          className="mt-1 w-full rounded border p-2"
+          className="mt-1 h-10 w-full rounded-xl border border-border bg-muted/60 px-3 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary focus:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
         >
           {etapas.map((e) => (
             <option key={e.id} value={e.id}>
@@ -76,7 +76,7 @@ export function AcoesLead({
                 router.refresh()
               }
             }}
-            className="mt-1 w-full rounded border p-2"
+            className="mt-1 h-10 w-full rounded-xl border border-border bg-muted/60 px-3 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary focus:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
           >
             <option value="">sem responsável</option>
             {membros.map((m) => (

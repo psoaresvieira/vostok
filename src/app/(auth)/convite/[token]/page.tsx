@@ -18,7 +18,7 @@ export default async function ConvitePage({ params }: { params: Promise<{ token:
     const destino = `convite=${encodeURIComponent(token)}`
     return (
       <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
-        <h1 className="text-2xl font-semibold">Você foi convidado</h1>
+        <h1 className="text-[26px] font-semibold">Você foi convidado</h1>
         <p className="text-sm">Crie sua conta ou entre para aceitar o convite.</p>
         <Link href={`/signup?${destino}`} className="underline">
           Criar conta
@@ -35,7 +35,7 @@ export default async function ConvitePage({ params }: { params: Promise<{ token:
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
-      <h1 className="text-2xl font-semibold">Convite não aceito</h1>
+      <h1 className="text-[26px] font-semibold">Convite não aceito</h1>
       <p className="text-sm text-destructive">{mensagemDeErro(r.erro)}</p>
     </main>
   )

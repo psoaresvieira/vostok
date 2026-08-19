@@ -84,7 +84,7 @@ export function Filtros({
             ref={deRef}
             type="date"
             defaultValue={params.get('de') ?? ''}
-            className="rounded border border-border px-2 py-1"
+            className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
           />
         </label>
         <label className="flex items-center gap-1">
@@ -93,12 +93,12 @@ export function Filtros({
             ref={ateRef}
             type="date"
             defaultValue={params.get('ate') ?? ''}
-            className="rounded border border-border px-2 py-1"
+            className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
           />
         </label>
         <button
           type="button"
-          className="rounded border border-border px-2 py-1"
+          className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
           onClick={aplicarIntervalo}
         >
           Aplicar
@@ -107,7 +107,7 @@ export function Filtros({
       {podeFiltrarPorResponsavel && (
         <select
           defaultValue={params.get('responsavel') ?? ''}
-          className="rounded border border-border px-2 py-1 text-sm"
+          className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-sm"
           onChange={(e) => irPara({ responsavel: e.target.value || null })}
         >
           <option value="">Todos os responsáveis</option>

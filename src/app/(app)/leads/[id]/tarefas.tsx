@@ -167,13 +167,13 @@ export function PainelTarefas({
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}
           placeholder="título da tarefa"
-          className="rounded border p-2 text-sm"
+          className="h-10 w-full rounded-xl border border-border bg-muted/60 px-3 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary focus:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
         />
         <div className="flex gap-2">
           <select
             value={tipo}
             onChange={(e) => setTipo(e.target.value as TipoTarefa)}
-            className="rounded border p-2 text-sm"
+            className="h-10 w-full rounded-xl border border-border bg-muted/60 px-3 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary focus:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
           >
             {Object.entries(ROTULO_TIPO).map(([valor, rotulo]) => (
               <option key={valor} value={valor}>
@@ -185,14 +185,14 @@ export function PainelTarefas({
             type="datetime-local"
             value={prazo}
             onChange={(e) => setPrazo(e.target.value)}
-            className="rounded border p-2 text-sm"
+            className="h-10 w-full rounded-xl border border-border bg-muted/60 px-3 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary focus:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
           />
         </div>
         <button
           type="button"
           onClick={criar}
           disabled={enviando}
-          className="self-start rounded bg-primary px-3 py-1 text-sm text-primary-foreground"
+          className="self-start pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl bg-primary px-4 text-sm text-primary-foreground shadow-sm hover:brightness-110"
         >
           Criar tarefa
         </button>

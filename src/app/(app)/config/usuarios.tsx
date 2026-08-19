@@ -26,7 +26,7 @@ export function Usuarios({
       <h2 className="mb-2 font-semibold">Usuários</h2>
       <ul className="flex flex-col gap-1">
         {membros.map((m) => (
-          <li key={m.id} className="flex items-center justify-between rounded border p-2 text-sm">
+          <li key={m.id} className="surface flex items-center justify-between rounded-xl p-3 text-sm">
             <span>
               {m.nome} <span className="text-muted-foreground">({m.email})</span>
             </span>
@@ -68,12 +68,12 @@ export function Usuarios({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="email do convidado"
-          className="rounded border px-2 py-1 text-sm"
+          className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-sm"
         />
         <select
           value={papel}
           onChange={(e) => setPapel(e.target.value as Papel)}
-          className="rounded border px-2 py-1 text-sm"
+          className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-sm"
         >
           <option value="vendedor">vendedor</option>
           <option value="gestor">gestor</option>
@@ -91,7 +91,7 @@ export function Usuarios({
             setEmail('')
             setLink(`${origem}/convite/${r.valor}`)
           }}
-          className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground"
+          className="pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl bg-primary px-4 text-sm text-primary-foreground shadow-sm hover:brightness-110"
         >
           Convidar
         </button>

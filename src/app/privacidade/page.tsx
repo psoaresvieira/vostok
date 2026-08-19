@@ -15,7 +15,7 @@ export default function PrivacidadePage() {
       <p className="font-display text-sm font-semibold uppercase tracking-widest text-muted-foreground">
         Vostok
       </p>
-      <h1 className="text-2xl font-semibold">Política de Privacidade</h1>
+      <h1 className="text-[26px] font-semibold">Política de Privacidade</h1>
       <p className="text-sm text-muted-foreground">Última atualização: 6 de agosto de 2026</p>
 
       <section className="flex flex-col gap-2">

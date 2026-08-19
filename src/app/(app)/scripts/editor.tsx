@@ -208,7 +208,7 @@ export function Editor({
             id="script-titulo"
             value={titulo}
             onChange={(e) => setTitulo(e.target.value)}
-            className="rounded border border-border px-2 py-1"
+            className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
           />
         </div>
 
@@ -218,7 +218,7 @@ export function Editor({
             id="script-etapa"
             value={stageId}
             onChange={(e) => setStageId(e.target.value)}
-            className="rounded border border-border px-2 py-1"
+            className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
           >
             <option value="">Qualquer etapa</option>
             {etapas.map((e) => (
@@ -236,7 +236,7 @@ export function Editor({
             value={tagsTexto}
             onChange={(e) => setTagsTexto(e.target.value)}
             placeholder="objeção, preço"
-            className="rounded border border-border px-2 py-1"
+            className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
           />
         </div>
         <p className="text-xs text-muted-foreground">
@@ -266,7 +266,12 @@ export function Editor({
               setConteudo(e.target.value)
             }}
             rows={16}
-            className="rounded border border-border px-2 py-1 font-mono text-sm"
+            // `resize-y`, e nao o `resize-none` que a nota do lead usa: aqui se
+            // escreve o script inteiro, e poder esticar a area de escrita e'
+            // util. O que fica proibido e' o eixo HORIZONTAL — e' ele que
+            // atravessa o card e empurra a coluna vizinha; a altura so' empurra
+            // o que esta abaixo, e volta ao normal ao rolar.
+            className="resize-y rounded-xl border border-border bg-muted/60 px-3 py-2 font-mono text-sm leading-relaxed focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
           />
         </div>
 
@@ -318,7 +323,7 @@ export function Editor({
             type="button"
             onClick={() => void salvar()}
             disabled={pendente}
-            className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
+            className="pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl bg-primary px-4 text-sm text-primary-foreground shadow-sm hover:brightness-110"
           >
             {pendente ? 'Salvando…' : 'Salvar'}
           </button>

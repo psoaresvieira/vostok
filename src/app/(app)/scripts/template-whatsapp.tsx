@@ -150,7 +150,7 @@ export function TemplateWhatsApp({
   )
 
   return (
-    <section className="flex flex-col gap-3 rounded border p-4">
+    <section className="surface flex flex-col gap-3 rounded-2xl p-5">
       <h2 className="font-medium">Template do WhatsApp</h2>
 
       {template && (
@@ -199,7 +199,7 @@ export function TemplateWhatsApp({
         <div
           role="dialog"
           aria-label="Excluir template"
-          className="flex flex-col gap-2 rounded border p-3 text-sm"
+          className="surface flex flex-col gap-2 rounded-2xl p-4 text-sm"
         >
           <p>
             Excluir o template &quot;{template.nomeMeta}&quot;?
@@ -215,7 +215,7 @@ export function TemplateWhatsApp({
               onClick={() => void confirmarExclusao()}
               disabled={pendente}
               aria-label="Confirmar exclusão do template"
-              className="rounded bg-destructive px-3 py-1 text-primary-foreground disabled:opacity-50"
+              className="pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl bg-destructive px-4 text-sm text-destructive-foreground shadow-sm hover:brightness-110"
             >
               Confirmar exclusão
             </button>
@@ -241,7 +241,7 @@ export function TemplateWhatsApp({
                 <select
                   value={categoria}
                   onChange={(e) => setCategoria(e.target.value as 'marketing' | 'utility')}
-                  className="rounded border px-2 py-1"
+                  className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
                 >
                   <option value="marketing">Marketing</option>
                   <option value="utility">Utilidade</option>
@@ -257,7 +257,7 @@ export function TemplateWhatsApp({
             type="button"
             onClick={() => void submeterClique()}
             disabled={pendente}
-            className="w-fit rounded bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
+            className="w-fit pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl bg-primary px-4 text-sm text-primary-foreground shadow-sm hover:brightness-110"
           >
             {template === null ? 'Submeter ao WhatsApp' : 'Re-submeter ao WhatsApp'}
           </button>

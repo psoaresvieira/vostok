@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { ArrowDown, ArrowUp, Check, Plus, Settings2, Trash2, X } from 'lucide-react'
+import { Botao } from '@/components/ui/botao'
+import { Selo } from '@/components/ui/selo'
 import { type Resultado } from '@/lib/domain/resultado'
 import type { Etapa, StageTipo } from '@/lib/domain/tipos'
 import type { ResumoEtapa } from '@/lib/data/etapas'
@@ -158,115 +161,170 @@ export function EditarEtapas({
 
   return (
     <section>
-      <button
+      <Botao
         type="button"
+        variante="contorno"
         aria-expanded={aberto}
         onClick={() => setAberto((atual) => !atual)}
-        className="rounded border px-3 py-1 text-sm"
+        className="w-full"
       >
+        <Settings2 size={16} strokeWidth={1.75} aria-hidden="true" />
         Editar etapas
-      </button>
+      </Botao>
 
       {aberto && (
-        <div className="mt-3">
-          <h2 className="mb-2 font-semibold">Etapas do funil</h2>
-          <ul className="flex flex-col gap-1">
-            {etapas.map((e, i) => (
-              <li key={e.id} className="flex items-center gap-2 rounded border p-2 text-sm">
-                <input
-                  defaultValue={e.nome}
-                  onBlur={(ev) => {
-                    void renomearCampo(e, ev.target.value)
-                  }}
-                  className="flex-1 rounded border px-2 py-1"
-                />
-                {salvoId === e.id && (
-                  <span className="text-xs text-success">Salvo ✓</span>
-                )}
-                <span className="text-xs text-muted-foreground">{e.tipo}</span>
-                <button type="button" onClick={() => mover(i, -1)} aria-label="subir">
-                  ↑
-                </button>
-                <button type="button" onClick={() => mover(i, 1)} aria-label="descer">
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEtapaParaExcluir(e)}
-                  aria-label={`Excluir etapa ${e.nome}`}
-                  className="text-xs text-destructive underline"
-                >
-                  Excluir
-                </button>
-              </li>
-            ))}
-          </ul>
-
-          <div className="mt-3 flex gap-2">
-            <input
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              placeholder="nova etapa"
-              className="rounded border px-2 py-1 text-sm"
-            />
-            <select
-              value={tipo}
-              onChange={(e) => setTipo(e.target.value as StageTipo)}
-              className="rounded border px-2 py-1 text-sm"
-            >
-              <option value="aberta">aberta</option>
-              <option value="ganho">ganho</option>
-              <option value="perdido">perdido</option>
-            </select>
-            <button
-              type="button"
-              onClick={async () => {
-                const r = await chamarAcao(criarEtapaAction(pipelineId, nome, tipo))
-                if (!r.ok) reportarErro(mensagemDeEtapa(r.erro))
-                else {
-                  setErro(null)
-                  setNome('')
-                }
-              }}
-              className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground"
-            >
-              Adicionar
-            </button>
-          </div>
-          {erro && <p className="mt-1 text-sm text-destructive">{erro}</p>}
-
-          {etapaParaExcluir && (
-            <div
-              role="dialog"
-              aria-label={`Excluir etapa ${etapaParaExcluir.nome}`}
-              className="mt-3 flex flex-col gap-2 rounded border p-3 text-sm"
-            >
-              <p>
-                Excluir a etapa &quot;{etapaParaExcluir.nome}&quot;?
-                {resumoPorEtapa.has(etapaParaExcluir.id) &&
-                  ` ${mensagemLeadsPassaram(resumoPorEtapa.get(etapaParaExcluir.id)!.leadsPassaram)}`}
-              </p>
-              <p>O histórico e as métricas desta etapa serão preservados.</p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => void confirmarExclusao()}
-                  disabled={excluindo}
-                  aria-label={`Confirmar exclusão de ${etapaParaExcluir.nome}`}
-                  className="rounded bg-destructive px-3 py-1 text-primary-foreground disabled:opacity-50"
-                >
-                  Confirmar exclusão
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEtapaParaExcluir(null)}
-                  aria-label="Cancelar exclusão"
-                >
-                  Cancelar
-                </button>
-              </div>
+        // Overlay, e nao mais um disclosure inline: este componente vive na
+        // coluna de 224px do funil, e a linha de cada etapa (campo de nome +
+        // tipo + duas setas + excluir) nunca coube ali — os controles
+        // atropelavam uns aos outros e o campo de nome ficava com uns 40px.
+        //
+        // Sem role="dialog" de proposito, seguindo nova-pipeline.tsx: o
+        // dialogo de confirmacao de exclusao AQUI DENTRO e' que carrega esse
+        // papel, e etapas.test.tsx faz `getByRole('dialog')` no singular e
+        // exige zero dialogos depois de cancelar. Um role a mais aqui daria
+        // "multiple elements" em quatro testes. Quem anuncia o estado deste
+        // painel e' o aria-expanded do botao acima.
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="surface fade-in flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl">
+            <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
+              <h2 className="text-lg font-semibold">Etapas do funil</h2>
+              <button
+                type="button"
+                onClick={() => setAberto(false)}
+                aria-label="Fechar"
+                className="pressable rounded-full p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X size={18} strokeWidth={2} aria-hidden="true" />
+              </button>
             </div>
-          )}
+
+            {/* Rola so a lista: o cabecalho e o rodape de adicionar ficam
+                fixos, senao numa pipeline de 8 etapas o campo "nova etapa"
+                nasce fora da area visivel. */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <ul className="flex flex-col gap-2">
+                {etapas.map((e, i) => (
+                  <li
+                    key={e.id}
+                    className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-2"
+                  >
+                    <input
+                      defaultValue={e.nome}
+                      onBlur={(ev) => {
+                        void renomearCampo(e, ev.target.value)
+                      }}
+                      className="min-w-0 flex-1 rounded-lg border border-border bg-muted/60 px-2.5 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
+                    />
+                    {salvoId === e.id && (
+                      <span className="inline-flex shrink-0 items-center gap-1 text-xs text-success">
+                        <Check size={13} strokeWidth={2.5} aria-hidden="true" />
+                        Salvo
+                      </span>
+                    )}
+                    <Selo tom={e.tipo === 'ganho' ? 'sucesso' : e.tipo === 'perdido' ? 'perigo' : 'neutro'}>
+                      {e.tipo}
+                    </Selo>
+                    <button
+                      type="button"
+                      onClick={() => mover(i, -1)}
+                      aria-label="subir"
+                      className="pressable shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                    >
+                      <ArrowUp size={14} strokeWidth={2} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => mover(i, 1)}
+                      aria-label="descer"
+                      className="pressable shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                    >
+                      <ArrowDown size={14} strokeWidth={2} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEtapaParaExcluir(e)}
+                      aria-label={`Excluir etapa ${e.nome}`}
+                      className="pressable shrink-0 rounded-lg p-1.5 text-destructive hover:bg-destructive/12"
+                    >
+                      <Trash2 size={14} strokeWidth={1.75} aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              {erro && <p className="mt-3 text-sm text-destructive">{erro}</p>}
+
+              {etapaParaExcluir && (
+                <div
+                  role="dialog"
+                  aria-label={`Excluir etapa ${etapaParaExcluir.nome}`}
+                  className="mt-3 flex flex-col gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm"
+                >
+                  <p>
+                    Excluir a etapa &quot;{etapaParaExcluir.nome}&quot;?
+                    {resumoPorEtapa.has(etapaParaExcluir.id) &&
+                      ` ${mensagemLeadsPassaram(resumoPorEtapa.get(etapaParaExcluir.id)!.leadsPassaram)}`}
+                  </p>
+                  <p className="text-muted-foreground">
+                    O histórico e as métricas desta etapa serão preservados.
+                  </p>
+                  <div className="mt-1 flex gap-2">
+                    <Botao
+                      type="button"
+                      variante="destrutivo"
+                      tamanho="sm"
+                      onClick={() => void confirmarExclusao()}
+                      disabled={excluindo}
+                      aria-label={`Confirmar exclusão de ${etapaParaExcluir.nome}`}
+                    >
+                      Confirmar exclusão
+                    </Botao>
+                    <Botao
+                      type="button"
+                      variante="fantasma"
+                      tamanho="sm"
+                      onClick={() => setEtapaParaExcluir(null)}
+                      aria-label="Cancelar exclusão"
+                    >
+                      Cancelar
+                    </Botao>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2 border-t border-border px-6 py-4">
+              <input
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="nova etapa"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-muted/60 px-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
+              />
+              <select
+                value={tipo}
+                onChange={(e) => setTipo(e.target.value as StageTipo)}
+                className="h-10 shrink-0 rounded-xl border border-border bg-muted/60 px-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
+              >
+                <option value="aberta">aberta</option>
+                <option value="ganho">ganho</option>
+                <option value="perdido">perdido</option>
+              </select>
+              <Botao
+                type="button"
+                onClick={async () => {
+                  const r = await chamarAcao(criarEtapaAction(pipelineId, nome, tipo))
+                  if (!r.ok) reportarErro(mensagemDeEtapa(r.erro))
+                  else {
+                    setErro(null)
+                    setNome('')
+                  }
+                }}
+              >
+                <Plus size={16} strokeWidth={2.25} aria-hidden="true" />
+                Adicionar
+              </Botao>
+            </div>
+          </div>
         </div>
       )}
     </section>

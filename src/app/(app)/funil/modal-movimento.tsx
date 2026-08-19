@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { X } from 'lucide-react'
 import type { Etapa, Etiqueta, MotivoPerda } from '@/lib/domain/tipos'
 
 export type PedidoMovimento = { leadId: string; nomeLead: string; destino: Etapa }
@@ -37,12 +38,12 @@ export function ModalMovimento({
     .slice(0, 6)
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       {/* .surface (utilitario ja portado, sem consumidor ate aqui) da o
           hairline e a sombra que bg-card sozinho nao tem: sobre o scrim de
           bg-black/40, bg-card (#0e1526) compoe para ~1.12:1 contra o fundo —
           o painel praticamente nao tem borda visivel. */}
-      <div className="surface w-full max-w-md rounded p-5">
+      <div className="surface fade-in w-full max-w-md rounded-3xl p-6">
         <h2 className="text-lg font-semibold">
           {pedido.nomeLead} → {pedido.destino.nome}
         </h2>
@@ -53,7 +54,7 @@ export function ModalMovimento({
             <select
               value={motivoId}
               onChange={(e) => setMotivoId(e.target.value)}
-              className="mt-1 w-full rounded border p-2"
+              className="mt-1 h-10 w-full rounded-xl border border-border bg-muted/60 px-3 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary focus:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
             >
               <option value="">selecione</option>
               {motivos.map((m) => (
@@ -77,7 +78,7 @@ export function ModalMovimento({
               }
             }}
             placeholder="digite e pressione Enter"
-            className="mt-1 w-full rounded border p-2"
+            className="mt-1 h-10 w-full rounded-xl border border-border bg-muted/60 px-3 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary focus:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
           />
           {sugestoes.length > 0 && (
             <ul className="mt-1 flex flex-wrap gap-1">
@@ -97,15 +98,18 @@ export function ModalMovimento({
           {escolhidas.length > 0 && (
             <ul className="mt-2 flex flex-wrap gap-1">
               {escolhidas.map((e) => (
-                <li key={e} className="rounded bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+                <li
+                  key={e}
+                  className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
+                >
                   {e}
                   <button
                     type="button"
                     onClick={() => setEscolhidas(escolhidas.filter((x) => x !== e))}
-                    className="ml-1"
+                    className="pressable -mr-1 rounded-full p-0.5 hover:bg-black/20"
                     aria-label={`remover ${e}`}
                   >
-                    ×
+                    <X size={12} strokeWidth={2.5} aria-hidden="true" />
                   </button>
                 </li>
               ))}

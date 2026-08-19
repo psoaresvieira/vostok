@@ -170,7 +170,7 @@ test.describe('disparo de WhatsApp da ficha do lead', () => {
 
       // Transitorio (2.5s): a asercao comeca a esperar ANTES de a action
       // responder, entao ela ve a janela inteira em vez de correr contra ela.
-      await expect(paginaAdmin.getByText('Enviado ✓')).toBeVisible()
+      await expect(paginaAdmin.getByText('Enviado')).toBeVisible()
 
       // --- Passo 6: a timeline mostra o texto EXATO que foi enviado ---
       await paginaAdmin.reload()

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { Check } from 'lucide-react'
 import type { Script } from '@/lib/data/scripts'
 // Type-only: `import type` some na compilacao, entao lib/data/templates (e o
 // next/headers que ele arrasta por baixo) nunca entra no bundle do browser.
@@ -160,7 +161,7 @@ function ItemScript({
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded border border-border p-2">
+    <li className="surface flex flex-col gap-2 rounded-2xl p-4">
       <h3 className="text-sm font-medium">{script.titulo}</h3>
 
       <div
@@ -216,7 +217,7 @@ function ItemScript({
         <button
           type="button"
           onClick={() => void copiar()}
-          className="rounded border border-border px-2 py-1 text-xs"
+          className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs"
         >
           Copiar
         </button>
@@ -226,7 +227,7 @@ function ItemScript({
             href={linkWhatsApp(telefoneE164, texto)}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded border border-border px-2 py-1 text-xs"
+            className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs"
           >
             WhatsApp
           </a>
@@ -266,14 +267,20 @@ function ItemScript({
             "Enviar WhatsApp" nao pode mudar depois do primeiro uso, senao quem
             navega por teclado perde o alvo. role="status" da o aria-live polite
             que anuncia a mudanca. */}
+        {/* O ✓ que ficava no texto virou <Check> SVG. O icone e' aria-hidden e
+            o texto acessivel passa a ser so "Copiado"/"Enviado" — o role=status
+            continua anunciando a mudanca, agora sem o leitor de tela soletrar
+            um caractere de pontuacao no fim da frase. */}
         {copiado && (
-          <span role="status" className="text-xs text-success">
-            Copiado ✓
+          <span role="status" className="inline-flex items-center gap-1 text-xs text-success">
+            <Check size={13} strokeWidth={2.5} aria-hidden="true" />
+            Copiado
           </span>
         )}
         {enviado && (
-          <span role="status" className="text-xs text-success">
-            Enviado ✓
+          <span role="status" className="inline-flex items-center gap-1 text-xs text-success">
+            <Check size={13} strokeWidth={2.5} aria-hidden="true" />
+            Enviado
           </span>
         )}
       </div>
@@ -306,7 +313,7 @@ function ItemScript({
                 setConfirmando(false)
               }}
               aria-label="Cancelar envio"
-              className="rounded border border-border px-2 py-1 text-xs"
+              className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs"
             >
               Cancelar
             </button>

@@ -1,8 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { Plus, TriangleAlert } from 'lucide-react'
 import type { Membro } from '@/lib/domain/tipos'
 import { chamarAcao, FALHA_DE_CONEXAO, MENSAGEM_FALHA_DE_CONEXAO } from '@/lib/ui/acao'
+import { Botao } from '@/components/ui/botao'
+import { Campo, Selecao } from '@/components/ui/campo'
+import { Modal, AcoesDoModal } from '@/components/ui/modal'
 import { criarLeadAction, verificarDuplicados, type Duplicado } from './acoes'
 
 const MENSAGENS: Record<string, string> = {
@@ -56,59 +60,60 @@ export function NovoLead({
 
   if (!aberto) {
     return (
-      <button
-        type="button"
-        onClick={() => setAberto(true)}
-        className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground"
-      >
+      // tamanho="sm" (32px) para casar com a altura dos filtros ao lado: um
+      // botao de 40px na mesma linha de controles de 32 desalinha a barra
+      // inteira e ainda a deixa mais alta do que precisa.
+      <Botao type="button" tamanho="sm" onClick={() => setAberto(true)} className="shrink-0">
+        <Plus size={14} strokeWidth={2.25} aria-hidden="true" />
         Novo lead
-      </button>
+      </Botao>
     )
   }
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-      {/* .surface (mesmo utilitario do modal-movimento.tsx, ver comentario la)
-          da o hairline e a sombra que faltavam ao painel sobre o scrim. */}
-      <div className="surface w-full max-w-md rounded p-5">
-        <h2 className="mb-3 text-lg font-semibold">Novo lead</h2>
-        <form action={salvar} className="flex flex-col gap-2">
-          <input type="hidden" name="pipelineId" value={pipelineId} />
-          <input name="nome" placeholder="nome" required className="rounded border p-2" />
-          <input
-            name="telefone"
-            placeholder="telefone"
-            className="rounded border p-2"
-            onBlur={(e) =>
-              checar(e.target.value, (e.currentTarget.form?.email as HTMLInputElement)?.value ?? '')
-            }
-          />
-          <input
-            name="email"
-            placeholder="email"
-            className="rounded border p-2"
-            onBlur={(e) =>
-              checar(
-                (e.currentTarget.form?.telefone as HTMLInputElement)?.value ?? '',
-                e.target.value,
-              )
-            }
-          />
-          <input name="empresa" placeholder="empresa" className="rounded border p-2" />
-          <input name="valor" placeholder="valor em reais" className="rounded border p-2" />
-          {podeEscolherResponsavel && (
-            <select name="responsavelId" defaultValue="" className="rounded border p-2">
-              <option value="">sem responsável</option>
-              {membros.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.nome}
-                </option>
-              ))}
-            </select>
-          )}
+    <Modal titulo="Novo lead" largura="md" aoFechar={() => setAberto(false)}>
+      <form action={salvar} className="flex flex-col gap-2.5">
+        <input type="hidden" name="pipelineId" value={pipelineId} />
+        <Campo name="nome" placeholder="nome" required />
+        <Campo
+          name="telefone"
+          placeholder="telefone"
+          onBlur={(e) =>
+            checar(e.target.value, (e.currentTarget.form?.email as HTMLInputElement)?.value ?? '')
+          }
+        />
+        <Campo
+          name="email"
+          placeholder="email"
+          onBlur={(e) =>
+            checar(
+              (e.currentTarget.form?.telefone as HTMLInputElement)?.value ?? '',
+              e.target.value,
+            )
+          }
+        />
+        <Campo name="empresa" placeholder="empresa" />
+        <Campo name="valor" placeholder="valor em reais" />
+        {podeEscolherResponsavel && (
+          <Selecao name="responsavelId" defaultValue="">
+            <option value="">sem responsável</option>
+            {membros.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.nome}
+              </option>
+            ))}
+          </Selecao>
+        )}
 
-          {duplicados.length > 0 && (
-            <div className="rounded border border-warning/40 bg-warning/10 p-2 text-sm">
+        {duplicados.length > 0 && (
+          <div className="flex gap-2.5 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm">
+            <TriangleAlert
+              size={16}
+              strokeWidth={2}
+              aria-hidden="true"
+              className="mt-0.5 shrink-0 text-warning"
+            />
+            <div>
               <p className="font-medium">Já existe lead com esse contato:</p>
               <ul className="mt-1 list-disc pl-4">
                 {duplicados.map((d) => (
@@ -124,20 +129,18 @@ export function NovoLead({
                 Você pode continuar mesmo assim — recompra vira lead novo.
               </p>
             </div>
-          )}
-
-          {erro && <p className="text-sm text-destructive">{erro}</p>}
-
-          <div className="mt-2 flex justify-end gap-2">
-            <button type="button" onClick={() => setAberto(false)} className="px-3 py-1 text-sm">
-              Cancelar
-            </button>
-            <button type="submit" className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground">
-              Salvar
-            </button>
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+
+        {erro && <p className="text-sm text-destructive">{erro}</p>}
+
+        <AcoesDoModal>
+          <Botao type="button" variante="fantasma" onClick={() => setAberto(false)}>
+            Cancelar
+          </Botao>
+          <Botao type="submit">Salvar</Botao>
+        </AcoesDoModal>
+      </form>
+    </Modal>
   )
 }

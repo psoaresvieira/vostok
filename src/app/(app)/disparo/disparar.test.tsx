@@ -298,7 +298,7 @@ describe('Disparar', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Enviar WhatsApp' }))
 
-      await waitFor(() => expect(screen.getByText('Enviado ✓')).toBeTruthy())
+      await waitFor(() => expect(screen.getByText('Enviado')).toBeTruthy())
       const link = screen.getByRole('link', { name: /ver na ficha/i })
       expect(link.getAttribute('href')).toBe('/leads/lead-1')
     })
@@ -344,7 +344,7 @@ describe('Disparar', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Enviar WhatsApp' }))
 
-      await waitFor(() => expect(screen.getByText('Enviado ✓')).toBeTruthy())
+      await waitFor(() => expect(screen.getByText('Enviado')).toBeTruthy())
       expect(screen.queryByRole('button', { name: 'Enviar WhatsApp' })).toBeNull()
     })
   })

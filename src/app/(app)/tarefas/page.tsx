@@ -59,23 +59,23 @@ export default async function TarefasPage({
   const tarefas = await tarefaStore.valor.minhasAbertas(responsavelId)
   if (!tarefas.ok) {
     return (
-      <div className="flex flex-col gap-4 p-6">
-        <h1 className="text-2xl font-semibold">Tarefas</h1>
+      <div className="fade-in flex flex-col gap-6 p-6 sm:p-8">
+        <h1 className="text-[26px] font-semibold">Tarefas</h1>
         <p className="text-destructive">{mensagemDeErroTarefa(tarefas.erro)}</p>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-4 p-6">
-      <h1 className="text-2xl font-semibold">Tarefas</h1>
+    <div className="fade-in flex flex-col gap-6 p-6 sm:p-8">
+      <h1 className="text-[26px] font-semibold">Tarefas</h1>
 
       {papel !== 'vendedor' && (
         <form className="flex items-center gap-2" action="/tarefas">
           <select
             name="responsavel"
             defaultValue={params.responsavel ?? ''}
-            className="rounded border border-border px-2 py-1 text-sm"
+            className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-sm"
           >
             <option value="">Minhas tarefas</option>
             {membros.valor.map((m) => (
@@ -85,7 +85,7 @@ export default async function TarefasPage({
             ))}
             <option value="sem">Sem responsável</option>
           </select>
-          <button type="submit" className="rounded border border-border px-2 py-1 text-sm">
+          <button type="submit" className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-sm">
             Filtrar
           </button>
         </form>

@@ -2,6 +2,8 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { ArrowDown, ArrowUp, Plus } from 'lucide-react'
+import { Botao } from '@/components/ui/botao'
 import type { Resultado } from '@/lib/domain/resultado'
 import { chamarAcao } from '@/lib/ui/acao'
 import { criarPipelineAction } from './acoes-pipelines'
@@ -115,19 +117,22 @@ export function NovaPipeline({ criar = criarPipelineAction }: { criar?: AcaoCria
 
   if (!aberto) {
     return (
-      <button
-        type="button"
-        onClick={abrir}
-        className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground"
-      >
-        + Nova pipeline
-      </button>
+      // O "+" textual virou <Plus> aria-hidden, entao o nome acessivel do
+      // botao passou de "+ Nova pipeline" para "Nova pipeline" — os tres
+      // seletores que o casavam com `exact: true` (pipelines.spec.ts,
+      // etapas-membro.spec.ts, nova-pipeline.test.tsx) foram atualizados
+      // junto. w-full para empilhar com "Editar etapas" logo abaixo, na
+      // coluna de 224px.
+      <Botao type="button" onClick={abrir} className="w-full">
+        <Plus size={16} strokeWidth={2.25} aria-hidden="true" />
+        Nova pipeline
+      </Botao>
     )
   }
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
-      <div className="surface w-full max-w-md rounded p-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="surface fade-in w-full max-w-md rounded-3xl p-6">
         <h2 className="mb-3 text-lg font-semibold">Nova pipeline</h2>
         <form action={salvar} className="flex flex-col gap-3">
           <label className="text-sm">
@@ -142,7 +147,7 @@ export function NovaPipeline({ criar = criarPipelineAction }: { criar?: AcaoCria
               required
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              className="mt-1 w-full rounded border p-2"
+              className="mt-1 h-10 w-full rounded-xl border border-border bg-muted/60 px-3 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary focus:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
             />
           </label>
 
@@ -162,18 +167,18 @@ export function NovaPipeline({ criar = criarPipelineAction }: { criar?: AcaoCria
                     onClick={() => moverEtapa(etapa.id, -1)}
                     disabled={index === 0}
                     aria-label={`Mover ${rotulo} para cima`}
-                    className="rounded px-1.5 py-1 text-sm disabled:opacity-30"
+                    className="pressable rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30"
                   >
-                    ↑
+                    <ArrowUp size={14} strokeWidth={2} aria-hidden="true" />
                   </button>
                   <button
                     type="button"
                     onClick={() => moverEtapa(etapa.id, 1)}
                     disabled={index === etapas.length - 1}
                     aria-label={`Mover ${rotulo} para baixo`}
-                    className="rounded px-1.5 py-1 text-sm disabled:opacity-30"
+                    className="pressable rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30"
                   >
-                    ↓
+                    <ArrowDown size={14} strokeWidth={2} aria-hidden="true" />
                   </button>
                   <button
                     type="button"
@@ -210,7 +215,7 @@ export function NovaPipeline({ criar = criarPipelineAction }: { criar?: AcaoCria
             <button
               type="submit"
               disabled={salvando}
-              className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50"
+              className="pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl bg-primary px-4 text-sm text-primary-foreground shadow-sm hover:brightness-110"
             >
               Salvar
             </button>

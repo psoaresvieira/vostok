@@ -31,7 +31,7 @@ test('múltiplas pipelines: criar, isolar leads, ficha e exclusão bloqueada', a
   // 1. criar pipeline pela barra: nome + remover 3 das 5 etapas sugeridas.
   // Os aria-label dos botões "Remover" são o NOME da etapa, não a posição —
   // removê-las por texto sobrevive à lista reindexando a cada clique.
-  await page.getByRole('button', { name: '+ Nova pipeline', exact: true }).click()
+  await page.getByRole('button', { name: 'Nova pipeline', exact: true }).click()
   await page.getByLabel('Nome da pipeline').fill('Outbound')
   await page.getByRole('button', { name: 'Remover Contato feito', exact: true }).click()
   await page.getByRole('button', { name: 'Remover Proposta', exact: true }).click()

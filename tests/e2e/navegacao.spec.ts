@@ -2,13 +2,27 @@ import { test, expect, type Page } from '@playwright/test'
 import { SENHA, carimbo, criarConta } from './apoio'
 
 /**
- * O percurso da Task 8 do Plano 13 (remodelada): a navegacao do topo encolhe
- * para tres abas — Funil, Metricas, Disparo de WPP — e perde Tarefas (link e
- * badge) e Scripts (que virou Disparo de WPP). Configuracao deixa de ser um
- * link de texto e vira um icone de engrenagem discreto ao lado do sino,
- * visivel so para admin. Este arquivo tranca a FORMA da navegacao; o
- * conteudo de cada rota continua coberto pelos specs proprios (funil.spec.ts,
- * metricas.spec.ts, disparo-whatsapp.spec.ts, tarefas.spec.ts).
+ * A FORMA da navegacao. Reescrito junto com a barra lateral: o <header>
+ * horizontal de tres abas deixou de existir, e a navegacao virou uma barra
+ * lateral (<aside>, role=complementary) com QUATRO itens — Funil, Metricas,
+ * Disparo e Tarefas.
+ *
+ * O que mudou em relacao a Task 8 do Plano 13, e por que:
+ * - Tarefas VOLTOU a ser um link. Ela tinha saido por falta de espaco
+ *   horizontal no header; numa barra vertical esse motivo nao existe. A
+ *   asercao virou positiva (antes era `toHaveCount(0)`).
+ * - "Disparo de WPP" encolheu para "Disparo": o logo do WhatsApp ao lado ja
+ *   diz de que canal se trata. O <h1> da propria tela segue "Disparo de
+ *   WhatsApp", e os specs que o checam por heading nao mudaram.
+ * - As buscas ancoradas em `page.locator('header')` viraram
+ *   `barraLateral(page)`. ATENCAO: nao basta trocar o seletor por causa das
+ *   asercoes NEGATIVAS — `header.getByRole(...)` com `toHaveCount(0)` passava
+ *   vacuamente depois da mudanca (o <header> nao existe mais, logo nada dentro
+ *   dele existe), ou seja, deixaria de provar qualquer coisa em silencio.
+ *
+ * Scripts continua ausente da navegacao (a rota /scripts existe, mas nao e'
+ * listada). O conteudo de cada rota segue coberto pelos specs proprios
+ * (funil.spec.ts, metricas.spec.ts, disparo-whatsapp.spec.ts, tarefas.spec.ts).
  */
 
 /** Copiado do padrao de convite.spec.ts / sino-isolamento.spec.ts de proposito
@@ -48,13 +62,20 @@ async function aceitarConvite(paginaConvidado: Page, link: string, nome: string,
 }
 
 /** A navegacao principal: um <nav> proprio, escopado para nao pegar o resto
- * do header (sino, sair, engrenagem) na contagem de links. */
+ * da barra (sino, sair, engrenagem) na contagem de links. */
 function navPrincipal(page: Page) {
   return page.getByRole('navigation', { name: 'Navegação principal' })
 }
 
-test.describe('navegacao do topo: tres abas, sem Tarefas/Scripts, engrenagem so para admin', () => {
-  test('admin ve exatamente os tres links e a engrenagem; vendedor ve os tres links sem a engrenagem', async ({
+/** A barra lateral inteira — <aside>, que expoe role=complementary. Escopo
+ * das asercoes que precisam olhar FORA do <nav> (a engrenagem e o sair moram
+ * no rodape dela, nao na navegacao). */
+function barraLateral(page: Page) {
+  return page.getByRole('complementary')
+}
+
+test.describe('barra lateral: quatro itens, sem Scripts, engrenagem so para admin', () => {
+  test('admin ve exatamente os quatro links e a engrenagem; vendedor ve os quatro links sem a engrenagem', async ({
     browser,
   }) => {
     const contextoAdmin = await browser.newContext()
@@ -64,24 +85,21 @@ test.describe('navegacao do topo: tres abas, sem Tarefas/Scripts, engrenagem so 
       const paginaAdmin = await contextoAdmin.newPage()
       await criarConta(paginaAdmin)
 
-      // --- admin: exatamente os tres links, na ordem, dentro do <nav> ---
+      // --- admin: exatamente os quatro links, na ordem, dentro do <nav> ---
       const navAdmin = navPrincipal(paginaAdmin)
-      await expect(navAdmin.getByRole('link')).toHaveCount(3)
+      await expect(navAdmin.getByRole('link')).toHaveCount(4)
       await expect(navAdmin.getByRole('link', { name: 'Funil', exact: true })).toBeVisible()
       await expect(navAdmin.getByRole('link', { name: 'Métricas', exact: true })).toBeVisible()
-      await expect(
-        navAdmin.getByRole('link', { name: 'Disparo de WPP', exact: true }),
-      ).toBeVisible()
+      await expect(navAdmin.getByRole('link', { name: 'Disparo', exact: true })).toBeVisible()
+      await expect(navAdmin.getByRole('link', { name: 'Tarefas', exact: true })).toBeVisible()
 
-      // Positiva (o link novo existe) ja provada acima; agora a negativa —
-      // Tarefas e Scripts nao aparecem em lugar nenhum do header, nem so no
-      // <nav> escopado.
-      const headerAdmin = paginaAdmin.locator('header')
-      await expect(headerAdmin.getByRole('link', { name: /^Tarefas/ })).toHaveCount(0)
-      await expect(headerAdmin.getByRole('link', { name: 'Scripts', exact: true })).toHaveCount(0)
+      // A negativa que sobrou: Scripts nao aparece em lugar nenhum da barra,
+      // nem so' no <nav> escopado.
+      const barraAdmin = barraLateral(paginaAdmin)
+      await expect(barraAdmin.getByRole('link', { name: 'Scripts', exact: true })).toHaveCount(0)
 
       // Engrenagem: visivel para admin, pelo aria-label, e navega para /config.
-      const engrenagemAdmin = headerAdmin.getByRole('link', { name: 'Configuração' })
+      const engrenagemAdmin = barraAdmin.getByRole('link', { name: 'Configuração' })
       await expect(engrenagemAdmin).toBeVisible()
       await engrenagemAdmin.click()
       await expect(
@@ -95,17 +113,15 @@ test.describe('navegacao do topo: tres abas, sem Tarefas/Scripts, engrenagem so 
       await aceitarConvite(paginaVendedor, link, 'Vendedor Nav E2E', emailVendedor)
 
       const navVendedor = navPrincipal(paginaVendedor)
-      await expect(navVendedor.getByRole('link')).toHaveCount(3)
+      await expect(navVendedor.getByRole('link')).toHaveCount(4)
       await expect(navVendedor.getByRole('link', { name: 'Funil', exact: true })).toBeVisible()
       await expect(navVendedor.getByRole('link', { name: 'Métricas', exact: true })).toBeVisible()
-      await expect(
-        navVendedor.getByRole('link', { name: 'Disparo de WPP', exact: true }),
-      ).toBeVisible()
+      await expect(navVendedor.getByRole('link', { name: 'Disparo', exact: true })).toBeVisible()
+      await expect(navVendedor.getByRole('link', { name: 'Tarefas', exact: true })).toBeVisible()
 
-      const headerVendedor = paginaVendedor.locator('header')
-      await expect(headerVendedor.getByRole('link', { name: /^Tarefas/ })).toHaveCount(0)
-      await expect(headerVendedor.getByRole('link', { name: 'Scripts', exact: true })).toHaveCount(0)
-      await expect(headerVendedor.getByRole('link', { name: 'Configuração' })).toHaveCount(0)
+      const barraVendedor = barraLateral(paginaVendedor)
+      await expect(barraVendedor.getByRole('link', { name: 'Scripts', exact: true })).toHaveCount(0)
+      await expect(barraVendedor.getByRole('link', { name: 'Configuração' })).toHaveCount(0)
     } finally {
       await contextoAdmin.close()
       await contextoVendedor.close()

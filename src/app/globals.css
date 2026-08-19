@@ -38,11 +38,21 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-muted: var(--sidebar-muted);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
 }
 
-/* Os tokens --sidebar-* do gestor-trafego NAO foram portados: o CRM nao tem
-   sidebar, e token sem consumidor vira ruido que o proximo leitor tenta
-   descobrir onde e usado. Se uma sidebar existir um dia, copie-os de la. */
+/* Os tokens --sidebar-* agora TEM consumidor: a barra lateral fixa em
+   src/app/(app)/barra-lateral.tsx, que substituiu o header horizontal. Eles
+   existem separados dos tokens de superficie (--card, --muted) porque a barra
+   e' cromaticamente independente do conteudo: ela fica um degrau MAIS ESCURA
+   que o fundo da pagina, para o quadro do funil parecer flutuar sobre ela.
+   Reusar --card aqui amarraria as duas coisas — mexer no card do lead mudaria
+   a barra junto, sem ninguem esperar. */
 
 /*
   Paleta "sala de operação", portada do gestor-trafego: navy quase-preto,
@@ -86,6 +96,18 @@
     --chart-3: #7aa2ff;
     --chart-4: #f2b263;
     --chart-5: #a78bfa;
+    /* Barra lateral: um degrau ACIMA do --background (#070b16) e um abaixo do
+       --card (#0e1526). Nenhuma cor nova na paleta — o acento e a borda
+       reusam os hex de --accent e --border, que ja existiam. So a superficie
+       (--sidebar) e um tom novo, e existe porque o navy do card, aplicado
+       numa faixa de tela inteira, empatava com as colunas do funil e a barra
+       sumia. */
+    --sidebar: #0a1020;
+    --sidebar-foreground: #eaf0fb;
+    --sidebar-muted: #8496b8;
+    --sidebar-accent: #182642;
+    --sidebar-accent-foreground: #eaf0fb;
+    --sidebar-border: #1c2942;
     --radius: 0.75rem;
 }
 
@@ -118,6 +140,13 @@
     --chart-3: #7aa2ff;
     --chart-4: #f2b263;
     --chart-5: #a78bfa;
+    /* Ver comentario no bloco :root acima — mesmos tokens, mesmos hex. */
+    --sidebar: #0a1020;
+    --sidebar-foreground: #eaf0fb;
+    --sidebar-muted: #8496b8;
+    --sidebar-accent: #182642;
+    --sidebar-accent-foreground: #eaf0fb;
+    --sidebar-border: #1c2942;
 }
 
 @layer base {
@@ -147,6 +176,12 @@
        classe font-heading — Space Grotesk e carregada e preloaded, mas sem
        isto nao era usada em lugar nenhum. */
     @apply font-heading;
+    /* Tracking negativo e' a metrica que mais aproxima um titulo web do
+       display da Apple: a San Francisco aperta o espacamento conforme o corpo
+       cresce (SF Display vs SF Text), e sem isto o Space Grotesk em 24px+
+       fica visivelmente mais solto que qualquer titulo de app iOS. Aplicado
+       so nos titulos: em texto corrido apertar tracking prejudica leitura. */
+    letter-spacing: -0.021em;
   }
   /* Numeros de metrica alinhados em colunas. */
   .tabular {
@@ -183,6 +218,51 @@
     background: linear-gradient(90deg, transparent, var(--primary), transparent);
     opacity: 0.7;
   }
+  /* Resposta ao toque do iOS: o controle AFUNDA sob o dedo e volta. E' o
+     unico gesto que separa um botao "de app Apple" de um botao web comum —
+     mais do que raio ou sombra. A curva e' propositalmente diferente na ida e
+     na volta: 120ms para afundar (imediato, acompanha o dedo) e 240ms com
+     overshoot suave para voltar, que e' o que da a sensacao elastica.
+     `will-change` fica de fora de proposito: sao dezenas de botoes por tela e
+     promover cada um a camada propria custa mais do que a animacao economiza. */
+  .pressable {
+    transition:
+      transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      background-color 160ms ease,
+      border-color 160ms ease,
+      opacity 160ms ease;
+  }
+  .pressable:active:not(:disabled) {
+    transform: scale(0.97);
+    transition-duration: 120ms;
+    transition-timing-function: ease-out;
+  }
+  /* "Vibrancy": a barra translucida que deixa o conteudo vazar borrado por
+     baixo, como a nav bar do iOS e a menu bar do macOS. saturate(180%)
+     acompanha o blur de proposito — sem ele o que vaza fica cinza e a barra
+     parece suja em vez de translucida; e' o mesmo par que a Apple usa.
+     O fundo fica em color-mix e nao em rgba() fixo para seguir o token: se
+     --sidebar mudar, a barra muda junto. */
+  .vibrancy {
+    background: color-mix(in oklch, var(--sidebar) 72%, transparent);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+  /* Sem suporte a backdrop-filter (Firefox com a flag desligada), o 72% acima
+     deixaria a barra semi-transparente sobre o conteudo rolando — ilegivel.
+     Fecha para opaco. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .vibrancy {
+      background: var(--sidebar);
+    }
+  }
+  /* Separador hairline: o 1px de borda cheia (--border) e' pesado demais
+     DENTRO de uma superficie ja escura — a Apple usa um fio bem mais fraco
+     para dividir linhas de lista, e reserva a borda cheia para o contorno
+     externo do card. */
+  .hairline {
+    border-color: color-mix(in oklch, var(--border) 55%, transparent);
+  }
   .fade-in {
     animation: fade-in 0.5s ease both;
   }
@@ -192,5 +272,10 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .fade-in { animation: none; }
+    /* O afundar do .pressable e' movimento por definicao. Quem pediu menos
+       movimento no sistema continua tendo o feedback — so que por cor
+       (o :active de fundo/borda segue valendo), nunca por escala. */
+    .pressable { transition: background-color 160ms ease, border-color 160ms ease; }
+    .pressable:active:not(:disabled) { transform: none; }
   }
 }

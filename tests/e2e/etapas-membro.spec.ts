@@ -47,7 +47,7 @@ test('gestão de etapas pelo funil: renomear, adicionar e excluir refletem no qu
   // sugeridas pelo modal, mesmo padrao de pipelines.spec.ts (remover por
   // texto sobrevive a lista reindexando a cada clique). Ganho e Perdido
   // entram sozinhas: sobram 4 etapas ao todo.
-  await page.getByRole('button', { name: '+ Nova pipeline', exact: true }).click()
+  await page.getByRole('button', { name: 'Nova pipeline', exact: true }).click()
   await page.getByLabel('Nome da pipeline').fill('Renovação')
   await page.getByRole('button', { name: 'Remover Contato feito', exact: true }).click()
   await page.getByRole('button', { name: 'Remover Proposta', exact: true }).click()

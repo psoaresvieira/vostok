@@ -100,14 +100,14 @@ export default async function DisparoPage({
   const podeEscrever = papel !== 'vendedor'
 
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="fade-in flex flex-col gap-6 p-6 sm:p-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Disparo de WhatsApp</h1>
+        <h1 className="text-[26px] font-semibold">Disparo de WhatsApp</h1>
         {/* Esconder o botao NAO e a guarda: quem barra a escrita do vendedor e
             a RLS da 0020 mais o pre-check das actions. Isto e so nao oferecer
             um caminho que terminaria em recusa. */}
         {podeEscrever && (
-          <Link href="/scripts/novo" className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground">
+          <Link href="/scripts/novo" className="pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl bg-primary px-4 text-sm text-primary-foreground shadow-sm hover:brightness-110">
             Novo script
           </Link>
         )}
@@ -136,7 +136,7 @@ export default async function DisparoPage({
               name="busca"
               defaultValue={busca}
               placeholder="título ou conteúdo"
-              className="rounded border border-border px-2 py-1"
+              className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
             />
           </div>
           <div className="flex flex-col text-sm">
@@ -145,7 +145,7 @@ export default async function DisparoPage({
               id="filtro-tag"
               name="tag"
               defaultValue={tag}
-              className="rounded border border-border px-2 py-1"
+              className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
             >
               <option value="">Qualquer tag</option>
               {tags.map((t) => (
@@ -161,7 +161,7 @@ export default async function DisparoPage({
               id="filtro-etapa"
               name="etapa"
               defaultValue={etapa}
-              className="rounded border border-border px-2 py-1"
+              className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
             >
               <option value="">Qualquer etapa</option>
               {etapas.map((e) => (

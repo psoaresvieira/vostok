@@ -69,7 +69,7 @@ export function WhatsApp({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded border p-4">
+    <section className="surface flex flex-col gap-3 rounded-2xl p-5">
       <h2 className="font-medium">WhatsApp</h2>
 
       {conexao ? (
@@ -94,7 +94,7 @@ export function WhatsApp({
                 setErro(null)
                 setConfirmando(true)
               }}
-              className="w-fit rounded border px-3 py-1 text-sm"
+              className="w-fit pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl border border-border px-4 text-sm hover:bg-accent"
             >
               Desconectar
             </button>
@@ -102,7 +102,7 @@ export function WhatsApp({
             <div
               role="dialog"
               aria-label="Desconectar WhatsApp"
-              className="flex flex-col gap-2 rounded border p-3 text-sm"
+              className="surface flex flex-col gap-2 rounded-2xl p-4 text-sm"
             >
               <p>Desconectar este número do WhatsApp?</p>
               <div className="flex gap-2">
@@ -111,7 +111,7 @@ export function WhatsApp({
                   onClick={() => void confirmarDesconexao()}
                   disabled={desconectando}
                   aria-label="Confirmar desconexão"
-                  className="rounded bg-destructive px-3 py-1 text-primary-foreground disabled:opacity-50"
+                  className="pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl bg-destructive px-4 text-sm text-destructive-foreground shadow-sm hover:brightness-110"
                 >
                   Confirmar desconexão
                 </button>
@@ -142,7 +142,7 @@ export function WhatsApp({
               autoComplete="off"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              className="rounded border px-2 py-1"
+              className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
             />
           </label>
           <label className="flex flex-col text-sm">
@@ -150,7 +150,7 @@ export function WhatsApp({
             <input
               value={phoneNumberId}
               onChange={(e) => setPhoneNumberId(e.target.value)}
-              className="rounded border px-2 py-1"
+              className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
             />
           </label>
           <label className="flex flex-col text-sm">
@@ -158,14 +158,14 @@ export function WhatsApp({
             <input
               value={wabaId}
               onChange={(e) => setWabaId(e.target.value)}
-              className="rounded border px-2 py-1"
+              className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
             />
           </label>
           <button
             type="button"
             onClick={() => void conectarClique()}
             disabled={pendente}
-            className="w-fit rounded bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
+            className="w-fit pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl bg-primary px-4 text-sm text-primary-foreground shadow-sm hover:brightness-110"
           >
             Conectar
           </button>

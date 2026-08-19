@@ -139,7 +139,7 @@ test.describe('disparo de WhatsApp pela aba /disparo', () => {
 
     // Transitorio (2.5s): a asercao comeca a esperar ANTES de a action
     // responder, entao ela ve a janela inteira em vez de correr contra ela.
-    await expect(page.getByText('Enviado ✓')).toBeVisible()
+    await expect(page.getByText('Enviado')).toBeVisible()
 
     // --- "Ver na ficha" leva para a ficha do lead certo ---
     await page.getByRole('link', { name: 'Ver na ficha' }).click()

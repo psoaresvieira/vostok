@@ -181,7 +181,7 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas, modoBeta
             <button
               type="button"
               disabled={pendente}
-              className="rounded border px-3 py-2 text-sm disabled:opacity-50"
+              className="pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl border border-border px-4 text-sm hover:bg-accent"
               onClick={() => setSquat(null)}
             >
               Cancelar
@@ -222,7 +222,7 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas, modoBeta
             <label className="ml-auto flex items-center gap-2 text-sm">
               Responsável
               <select
-                className="rounded border px-2 py-1"
+                className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
                 value={f.responsavelPadraoId ?? ''}
                 disabled={pendente}
                 onChange={(e) =>
@@ -255,7 +255,7 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas, modoBeta
       <div className="flex flex-wrap items-end gap-2">
         <a
           href="/api/integracoes/meta/iniciar"
-          className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground"
+          className="pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl bg-primary px-4 text-sm text-primary-foreground shadow-sm hover:brightness-110"
         >
           Conectar Facebook
         </a>
@@ -269,7 +269,7 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas, modoBeta
         <label className="flex flex-col text-sm">
           Nome do formulário do Google
           <input
-            className="rounded border px-2 py-1"
+            className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
             placeholder="nome do formulário"
             value={nomeGoogle}
             onChange={(e) => setNomeGoogle(e.target.value)}
@@ -278,7 +278,7 @@ export function Integracoes({ fontes, membros, origem, etapa, entregas, modoBeta
         <button
           type="button"
           disabled={pendente}
-          className="rounded border px-3 py-2 text-sm disabled:opacity-50"
+          className="pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl border border-border px-4 text-sm hover:bg-accent"
           onClick={() =>
             iniciar(async () => {
               setErroLocal(null)

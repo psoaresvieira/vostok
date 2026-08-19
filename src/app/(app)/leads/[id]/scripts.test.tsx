@@ -114,7 +114,7 @@ describe('PainelScripts', () => {
     expect(escritos[0]).not.toContain('sem valor')
 
     // Feedback transitorio, padrao do "Salvo ✓" de funil/etapas.tsx.
-    expect(await screen.findByText('Copiado ✓')).toBeTruthy()
+    expect(await screen.findByText('Copiado')).toBeTruthy()
     // O nome acessivel do botao NAO muda com o feedback: quem navega por
     // teclado nao pode perder o alvo depois de usa-lo uma vez.
     expect(screen.getByRole('button', { name: 'Copiar' })).toBeTruthy()
@@ -413,7 +413,7 @@ describe('PainelScripts — disparo de WhatsApp', () => {
     expect(enviar).toHaveBeenCalledWith('lead-1', 'script-1')
 
     // Feedback transitorio, padrao do "Copiado ✓".
-    expect(await screen.findByText('Enviado ✓')).toBeTruthy()
+    expect(await screen.findByText('Enviado')).toBeTruthy()
     // O nome acessivel do botao nao muda depois do uso.
     expect(screen.getByRole('button', { name: 'Enviar WhatsApp' })).toBeTruthy()
   })
@@ -460,7 +460,7 @@ describe('PainelScripts — disparo de WhatsApp', () => {
 
     // A chamada em curso termina e o feedback aparece uma vez so.
     liberar({ ok: true, valor: undefined })
-    expect(await screen.findByText('Enviado ✓')).toBeTruthy()
+    expect(await screen.findByText('Enviado')).toBeTruthy()
     expect(enviar).toHaveBeenCalledTimes(1)
   })
 

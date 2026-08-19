@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { Check } from 'lucide-react'
 // Type-only: `import type` some na compilacao, entao lib/data/templates (e o
 // next/headers que ele arrasta por baixo) nunca entra no bundle do browser.
 import type { TemplateWhatsApp } from '@/lib/data/templates'
@@ -166,7 +167,7 @@ export function Disparar({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded border border-border p-4">
+    <div className="surface flex flex-col gap-4 rounded-2xl p-5">
       <h2 className="text-lg font-semibold">Disparar</h2>
 
       <section className="flex flex-col gap-2">
@@ -190,7 +191,7 @@ export function Disparar({
                       }}
                       disabled={!selecionavel}
                       aria-pressed={scriptId === s.id}
-                      className="rounded border border-border px-2 py-1 text-sm disabled:opacity-50"
+                      className="pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-8 rounded-lg border border-border px-3 text-[13px] hover:bg-accent"
                     >
                       {s.titulo}
                     </button>
@@ -223,7 +224,7 @@ export function Disparar({
                 value={termo}
                 onChange={(e) => setTermo(e.target.value)}
                 placeholder="nome, telefone ou email"
-                className="rounded border border-border px-2 py-1"
+                className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5"
               />
             </div>
             <button
@@ -253,7 +254,7 @@ export function Disparar({
                     disabled={l.telefoneE164 === null}
                     title={l.telefoneE164 === null ? 'Este lead não tem telefone' : undefined}
                     aria-pressed={leadId === l.id}
-                    className="rounded border border-border px-2 py-1 text-sm disabled:opacity-50"
+                    className="pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-8 rounded-lg border border-border px-3 text-[13px] hover:bg-accent"
                   >
                     {l.nome}
                   </button>
@@ -296,15 +297,16 @@ export function Disparar({
                 onClick={() => void enviarClique()}
                 disabled={!podeEnviar || enviando}
                 title={motivoBloqueio ?? undefined}
-                className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
+                className="pressable inline-flex shrink-0 items-center justify-center gap-2 font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 h-10 rounded-xl bg-primary px-4 text-sm text-primary-foreground shadow-sm hover:brightness-110"
               >
                 Enviar WhatsApp
               </button>
             )}
 
             {enviado && leadEnviadoId && (
-              <span role="status" className="text-sm text-success">
-                Enviado ✓{' '}
+              <span role="status" className="inline-flex items-center gap-1.5 text-sm text-success">
+                <Check size={15} strokeWidth={2.5} aria-hidden="true" />
+                Enviado{' '}
                 <Link href={`/leads/${leadEnviadoId}`} className="underline">
                   Ver na ficha
                 </Link>

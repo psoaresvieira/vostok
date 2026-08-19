@@ -39,7 +39,7 @@ function etapasDaChamada(formData: FormData): string[] {
 }
 
 function abrirModal() {
-  fireEvent.click(screen.getByRole('button', { name: '+ Nova pipeline' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Nova pipeline' }))
 }
 
 beforeEach(() => {

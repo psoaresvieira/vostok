@@ -3,9 +3,13 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { EllipsisVertical, Pencil, Trash2 } from 'lucide-react'
 import type { Pipeline } from '@/lib/domain/tipos'
 import type { Resultado } from '@/lib/domain/resultado'
 import { chamarAcao } from '@/lib/ui/acao'
+import { Botao } from '@/components/ui/botao'
+import { Campo, Rotulo } from '@/components/ui/campo'
+import { Modal, AcoesDoModal } from '@/components/ui/modal'
 import { renomearPipelineAction, excluirPipelineAction } from './acoes-pipelines'
 import { mensagemDePipeline } from './erros'
 
@@ -33,6 +37,14 @@ type AcaoExcluir = (pipelineId: string) => Promise<Resultado<void>>
  * item com renomear/excluir. NAO conhece o modal de criacao («+ Nova
  * pipeline» e' da Task 6, montado pela pagina — Task 7 — logo abaixo desta
  * barra na mesma coluna).
+ *
+ * Continua sendo um painel PROPRIO, e nao itens dentro da barra lateral
+ * global: os hrefs daqui dependem de `queryAtual` (os searchParams do funil),
+ * e um layout do Next nao recebe searchParams. Movida para la, a barra
+ * perderia a preservacao de filtros ao trocar de pipeline — o funil voltaria
+ * para "todos os leads" a cada clique. E' o mesmo arranjo de dois niveis do
+ * print de referencia: navegacao global na barra escura, contexto da tela na
+ * coluna ao lado.
  *
  * Actions por prop com default, mesmo padrao de disparar.tsx: testavel sem
  * servidor, e a pagina real usa as actions de verdade sem precisar passar
@@ -105,108 +117,114 @@ export function BarraPipelines({
   }
 
   return (
-    <div className="flex w-56 flex-col border-r border-border">
-      <nav aria-label="Pipelines" className="flex flex-col gap-1 p-2">
-        {pipelines.map((p) => (
-          <div key={p.id} className="flex items-center justify-between gap-1">
-            <Link
-              href={hrefDoItem(p, queryAtual)}
-              aria-current={p.id === pipelineAtivaId ? 'page' : undefined}
-              className="flex-1 truncate rounded px-2 py-1 text-sm text-foreground aria-[current=page]:bg-muted aria-[current=page]:font-medium"
+    <div className="flex w-56 flex-col">
+      <p className="eyebrow px-3 pb-1 pt-4">Pipelines</p>
+      <nav aria-label="Pipelines" className="flex flex-col gap-0.5 p-2">
+        {pipelines.map((p) => {
+          const ativa = p.id === pipelineAtivaId
+          return (
+            <div
+              key={p.id}
+              className={`group flex items-center gap-0.5 rounded-xl pr-1 transition-colors ${
+                ativa ? 'bg-accent' : 'hover:bg-accent/50'
+              }`}
             >
-              {p.nome}
-            </Link>
-            <div className="relative">
-              <button
-                type="button"
-                aria-label={`Opções de ${p.nome}`}
-                onClick={() => setMenuAbertoId(menuAbertoId === p.id ? null : p.id)}
-                className="rounded px-1.5 py-1 text-sm text-muted-foreground hover:bg-muted"
+              <Link
+                href={hrefDoItem(p, queryAtual)}
+                aria-current={ativa ? 'page' : undefined}
+                className={`flex-1 truncate rounded-xl px-3 py-2 text-[13px] ${
+                  ativa ? 'font-semibold text-foreground' : 'text-muted-foreground'
+                }`}
               >
-                ⋮
-              </button>
-              {menuAbertoId === p.id && (
-                <div
-                  aria-label={`Ações de ${p.nome}`}
-                  className="surface absolute right-0 z-10 flex w-32 flex-col rounded p-1 text-sm"
+                {p.nome}
+              </Link>
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-label={`Opções de ${p.nome}`}
+                  onClick={() => setMenuAbertoId(menuAbertoId === p.id ? null : p.id)}
+                  // opacity-0 + focus-visible:opacity-100: o kebab so aparece no
+                  // hover da linha (menos ruido numa lista longa), mas continua
+                  // alcancavel por Tab — sem a regra de foco ele seria um alvo
+                  // invisivel para quem navega por teclado.
+                  className="pressable rounded-lg p-1.5 text-muted-foreground opacity-0 hover:bg-secondary hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100"
+                  aria-expanded={menuAbertoId === p.id}
                 >
-                  <button
-                    type="button"
-                    onClick={() => abrirRenomear(p)}
-                    className="rounded px-2 py-1 text-left hover:bg-muted"
+                  <EllipsisVertical size={15} strokeWidth={2} aria-hidden="true" />
+                </button>
+                {menuAbertoId === p.id && (
+                  <div
+                    aria-label={`Ações de ${p.nome}`}
+                    className="surface fade-in absolute right-0 z-20 mt-1 flex w-36 flex-col gap-0.5 rounded-xl p-1 text-sm shadow-2xl"
                   >
-                    Renomear
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => abrirExcluir(p)}
-                    className="rounded px-2 py-1 text-left hover:bg-muted"
-                  >
-                    Excluir
-                  </button>
-                </div>
-              )}
+                    <button
+                      type="button"
+                      onClick={() => abrirRenomear(p)}
+                      className="pressable flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] hover:bg-accent"
+                    >
+                      <Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
+                      Renomear
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => abrirExcluir(p)}
+                      className="pressable flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-destructive hover:bg-destructive/12"
+                    >
+                      <Trash2 size={14} strokeWidth={1.75} aria-hidden="true" />
+                      Excluir
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </nav>
 
       {renomeando && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
-          <div className="surface w-full max-w-sm rounded p-5">
-            <h2 className="mb-3 text-lg font-semibold">Renomear pipeline</h2>
-            <form action={salvarRenome} className="flex flex-col gap-2">
-              <label className="text-sm">
-                Nome da pipeline
-                <input
-                  name="nome"
-                  defaultValue={renomeando.nome}
-                  className="mt-1 w-full rounded border p-2"
-                />
-              </label>
+        <Modal titulo="Renomear pipeline" aoFechar={fecharModais}>
+          <form action={salvarRenome} className="flex flex-col gap-3">
+            <Rotulo>
+              Nome da pipeline
+              <Campo name="nome" defaultValue={renomeando.nome} />
+            </Rotulo>
 
-              {erro && <p className="text-sm text-destructive">{erro}</p>}
+            {erro && <p className="text-sm text-destructive">{erro}</p>}
 
-              <div className="mt-2 flex justify-end gap-2">
-                <button type="button" onClick={fecharModais} className="px-3 py-1 text-sm">
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={salvando}
-                  className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50"
-                >
-                  Salvar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <AcoesDoModal>
+              <Botao type="button" variante="fantasma" onClick={fecharModais}>
+                Cancelar
+              </Botao>
+              <Botao type="submit" disabled={salvando}>
+                Salvar
+              </Botao>
+            </AcoesDoModal>
+          </form>
+        </Modal>
       )}
 
       {excluindo && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
-          <div className="surface w-full max-w-sm rounded p-5">
-            <h2 className="mb-1 text-lg font-semibold">Excluir {excluindo.nome}?</h2>
-            <p className="text-sm text-muted-foreground">Essa ação não pode ser desfeita.</p>
+        <Modal
+          titulo={`Excluir ${excluindo.nome}?`}
+          descricao="Essa ação não pode ser desfeita."
+          aoFechar={fecharModais}
+        >
+          {erro && <p className="text-sm text-destructive">{erro}</p>}
 
-            {erro && <p className="mt-2 text-sm text-destructive">{erro}</p>}
-
-            <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={fecharModais} className="px-3 py-1 text-sm">
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => void confirmarExclusao()}
-                disabled={excluindoEmCurso}
-                className="rounded bg-destructive px-3 py-1 text-sm text-destructive-foreground disabled:opacity-50"
-              >
-                Confirmar exclusão
-              </button>
-            </div>
-          </div>
-        </div>
+          <AcoesDoModal>
+            <Botao type="button" variante="fantasma" onClick={fecharModais}>
+              Cancelar
+            </Botao>
+            <Botao
+              type="button"
+              variante="destrutivo"
+              onClick={() => void confirmarExclusao()}
+              disabled={excluindoEmCurso}
+            >
+              Confirmar exclusão
+            </Botao>
+          </AcoesDoModal>
+        </Modal>
       )}
     </div>
   )

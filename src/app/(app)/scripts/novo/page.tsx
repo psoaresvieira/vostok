@@ -20,12 +20,12 @@ export default async function NovoScriptPage() {
   if (!pipeline.ok) throw new Error(pipeline.erro)
 
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="fade-in flex flex-col gap-6 p-6 sm:p-8">
       <div className="flex items-center gap-3">
         <Link href="/disparo" className="text-sm underline">
           Scripts
         </Link>
-        <h1 className="text-2xl font-semibold">Novo script</h1>
+        <h1 className="text-[26px] font-semibold">Novo script</h1>
       </div>
       <Editor script={null} etapas={pipeline.valor.etapas} />
     </div>
