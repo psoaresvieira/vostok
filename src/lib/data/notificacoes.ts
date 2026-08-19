@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
-import { criarClienteServidor } from '@/lib/supabase/servidor'
+import { sessaoDoServidor } from './sessao'
 
 export type Notificacao = {
   id: string
@@ -106,8 +106,7 @@ export class SupabaseNotificacaoStore implements NotificacaoStore {
 }
 
 export async function criarNotificacaoStoreDoServidor(): Promise<Resultado<NotificacaoStore>> {
-  const cliente = await criarClienteServidor()
-  const { data: sessao } = await cliente.auth.getUser()
-  if (!sessao.user) return falha('sem_sessao')
-  return ok(new SupabaseNotificacaoStore(cliente))
+  const sessao = await sessaoDoServidor()
+  if (!sessao.ok) return falha(sessao.erro)
+  return ok(new SupabaseNotificacaoStore(sessao.valor.cliente))
 }

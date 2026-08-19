@@ -88,7 +88,10 @@ describe('buscarLeadsParaDisparo', () => {
 
     const r = await buscarLeadsParaDisparo('maria')
 
-    expect(storeMock.listarLeads).toHaveBeenCalledWith({ busca: 'maria' })
+    // `limite` explicito: o teto tem que descer para o store, e nao ficar
+    // num slice depois da leitura — sem ele o painel lia a conta inteira para
+    // mostrar dez linhas.
+    expect(storeMock.listarLeads).toHaveBeenCalledWith({ busca: 'maria', limite: 10 })
     expect(r.ok).toBe(true)
     if (!r.ok) return
     expect(r.valor).toHaveLength(1)

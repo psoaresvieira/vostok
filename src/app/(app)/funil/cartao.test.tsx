@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { Cartao } from './cartao'
-import type { Lead } from '@/lib/domain/tipos'
+import type { LeadDoFunil } from '@/lib/domain/tipos'
 
 // O cleanup automatico do @testing-library/react so se registra quando
 // globals: true esta ligado, e este vitest.config nao liga de proposito — o
@@ -12,30 +12,22 @@ import type { Lead } from '@/lib/domain/tipos'
 // "multiple elements found". Copiado de timeline.test.tsx.
 afterEach(cleanup)
 
-function lead(overrides: Partial<Lead> = {}): Lead {
+// O cartao recebe LeadDoFunil, e nao Lead: a projecao estreita que a RPC do
+// funil devolve (ver LeadDoFunil em domain/tipos.ts). A fixture segue o tipo
+// real de proposito — se o cartao um dia precisar de um campo que a projecao
+// nao tem, e' aqui que o compilador avisa.
+function lead(overrides: Partial<LeadDoFunil> = {}): LeadDoFunil {
   return {
     id: 'lead-1',
-    accountId: 'acc-1',
     nome: 'Maria da Silva',
-    telefone: null,
-    telefoneE164: null,
-    email: null,
-    emailNorm: null,
-    empresa: null,
-    origem: 'manual',
-    pipelineId: 'pipe-1',
     stageId: 'etapa-1',
     responsavelId: null,
-    status: 'aberto',
     valorCents: 150000,
-    lossReasonId: null,
     // horasNaEtapa(entrouNaEtapaEm, new Date()) usa o relogio real dentro do
     // componente (nao ha injecao de "agora") — por isso as fixtures deste
     // arquivo calculam entrouNaEtapaEm relativo a Date.now(), nunca uma data
     // fixa de calendario.
     entrouNaEtapaEm: new Date(Date.now() - 2 * 3_600_000),
-    criadoEm: new Date(Date.now() - 2 * 3_600_000),
-    atualizadoEm: new Date(Date.now() - 2 * 3_600_000),
     etiquetas: [],
     ...overrides,
   }

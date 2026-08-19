@@ -53,7 +53,12 @@ export async function buscarLeadsParaDisparo(
   // Os tres independentes: nenhum depende do outro, e todos resolvem a mesma
   // conta ativa — mesma forma de enviarWhatsApp (leads/[id]/acoes-whatsapp.ts).
   const [leads, pipeline, membros] = await Promise.all([
-    store.listarLeads({ busca }),
+    // `limite` no BANCO, e nao um slice em JS depois: a consulta lia toda a
+    // conta que casava com o termo (sem teto nenhum) para o painel mostrar
+    // dez linhas. O slice abaixo continua existindo porque e' ele que garante
+    // o contrato do painel — o limite do store e' um teto, nao uma promessa
+    // de ordem.
+    store.listarLeads({ busca, limite: LIMITE_RESULTADOS }),
     store.pipelinePadrao(),
     store.membros(),
   ])

@@ -2,6 +2,7 @@ import type { Resultado } from '@/lib/domain/resultado'
 import type { NovoLead } from '@/lib/domain/lead'
 import type { AplicacaoEtiqueta, LinhaCoorte } from '@/lib/domain/metricas'
 import type {
+  ColunaDoFunil,
   Conta,
   Etapa,
   Etiqueta,
@@ -9,6 +10,7 @@ import type {
   Lead,
   Membro,
   MotivoPerda,
+  Perfil,
   Pipeline,
 } from '@/lib/domain/tipos'
 
@@ -18,6 +20,26 @@ export type FiltroLeads = {
   desde?: Date | null
   busca?: string | null
   pipelineId?: string | null
+  /**
+   * Teto de linhas. Existe porque quem chama `listarLeads` sempre teve um: o
+   * painel de disparo lia a conta inteira para mostrar 8 resultados, e o
+   * recorte acontecia em JS depois de o banco ja ter montado e serializado
+   * tudo.
+   */
+  limite?: number | null
+}
+
+/**
+ * O que o quadro do funil pede: uma pagina POR ETAPA, nao a pipeline inteira.
+ *
+ * `etapaId` recorta a uma unica coluna — e' o "carregar mais" de uma coluna
+ * so', que nao pode repaginar as outras.
+ */
+export type FiltroFunil = Omit<FiltroLeads, 'limite' | 'pipelineId'> & {
+  pipelineId: string
+  etapaId?: string | null
+  limite: number
+  offset?: number
 }
 
 export type FiltroMetricas = {
@@ -32,6 +54,8 @@ export type FiltroMetricas = {
 export interface CrmStore {
   contaAtiva(): Promise<Resultado<Conta | null>>
   membros(): Promise<Resultado<Membro[]>>
+  /** O perfil do usuario logado. Ver a nota em SupabaseCrmStore.perfilAtual. */
+  perfilAtual(): Promise<Resultado<Perfil | null>>
   pipelinePadrao(): Promise<Resultado<{ pipeline: Pipeline; etapas: Etapa[] }>>
   listarPipelines(): Promise<Resultado<Pipeline[]>>
   pipelinePorId(pipelineId: string): Promise<Resultado<{ pipeline: Pipeline; etapas: Etapa[] }>>
@@ -41,6 +65,11 @@ export interface CrmStore {
   motivosPerda(): Promise<Resultado<MotivoPerda[]>>
 
   listarLeads(filtro: FiltroLeads): Promise<Resultado<Lead[]>>
+  /**
+   * Os cartoes do quadro, paginados por etapa, com total e soma da coluna
+   * inteira. Ver `ColunaDoFunil`.
+   */
+  leadsDoFunil(filtro: FiltroFunil): Promise<Resultado<ColunaDoFunil[]>>
   buscarLead(leadId: string): Promise<Resultado<Lead | null>>
   criarLead(
     dados: NovoLead & { pipelineId: string; stageId: string },
@@ -59,7 +88,13 @@ export interface CrmStore {
   etiquetasDaConta(): Promise<Resultado<Etiqueta[]>>
   aplicarEtiquetas(leadId: string, nomes: string[]): Promise<Resultado<void>>
 
-  eventosDoLead(leadId: string): Promise<Resultado<EventoLead[]>>
+  /**
+   * A timeline do lead, mais recente primeiro. `limite` opcional porque a
+   * ficha nunca desenhou mais que uma janela: um lead antigo com centenas de
+   * eventos serializava todos eles no payload da pagina para mostrar uma
+   * lista que ninguem rola ate o fim.
+   */
+  eventosDoLead(leadId: string, limite?: number): Promise<Resultado<EventoLead[]>>
   registrarNota(leadId: string, texto: string): Promise<Resultado<void>>
   /**
    * Evento `whatsapp_enviado` da ficha do lead. Vive no store — e nao num

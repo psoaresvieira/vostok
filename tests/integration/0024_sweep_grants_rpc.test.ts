@@ -52,6 +52,12 @@ const MAPA: Record<string, Privilegios> = {
   'desconectar_fonte(uuid)': { anon: false, authenticated: true },
   'desconectar_whatsapp(text,uuid)': { anon: false, authenticated: true },
   'excluir_etapa(uuid)': { anon: false, authenticated: true },
+  // Paginacao por etapa do quadro do funil (migration 0027). Invoker: a RLS
+  // de leads e' quem recorta o vendedor, inclusive nos totais da coluna.
+  'leads_do_funil(uuid,integer,integer,uuid,uuid,lead_origem,timestamp with time zone,text)': {
+    anon: false,
+    authenticated: true,
+  },
   'metricas_coorte(uuid,timestamp with time zone,timestamp with time zone,uuid)': {
     anon: false,
     authenticated: true,

@@ -46,6 +46,44 @@ export type Lead = {
   etiquetas: Etiqueta[]
 }
 
+/**
+ * O lead como o CARTAO do funil precisa dele — e nada mais.
+ *
+ * O quadro carregava `Lead` inteiro: email, email_norm, telefone cru,
+ * empresa, origem, status, loss_reason_id, criado_em, atualizado_em,
+ * account_id, pipeline_id. Nenhum desses campos aparece no cartao, e todos
+ * eles atravessavam o banco, o payload RSC e a memoria do navegador
+ * multiplicados pelo numero de leads da pipeline.
+ *
+ * Manter um tipo proprio (em vez de `Pick<Lead, ...>`) e' de proposito: o dia
+ * em que `Lead` ganhar um campo caro, o cartao nao o herda sem alguem
+ * decidir.
+ */
+export type LeadDoFunil = {
+  id: string
+  nome: string
+  stageId: string
+  responsavelId: string | null
+  valorCents: number | null
+  entrouNaEtapaEm: Date
+  etiquetas: Etiqueta[]
+}
+
+/**
+ * Uma coluna do quadro: a pagina de cartoes carregada, mais o total e a soma
+ * da etapa INTEIRA — o cabecalho continua contando os leads todos mesmo com
+ * so' a primeira pagina na tela.
+ *
+ * `somaCents` e' null quando nenhum lead da etapa tem valor preenchido, e nao
+ * zero: "R$ 0,00" ali seria a afirmacao falsa de que os leads valem zero.
+ */
+export type ColunaDoFunil = {
+  etapaId: string
+  leads: LeadDoFunil[]
+  total: number
+  somaCents: number | null
+}
+
 export type EventoLead = {
   id: string
   leadId: string

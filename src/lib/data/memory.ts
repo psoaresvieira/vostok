@@ -4,16 +4,19 @@ import { normalizarNomeEtiqueta } from '@/lib/domain/normalizacao'
 import type { NovoLead } from '@/lib/domain/lead'
 import type { AplicacaoEtiqueta, LinhaCoorte } from '@/lib/domain/metricas'
 import type {
+  ColunaDoFunil,
   Conta,
   Etapa,
   Etiqueta,
   EventoLead,
   Lead,
+  LeadDoFunil,
   Membro,
   MotivoPerda,
+  Perfil,
   Pipeline,
 } from '@/lib/domain/tipos'
-import type { CrmStore, FiltroLeads, FiltroMetricas } from './store'
+import type { CrmStore, FiltroFunil, FiltroLeads, FiltroMetricas } from './store'
 
 const ETAPAS_PADRAO: { nome: string; tipo: Etapa['tipo'] }[] = [
   { nome: 'Novo lead', tipo: 'aberta' },
@@ -93,6 +96,11 @@ export class InMemoryCrmStore implements CrmStore {
 
   async contaAtiva(): Promise<Resultado<Conta | null>> {
     return ok(this.conta)
+  }
+
+  async perfilAtual(): Promise<Resultado<Perfil | null>> {
+    const eu = this.membrosLista.find((m) => m.id === this.usuarioAtual)
+    return ok(eu ? { id: eu.id, nome: eu.nome, email: eu.email } : null)
   }
 
   async membros(): Promise<Resultado<Membro[]>> {
@@ -199,7 +207,61 @@ export class InMemoryCrmStore implements CrmStore {
           (l.emailNorm ?? '').includes(alvo),
       )
     }
-    return ok(saida)
+    // criado_em desc com id como desempate: mesma ordem do SELECT_LEAD do
+    // store do Supabase e da RPC leads_do_funil, para os dois stores
+    // paginarem igual.
+    saida.sort((a, b) => {
+      const porData = b.criadoEm.getTime() - a.criadoEm.getTime()
+      return porData !== 0 ? porData : (a.id < b.id ? 1 : a.id > b.id ? -1 : 0)
+    })
+    return ok(filtro.limite != null ? saida.slice(0, filtro.limite) : saida)
+  }
+
+  /**
+   * Espelho em memoria de `leads_do_funil` (migration 0027): o mesmo recorte,
+   * a mesma ordem e a mesma regra de `somaCents` null quando nenhum lead da
+   * coluna tem valor.
+   */
+  async leadsDoFunil(filtro: FiltroFunil): Promise<Resultado<ColunaDoFunil[]>> {
+    const todos = await this.listarLeads({
+      pipelineId: filtro.pipelineId,
+      responsavelId: filtro.responsavelId,
+      origem: filtro.origem,
+      desde: filtro.desde,
+      busca: filtro.busca,
+    })
+    if (!todos.ok) return falha(todos.erro)
+
+    const offset = filtro.offset ?? 0
+    const alvo = filtro.etapaId ?? null
+    const porEtapa = new Map<string, Lead[]>()
+    for (const lead of todos.valor) {
+      if (alvo !== null && lead.stageId !== alvo) continue
+      const lista = porEtapa.get(lead.stageId)
+      if (lista) lista.push(lead)
+      else porEtapa.set(lead.stageId, [lead])
+    }
+
+    const paraCartao = (l: Lead): LeadDoFunil => ({
+      id: l.id,
+      nome: l.nome,
+      stageId: l.stageId,
+      responsavelId: l.responsavelId,
+      valorCents: l.valorCents,
+      entrouNaEtapaEm: l.entrouNaEtapaEm,
+      etiquetas: l.etiquetas,
+    })
+
+    return ok(
+      [...porEtapa.entries()].map(([etapaId, leads]) => ({
+        etapaId,
+        leads: leads.slice(offset, offset + filtro.limite).map(paraCartao),
+        total: leads.length,
+        somaCents: leads.some((l) => l.valorCents !== null)
+          ? leads.reduce((acc, l) => acc + (l.valorCents ?? 0), 0)
+          : null,
+      })),
+    )
   }
 
   async buscarLead(leadId: string): Promise<Resultado<Lead | null>> {
@@ -349,8 +411,8 @@ export class InMemoryCrmStore implements CrmStore {
     return ok(undefined)
   }
 
-  async eventosDoLead(leadId: string): Promise<Resultado<EventoLead[]>> {
-    return ok(
+  async eventosDoLead(leadId: string, limite?: number): Promise<Resultado<EventoLead[]>> {
+    const ordenados =
       this.eventos
         // Guarda o indice de insercao antes de filtrar/ordenar: e o desempate
         // quando dois eventos nascem no mesmo milissegundo (new Date() so tem
@@ -365,8 +427,9 @@ export class InMemoryCrmStore implements CrmStore {
           // (mais antigo primeiro), o oposto do contrato "mais recente primeiro".
           return porData !== 0 ? porData : b.indice - a.indice
         })
-        .map(({ e }) => e),
-    )
+        .map(({ e }) => e)
+
+    return ok(limite != null ? ordenados.slice(0, limite) : ordenados)
   }
 
   async registrarNota(leadId: string, texto: string): Promise<Resultado<void>> {

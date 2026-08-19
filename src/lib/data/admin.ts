@@ -2,8 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import type { Conta, MotivoPerda, Papel } from '@/lib/domain/tipos'
-import { criarClienteServidor } from '@/lib/supabase/servidor'
-import { resolverContaAtiva } from './conta'
+import { contextoDaConta } from './sessao'
 
 /**
  * Sem `token` de proposito: a listagem de pendentes vai inteira para um
@@ -120,19 +119,17 @@ export class SupabaseAdminStore implements AdminStore {
 export async function criarAdminStoreDoServidor(): Promise<
   Resultado<{ admin: SupabaseAdminStore; conta: Conta }>
 > {
-  const cliente = await criarClienteServidor()
-  const { data: sessao } = await cliente.auth.getUser()
-  if (!sessao.user) return falha('sem_sessao')
-
   // Mesmo resolvedor de criarStoreDoServidor, de proposito: config/page.tsx
   // chama os dois na mesma renderizacao, e duas resolucoes independentes
-  // podiam cair em contas diferentes para quem tem duas memberships.
-  const ativa = await resolverContaAtiva(cliente, sessao.user.id)
-  if (!ativa.ok) return falha(ativa.erro)
-  if (ativa.valor.papel !== 'admin') return falha('sem_permissao')
+  // podiam cair em contas diferentes para quem tem duas memberships. Agora a
+  // resolucao e' literalmente a MESMA — contextoDaConta e' memoizado por
+  // request (ver sessao.ts), entao a divergencia deixou de ser possivel.
+  const ctx = await contextoDaConta()
+  if (!ctx.ok) return falha(ctx.erro)
+  if (ctx.valor.papel !== 'admin') return falha('sem_permissao')
 
   return ok({
-    admin: new SupabaseAdminStore(cliente, ativa.valor.conta.id, sessao.user.id),
-    conta: ativa.valor.conta,
+    admin: new SupabaseAdminStore(ctx.valor.cliente, ctx.valor.conta.id, ctx.valor.usuarioId),
+    conta: ctx.valor.conta,
   })
 }

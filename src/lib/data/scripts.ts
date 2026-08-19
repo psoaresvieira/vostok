@@ -2,9 +2,8 @@ import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import { normalizarTags } from '@/lib/domain/script'
 import type { Papel } from '@/lib/domain/tipos'
-import { criarClienteServidor } from '@/lib/supabase/servidor'
-import { resolverContaAtiva } from './conta'
 import { padraoIlike } from './filtro'
+import { contextoDaConta } from './sessao'
 
 export type Script = {
   id: string
@@ -286,15 +285,11 @@ export class SupabaseScriptStore implements ScriptStore {
 export async function criarScriptStoreDoServidor(): Promise<
   Resultado<{ scripts: SupabaseScriptStore; papel: Papel }>
 > {
-  const cliente = await criarClienteServidor()
-  const { data: sessao } = await cliente.auth.getUser()
-  if (!sessao.user) return falha('sem_sessao')
-
-  const ativa = await resolverContaAtiva(cliente, sessao.user.id)
-  if (!ativa.ok) return falha(ativa.erro)
+  const ctx = await contextoDaConta()
+  if (!ctx.ok) return falha(ctx.erro)
 
   return ok({
-    scripts: new SupabaseScriptStore(cliente, ativa.valor.conta.id, sessao.user.id),
-    papel: ativa.valor.papel,
+    scripts: new SupabaseScriptStore(ctx.valor.cliente, ctx.valor.conta.id, ctx.valor.usuarioId),
+    papel: ctx.valor.papel,
   })
 }

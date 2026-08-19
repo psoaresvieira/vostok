@@ -1,8 +1,7 @@
 import type { SupabaseClient, PostgrestError } from '@supabase/supabase-js'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import type { Conta } from '@/lib/domain/tipos'
-import { criarClienteServidor } from '@/lib/supabase/servidor'
-import { resolverContaAtiva } from './conta'
+import { contextoDaConta } from './sessao'
 
 /** A conexao do WhatsApp Cloud API da conta — o que a tela de Integracoes precisa. */
 export type ConexaoWhatsApp = {
@@ -119,16 +118,12 @@ export class SupabaseWhatsAppStore implements WhatsAppStore {
 export async function criarWhatsAppStoreDoServidor(): Promise<
   Resultado<{ whatsapp: SupabaseWhatsAppStore; conta: Conta }>
 > {
-  const cliente = await criarClienteServidor()
-  const { data: sessao } = await cliente.auth.getUser()
-  if (!sessao.user) return falha('sem_sessao')
-
-  const ativa = await resolverContaAtiva(cliente, sessao.user.id)
-  if (!ativa.ok) return falha(ativa.erro)
-  if (ativa.valor.papel !== 'admin') return falha('sem_permissao')
+  const ctx = await contextoDaConta()
+  if (!ctx.ok) return falha(ctx.erro)
+  if (ctx.valor.papel !== 'admin') return falha('sem_permissao')
 
   return ok({
-    whatsapp: new SupabaseWhatsAppStore(cliente, ativa.valor.conta.id),
-    conta: ativa.valor.conta,
+    whatsapp: new SupabaseWhatsAppStore(ctx.valor.cliente, ctx.valor.conta.id),
+    conta: ctx.valor.conta,
   })
 }

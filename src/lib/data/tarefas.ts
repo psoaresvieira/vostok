@@ -1,6 +1,6 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
-import { criarClienteServidor } from '@/lib/supabase/servidor'
+import { sessaoDoServidor } from './sessao'
 
 export type TipoTarefa = 'ligacao' | 'whatsapp' | 'reuniao' | 'proposta' | 'outro'
 
@@ -264,8 +264,7 @@ export class SupabaseTarefaStore implements TarefaStore {
 }
 
 export async function criarTarefaStoreDoServidor(): Promise<Resultado<TarefaStore>> {
-  const cliente = await criarClienteServidor()
-  const { data: sessao } = await cliente.auth.getUser()
-  if (!sessao.user) return falha('sem_sessao')
-  return ok(new SupabaseTarefaStore(cliente, sessao.user.id))
+  const sessao = await sessaoDoServidor()
+  if (!sessao.ok) return falha(sessao.erro)
+  return ok(new SupabaseTarefaStore(sessao.valor.cliente, sessao.valor.usuarioId))
 }

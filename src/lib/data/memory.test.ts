@@ -541,6 +541,79 @@ describe('InMemoryCrmStore', () => {
       expect(r.valor.map((l) => l.nome)).toEqual(['Bruno'])
     })
 
+    it('leadsDoFunil pagina POR ETAPA e conta a etapa inteira', async () => {
+      const p = await store.pipelinePadrao()
+      if (!p.ok) throw new Error(p.erro)
+      const [primeira, segunda] = p.valor.etapas
+
+      for (let i = 0; i < 5; i++) {
+        await store.criarLead({
+          ...novoLead(`A${i}`, { valorCents: 1000 }),
+          pipelineId: p.valor.pipeline.id,
+          stageId: primeira.id,
+        })
+      }
+      await store.criarLead({
+        ...novoLead('B0'),
+        pipelineId: p.valor.pipeline.id,
+        stageId: segunda.id,
+      })
+
+      const r = await store.leadsDoFunil({ pipelineId: p.valor.pipeline.id, limite: 2 })
+      if (!r.ok) throw new Error(r.erro)
+
+      const colunaA = r.valor.find((c) => c.etapaId === primeira.id)!
+      // Duas na pagina, cinco no total: o cabecalho da coluna nao mente por
+      // causa do limite.
+      expect(colunaA.leads).toHaveLength(2)
+      expect(colunaA.total).toBe(5)
+      expect(colunaA.somaCents).toBe(5000)
+      // O limite da coluna A nao consome o da coluna B.
+      expect(r.valor.find((c) => c.etapaId === segunda.id)!.leads).toHaveLength(1)
+    })
+
+    it('leadsDoFunil devolve somaCents null quando ninguem preencheu valor', async () => {
+      const p = await store.pipelinePadrao()
+      if (!p.ok) throw new Error(p.erro)
+      await store.criarLead({
+        ...novoLead('Sem valor'),
+        pipelineId: p.valor.pipeline.id,
+        stageId: p.valor.etapas[0].id,
+      })
+
+      const r = await store.leadsDoFunil({ pipelineId: p.valor.pipeline.id, limite: 50 })
+      if (!r.ok) throw new Error(r.erro)
+      // null, e nao 0: "R$ 0,00" afirmaria que os leads valem zero.
+      expect(r.valor[0].somaCents).toBeNull()
+    })
+
+    it('leadsDoFunil com etapaId e offset nao repete nem pula cartao', async () => {
+      const p = await store.pipelinePadrao()
+      if (!p.ok) throw new Error(p.erro)
+      const alvo = p.valor.etapas[0]
+      for (let i = 0; i < 5; i++) {
+        await store.criarLead({
+          ...novoLead(`L${i}`),
+          pipelineId: p.valor.pipeline.id,
+          stageId: alvo.id,
+        })
+      }
+
+      const base = { pipelineId: p.valor.pipeline.id, etapaId: alvo.id, limite: 2 }
+      const pg1 = await store.leadsDoFunil({ ...base, offset: 0 })
+      const pg2 = await store.leadsDoFunil({ ...base, offset: 2 })
+      const pg3 = await store.leadsDoFunil({ ...base, offset: 4 })
+      if (!pg1.ok || !pg2.ok || !pg3.ok) throw new Error('paginacao falhou')
+
+      const ids = [...pg1.valor[0].leads, ...pg2.valor[0].leads, ...pg3.valor[0].leads].map(
+        (l) => l.id,
+      )
+      expect(ids).toHaveLength(5)
+      expect(new Set(ids).size).toBe(5)
+      // Uma etapa so: as demais colunas nao voltam.
+      expect(pg1.valor).toHaveLength(1)
+    })
+
     it('renomear reflete em listarPipelines', async () => {
       const criado = await store.criarPipeline('Outbound', ['Prospecção'])
       if (!criado.ok) throw new Error(criado.erro)

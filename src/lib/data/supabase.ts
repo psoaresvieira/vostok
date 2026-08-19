@@ -3,6 +3,7 @@ import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import { normalizarNomeEtiqueta } from '@/lib/domain/normalizacao'
 import type { NovoLead } from '@/lib/domain/lead'
 import type {
+  ColunaDoFunil,
   Conta,
   Etapa,
   Etiqueta,
@@ -11,13 +12,13 @@ import type {
   Membro,
   MotivoPerda,
   Papel,
+  Perfil,
   Pipeline,
 } from '@/lib/domain/tipos'
 import type { AplicacaoEtiqueta, LinhaCoorte } from '@/lib/domain/metricas'
-import type { CrmStore, FiltroLeads, FiltroMetricas } from './store'
-import { criarClienteServidor } from '@/lib/supabase/servidor'
-import { resolverContaAtiva } from './conta'
+import type { CrmStore, FiltroFunil, FiltroLeads, FiltroMetricas } from './store'
 import { valorPostgrest, padraoIlike } from './filtro'
+import { contextoDaConta } from './sessao'
 
 type LinhaLead = {
   id: string
@@ -83,6 +84,25 @@ export class SupabaseCrmStore implements CrmStore {
       .maybeSingle()
     if (error) return falha(error.message)
     return ok(data ? { id: data.id, nome: data.nome } : null)
+  }
+
+  /**
+   * O perfil de QUEM esta logado — uma linha, por id.
+   *
+   * Existe porque o layout do app (que envolve toda pagina) chamava
+   * `membros()` so' para achar o proprio nome no rodape da barra lateral: uma
+   * consulta que le a membership e o perfil de TODA a conta, em cada
+   * navegacao, para usar um campo de uma linha. Numa conta com dezenas de
+   * usuarios era a leitura mais cara de paginas que nem tem lista de gente.
+   */
+  async perfilAtual(): Promise<Resultado<Perfil | null>> {
+    const { data, error } = await this.cliente
+      .from('profiles')
+      .select('id, nome, email')
+      .eq('id', this.usuarioId)
+      .maybeSingle()
+    if (error) return falha(error.message)
+    return ok(data ? { id: data.id, nome: data.nome, email: data.email } : null)
   }
 
   async membros(): Promise<Resultado<Membro[]>> {
@@ -308,9 +328,79 @@ export class SupabaseCrmStore implements CrmStore {
       q = q.or(`nome.ilike.${alvo},telefone_e164.ilike.${alvo},email_norm.ilike.${alvo}`)
     }
 
+    if (filtro.limite != null) q = q.limit(filtro.limite)
+
     const { data, error } = await q
     if (error) return falha(error.message)
     return ok((data as unknown as LinhaLead[]).map(paraLead))
+  }
+
+  /**
+   * Uma unica RPC para o quadro inteiro (migration 0027), em vez do
+   * `select *` da pipeline toda que existia antes.
+   *
+   * O ganho nao e' so' o `limit`: o `count` e o `sum` de cada coluna saem
+   * calculados do banco por window function, entao o cabecalho continua
+   * dizendo "128 leads: R$ 340.000" com 50 cartoes carregados. Fazer isso em
+   * JS exigiria justamente ter os 128 na memoria — o problema que a
+   * paginacao existe para resolver.
+   *
+   * `security invoker` na funcao: a RLS de leads recorta o vendedor la
+   * dentro, inclusive nos totais. Nada de autorizacao mudou de lugar.
+   */
+  async leadsDoFunil(filtro: FiltroFunil): Promise<Resultado<ColunaDoFunil[]>> {
+    const { data, error } = await this.cliente.rpc('leads_do_funil', {
+      p_pipeline_id: filtro.pipelineId,
+      p_limite: filtro.limite,
+      p_offset: filtro.offset ?? 0,
+      p_stage_id: filtro.etapaId ?? null,
+      p_responsavel_id: filtro.responsavelId ?? null,
+      p_origem: filtro.origem ?? null,
+      p_desde: filtro.desde ? filtro.desde.toISOString() : null,
+      p_busca: filtro.busca ?? null,
+    })
+    if (error) return falha(codigoDoErroPostgres(error))
+
+    const linhas = (data ?? []) as {
+      id: string
+      nome: string
+      stage_id: string
+      responsavel_id: string | null
+      valor_cents: number | null
+      entrou_na_etapa_em: string
+      etiquetas: Etiqueta[]
+      total_na_etapa: number
+      soma_cents_na_etapa: number | string | null
+    }[]
+
+    // A RPC devolve linhas ja agrupadas por stage_id (order by na funcao), com
+    // total e soma repetidos em cada uma. Aqui so' se dobra isso em colunas.
+    const porEtapa = new Map<string, ColunaDoFunil>()
+    for (const l of linhas) {
+      let coluna = porEtapa.get(l.stage_id)
+      if (!coluna) {
+        coluna = {
+          etapaId: l.stage_id,
+          leads: [],
+          total: Number(l.total_na_etapa),
+          // bigint volta do PostgREST como string quando passa de 2^53; a soma
+          // e' em centavos, entao Number() aqui e' o mesmo valor que o resto do
+          // app ja trata como number (formatarMoeda).
+          somaCents: l.soma_cents_na_etapa === null ? null : Number(l.soma_cents_na_etapa),
+        }
+        porEtapa.set(l.stage_id, coluna)
+      }
+      coluna.leads.push({
+        id: l.id,
+        nome: l.nome,
+        stageId: l.stage_id,
+        responsavelId: l.responsavel_id,
+        valorCents: l.valor_cents,
+        entrouNaEtapaEm: new Date(l.entrou_na_etapa_em),
+        etiquetas: l.etiquetas ?? [],
+      })
+    }
+    return ok([...porEtapa.values()])
   }
 
   async buscarLead(leadId: string): Promise<Resultado<Lead | null>> {
@@ -484,8 +574,8 @@ export class SupabaseCrmStore implements CrmStore {
     return ok(undefined)
   }
 
-  async eventosDoLead(leadId: string): Promise<Resultado<EventoLead[]>> {
-    const { data, error } = await this.cliente
+  async eventosDoLead(leadId: string, limite?: number): Promise<Resultado<EventoLead[]>> {
+    let q = this.cliente
       .from('lead_events')
       .select('id, lead_id, tipo, payload, ator_id, criado_em')
       .eq('lead_id', leadId)
@@ -495,6 +585,9 @@ export class SupabaseCrmStore implements CrmStore {
       // — mais novo primeiro —, igualando o criterio ao do InMemoryCrmStore.
       .order('criado_em', { ascending: false })
       .order('seq', { ascending: false })
+    if (limite != null) q = q.limit(limite)
+
+    const { data, error } = await q
     if (error) return falha(error.message)
     return ok(
       (data ?? []).map((e) => ({
@@ -653,18 +746,13 @@ function codigoDoErroPostgres(erro: Pick<PostgrestError, 'message' | 'code'>): s
 export async function criarStoreDoServidor(): Promise<
   Resultado<{ store: SupabaseCrmStore; conta: Conta; usuarioId: string; papel: Papel }>
 > {
-  const cliente = await criarClienteServidor()
-  const { data: sessao } = await cliente.auth.getUser()
-  const usuario = sessao.user
-  if (!usuario) return falha('sem_sessao')
-
-  const ativa = await resolverContaAtiva(cliente, usuario.id)
-  if (!ativa.ok) return falha(ativa.erro)
+  const ctx = await contextoDaConta()
+  if (!ctx.ok) return falha(ctx.erro)
 
   return ok({
-    store: new SupabaseCrmStore(cliente, ativa.valor.conta.id, usuario.id),
-    conta: ativa.valor.conta,
-    usuarioId: usuario.id,
-    papel: ativa.valor.papel,
+    store: new SupabaseCrmStore(ctx.valor.cliente, ctx.valor.conta.id, ctx.valor.usuarioId),
+    conta: ctx.valor.conta,
+    usuarioId: ctx.valor.usuarioId,
+    papel: ctx.valor.papel,
   })
 }

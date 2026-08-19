@@ -2,8 +2,7 @@ import { createClient, type PostgrestError, type SupabaseClient } from '@supabas
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import type { Variavel } from '@/lib/domain/script'
 import type { Papel } from '@/lib/domain/tipos'
-import { criarClienteServidor } from '@/lib/supabase/servidor'
-import { resolverContaAtiva } from './conta'
+import { contextoDaConta } from './sessao'
 
 /**
  * O template do WhatsApp de um script (0022_whatsapp_templates.sql).
@@ -270,17 +269,13 @@ export class SupabaseTemplateStore implements TemplateStore {
 export async function criarTemplateStoreDoServidor(): Promise<
   Resultado<{ templates: SupabaseTemplateStore; papel: Papel; contaId: string }>
 > {
-  const cliente = await criarClienteServidor()
-  const { data: sessao } = await cliente.auth.getUser()
-  if (!sessao.user) return falha('sem_sessao')
-
-  const ativa = await resolverContaAtiva(cliente, sessao.user.id)
-  if (!ativa.ok) return falha(ativa.erro)
+  const ctx = await contextoDaConta()
+  if (!ctx.ok) return falha(ctx.erro)
 
   return ok({
-    templates: new SupabaseTemplateStore(cliente, ativa.valor.conta.id),
-    papel: ativa.valor.papel,
-    contaId: ativa.valor.conta.id,
+    templates: new SupabaseTemplateStore(ctx.valor.cliente, ctx.valor.conta.id),
+    papel: ctx.valor.papel,
+    contaId: ctx.valor.conta.id,
   })
 }
 

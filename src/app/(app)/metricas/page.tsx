@@ -44,12 +44,12 @@ export default async function MetricasPage({
     return <p className="p-6 text-destructive">{mensagem(periodo.erro)}</p>
   }
 
-  const pipeline = await store.pipelinePadrao()
+  // Independentes entre si: em serie a tela pagava as duas latencias somadas
+  // antes de chegar nas metricas, que sao a parte cara.
+  const [pipeline, membros] = await Promise.all([store.pipelinePadrao(), store.membros()])
   if (!pipeline.ok) return <p className="p-6 text-destructive">{mensagem(pipeline.erro)}</p>
-  const { etapas } = pipeline.valor
-
-  const membros = await store.membros()
   if (!membros.ok) return <p className="p-6 text-destructive">{mensagem(membros.erro)}</p>
+  const { etapas } = pipeline.valor
 
   const filtro = {
     pipelineId: pipeline.valor.pipeline.id,
@@ -72,7 +72,7 @@ export default async function MetricasPage({
   // o problema e o proprio parametro que os filtros ofereceriam de novo.
   if (!coorte.ok) {
     return (
-      <div className="flex flex-col gap-6 p-6">
+      <div className="fade-in flex flex-col gap-6 p-6 sm:p-8">
         <Filtros membros={membros.valor} podeFiltrarPorResponsavel={papel !== 'vendedor'} />
         <p className="text-destructive">{mensagem(coorte.erro)}</p>
       </div>
@@ -80,7 +80,7 @@ export default async function MetricasPage({
   }
   if (!aplicacoes.ok) {
     return (
-      <div className="flex flex-col gap-6 p-6">
+      <div className="fade-in flex flex-col gap-6 p-6 sm:p-8">
         <Filtros membros={membros.valor} podeFiltrarPorResponsavel={papel !== 'vendedor'} />
         <p className="text-destructive">{mensagem(aplicacoes.erro)}</p>
       </div>
@@ -93,7 +93,7 @@ export default async function MetricasPage({
   const canais = canaisDaCoorte(coorte.valor)
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="fade-in flex flex-col gap-6 p-6 sm:p-8">
       <Filtros
         membros={membros.valor}
         podeFiltrarPorResponsavel={papel !== 'vendedor'}

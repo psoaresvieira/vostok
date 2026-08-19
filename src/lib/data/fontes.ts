@@ -3,8 +3,7 @@ import type { SupabaseClient, PostgrestError } from '@supabase/supabase-js'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import type { Conta } from '@/lib/domain/tipos'
 import type { Entrega, Fonte, Provedor, StatusEntrega } from '@/lib/domain/fonte'
-import { criarClienteServidor } from '@/lib/supabase/servidor'
-import { resolverContaAtiva } from './conta'
+import { contextoDaConta } from './sessao'
 
 /** O que a tela de Integracoes precisa. Escrita sempre por RPC. */
 export interface FonteStore {
@@ -261,16 +260,12 @@ export class SupabaseFonteStore implements FonteStore {
 export async function criarFonteStoreDoServidor(): Promise<
   Resultado<{ fontes: SupabaseFonteStore; conta: Conta }>
 > {
-  const cliente = await criarClienteServidor()
-  const { data: sessao } = await cliente.auth.getUser()
-  if (!sessao.user) return falha('sem_sessao')
-
-  const ativa = await resolverContaAtiva(cliente, sessao.user.id)
-  if (!ativa.ok) return falha(ativa.erro)
-  if (ativa.valor.papel !== 'admin') return falha('sem_permissao')
+  const ctx = await contextoDaConta()
+  if (!ctx.ok) return falha(ctx.erro)
+  if (ctx.valor.papel !== 'admin') return falha('sem_permissao')
 
   return ok({
-    fontes: new SupabaseFonteStore(cliente, ativa.valor.conta.id),
-    conta: ativa.valor.conta,
+    fontes: new SupabaseFonteStore(ctx.valor.cliente, ctx.valor.conta.id),
+    conta: ctx.valor.conta,
   })
 }

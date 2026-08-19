@@ -1,7 +1,7 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import type { StageTipo } from '@/lib/domain/tipos'
-import { criarClienteServidor } from '@/lib/supabase/servidor'
+import { sessaoDoServidor } from './sessao'
 
 export type ResumoEtapa = {
   etapaId: string
@@ -167,9 +167,8 @@ export class SupabaseEtapaStore implements EtapaStore {
 export async function criarEtapaStoreDoServidor(
   pipelineId: string,
 ): Promise<Resultado<{ etapas: SupabaseEtapaStore }>> {
-  const cliente = await criarClienteServidor()
-  const { data: sessao } = await cliente.auth.getUser()
-  if (!sessao.user) return falha('sem_sessao')
+  const sessao = await sessaoDoServidor()
+  if (!sessao.ok) return falha(sessao.erro)
 
-  return ok({ etapas: new SupabaseEtapaStore(cliente, pipelineId) })
+  return ok({ etapas: new SupabaseEtapaStore(sessao.valor.cliente, pipelineId) })
 }
