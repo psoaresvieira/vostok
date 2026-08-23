@@ -88,7 +88,10 @@ test('múltiplas pipelines: criar, isolar leads, ficha e exclusão bloqueada', a
   // Voltar pelo link da ficha retorna ao funil preservando `?pipeline=` — a
   // ficha sabe que o lead é da Outbound (pipeline.valor.pipeline.isDefault é
   // false) e monta o href com o id (page.tsx:138-142).
-  await page.getByRole('link', { name: '← voltar ao funil' }).click()
+  // A seta virou icone aria-hidden na revisao de telas; o nome acessivel do
+  // link e so "Voltar ao funil" — dai o regex, como o comentario da propria
+  // ficha recomenda.
+  await page.getByRole('link', { name: /voltar ao funil/i }).click()
   await expect(page).toHaveURL(/\/funil\?pipeline=/)
 
   // 5. excluir bloqueada com leads: kebab → Excluir → Confirmar exclusão.

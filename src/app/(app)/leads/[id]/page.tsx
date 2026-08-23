@@ -1,7 +1,8 @@
 import { Suspense } from 'react'
 import { notFound, redirect } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
-import { BotaoLink } from '@/components/ui/botao'
+import Link from 'next/link'
+import { classesDeBotao } from '@/components/ui/botao'
 import { Selo } from '@/components/ui/selo'
 import { criarStoreDoServidor } from '@/lib/data/supabase'
 import { criarTarefaStoreDoServidor, type Tarefa } from '@/lib/data/tarefas'
@@ -90,23 +91,25 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
     <div className="fade-in mx-auto flex max-w-6xl flex-col gap-6 p-6 sm:p-8">
       {/* Cabecalho da ficha, largura inteira. O "← voltar ao funil" era um
           link sublinhado solto no canto; virou botao de contorno com seta.
-          Continua sendo <a> (BotaoLink, nao <button>): abrir a pipeline em
-          nova aba tem que funcionar, e page.test.tsx seleciona por
-          `getByRole('link', { name: /voltar ao funil/i })`. */}
+          Continua sendo <a> (Link, nao <button>): abrir a pipeline em nova
+          aba tem que funcionar, e page.test.tsx seleciona por
+          `getByRole('link', { name: /voltar ao funil/i })`. Link do Next com
+          classesDeBotao, NAO BotaoLink: o <a> cru fazia navegacao de pagina
+          inteira, e o funil recem-carregado engolia o primeiro clique de quem
+          voltava (janela de hidratacao — pipelines.spec.ts pegou isso). */}
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col items-start gap-3">
-          <BotaoLink
+          <Link
             href={
               pipeline.valor.pipeline.isDefault
                 ? '/funil'
                 : `/funil?pipeline=${pipeline.valor.pipeline.id}`
             }
-            variante="contorno"
-            tamanho="sm"
+            className={classesDeBotao('contorno', 'sm')}
           >
             <ArrowLeft size={15} strokeWidth={2} aria-hidden="true" />
             Voltar ao funil
-          </BotaoLink>
+          </Link>
           <div>
             <h1 className="text-[26px] font-semibold">{lead.valor.nome}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-2">

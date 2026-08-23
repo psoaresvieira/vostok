@@ -71,9 +71,11 @@ test('convidado se cadastra pelo link e cai na conta de quem convidou', async ({
 
     await expect(paginaVendedor).toHaveURL(/\/funil/)
 
-    // Na conta de QUEM CONVIDOU: o nome da empresa no cabecalho e o carimbo unico
-    // da conta do admin, entao ver esse nome so e possivel dentro dela.
-    await expect(paginaVendedor.locator('header').getByText(empresa)).toBeVisible()
+    // Na conta de QUEM CONVIDOU: o nome da empresa na barra lateral e o carimbo
+    // unico da conta do admin, entao ver esse nome so e possivel dentro dela.
+    // (O nome saiu do <header> na revisao de telas — mesma migracao descrita no
+    // preambulo de navegacao.spec.ts; a barra expoe role=complementary.)
+    await expect(paginaVendedor.getByRole('complementary').getByText(empresa)).toBeVisible()
 
     // Entrou como vendedor, nao como admin da propria conta: sem link de config.
     await expect(paginaVendedor.getByRole('link', { name: 'Configuração' })).toHaveCount(0)
