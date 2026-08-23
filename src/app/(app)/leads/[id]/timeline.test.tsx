@@ -42,6 +42,14 @@ describe('rotuloEvento', () => {
     expect(resultado).toContain('Qualificado')
   })
 
+  it('traduz etiqueta_removida com o nome da etiqueta do payload', () => {
+    const e = evento({ tipo: 'etiqueta_removida', payload: { tag: 'Preço alto' } })
+
+    const resultado = rotuloEvento(e, new Map(), new Map())
+
+    expect(resultado).toBe('Etiqueta "Preço alto" removida')
+  })
+
   it('traduz tarefa_concluida lendo o titulo do payload', () => {
     // O payload guarda o titulo como snapshot de proposito: a tarefa pode ser
     // excluida depois e a historia do lead nao pode apontar para o vazio.

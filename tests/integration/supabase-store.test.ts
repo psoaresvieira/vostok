@@ -135,6 +135,86 @@ describe('SupabaseCrmStore', () => {
     expect(snapshot).toBe(etapa(c, 'Qualificação'))
   })
 
+  it('removerEtiqueta apaga a aplicacao, preserva o catalogo e grava etiqueta_removida', async () => {
+    const cliente = await clienteDoUsuario(c.adminId)
+    const store = new SupabaseCrmStore(cliente, c.accountId, c.adminId)
+    const criado = await store.criarLead({
+      ...leadSchema.parse({ nome: 'Ana' }),
+      pipelineId: c.pipelineId,
+      stageId: etapa(c, 'Qualificação'),
+    })
+    if (!criado.ok) throw new Error(criado.erro)
+    await store.aplicarEtiquetas(criado.valor, ['Preço alto'])
+    const etiquetas = await store.etiquetasDaConta()
+    if (!etiquetas.ok) throw new Error(etiquetas.erro)
+    const tagId = etiquetas.valor[0].id
+
+    const r = await store.removerEtiqueta(criado.valor, tagId)
+    expect(r).toEqual({ ok: true, valor: undefined })
+
+    const linhas = await comoServico(async (cli) =>
+      (await cli.query('select 1 from public.lead_tags where lead_id = $1', [criado.valor])).rows,
+    )
+    expect(linhas).toHaveLength(0)
+    // O catalogo da conta nao encolhe junto.
+    const catalogo = await comoServico(async (cli) =>
+      (await cli.query('select 1 from public.tags where account_id = $1', [c.accountId])).rows,
+    )
+    expect(catalogo).toHaveLength(1)
+    // A timeline guarda o desfazer, com o nome da etiqueta como snapshot.
+    const eventos = await comoServico(async (cli) =>
+      (
+        await cli.query(
+          `select payload->>'tag' as tag from public.lead_events
+           where lead_id = $1 and tipo = 'etiqueta_removida'`,
+          [criado.valor],
+        )
+      ).rows,
+    )
+    expect(eventos).toEqual([{ tag: 'Preço alto' }])
+
+    // Idempotente: remover de novo e ok e NAO grava segundo evento.
+    const denovo = await store.removerEtiqueta(criado.valor, tagId)
+    expect(denovo).toEqual({ ok: true, valor: undefined })
+    const contagem = await comoServico(async (cli) =>
+      (
+        await cli.query(
+          `select count(*)::int as n from public.lead_events
+           where lead_id = $1 and tipo = 'etiqueta_removida'`,
+          [criado.valor],
+        )
+      ).rows[0].n,
+    )
+    expect(contagem).toBe(1)
+  })
+
+  it('vendedor nao remove etiqueta de lead que a RLS esconde dele', async () => {
+    const admin = new SupabaseCrmStore(await clienteDoUsuario(c.adminId), c.accountId, c.adminId)
+    const criado = await admin.criarLead({
+      ...leadSchema.parse({ nome: 'Lead do B' }),
+      pipelineId: c.pipelineId,
+      stageId: etapa(c, 'Novo lead'),
+      responsavelId: c.vendedorBId,
+    })
+    if (!criado.ok) throw new Error(criado.erro)
+    await admin.aplicarEtiquetas(criado.valor, ['Preço alto'])
+    const etiquetas = await admin.etiquetasDaConta()
+    if (!etiquetas.ok) throw new Error(etiquetas.erro)
+
+    const storeA = new SupabaseCrmStore(
+      await clienteDoUsuario(c.vendedorAId),
+      c.accountId,
+      c.vendedorAId,
+    )
+    const r = await storeA.removerEtiqueta(criado.valor, etiquetas.valor[0].id)
+
+    expect(r).toEqual({ ok: false, erro: 'lead_nao_encontrado' })
+    const linhas = await comoServico(async (cli) =>
+      (await cli.query('select 1 from public.lead_tags where lead_id = $1', [criado.valor])).rows,
+    )
+    expect(linhas).toHaveLength(1)
+  })
+
   // Par do teste unitario em memory.test.ts, aqui contra o Postgres de verdade:
   // a busca da etiqueta usava .ilike('nome', nome), mandando o texto digitado
   // como PADRAO. Com uma unica linha casando, o lead recebia o id da etiqueta

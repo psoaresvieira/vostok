@@ -411,6 +411,28 @@ export class InMemoryCrmStore implements CrmStore {
     return ok(undefined)
   }
 
+  async removerEtiqueta(leadId: string, tagId: string): Promise<Resultado<void>> {
+    const lead = this.leads.find((l) => l.id === leadId)
+    if (!lead) return falha('lead_nao_encontrado')
+
+    const indice = this.leadTags.findIndex((lt) => lt.leadId === leadId && lt.tagId === tagId)
+    // Idempotente de proposito — ver o comentario do port em store.ts.
+    if (indice === -1) return ok(undefined)
+
+    const tag = this.tags.find((t) => t.id === tagId)
+    this.leadTags.splice(indice, 1)
+    lead.etiquetas = lead.etiquetas.filter((e) => e.id !== tagId)
+    this.eventos.push({
+      id: randomUUID(),
+      leadId,
+      tipo: 'etiqueta_removida',
+      payload: { tag: tag?.nome ?? '?' },
+      atorId: this.usuarioAtual,
+      criadoEm: new Date(),
+    })
+    return ok(undefined)
+  }
+
   async eventosDoLead(leadId: string, limite?: number): Promise<Resultado<EventoLead[]>> {
     const ordenados =
       this.eventos

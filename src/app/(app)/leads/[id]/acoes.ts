@@ -32,6 +32,17 @@ export async function adicionarEtiquetas(
   return ok(undefined)
 }
 
+export async function removerEtiqueta(leadId: string, tagId: string): Promise<Resultado<void>> {
+  const contexto = await criarStoreDoServidor()
+  if (!contexto.ok) return falha(contexto.erro)
+
+  const r = await contexto.valor.store.removerEtiqueta(leadId, tagId)
+  if (!r.ok) return falha(r.erro)
+
+  revalidatePath(`/leads/${leadId}`)
+  return ok(undefined)
+}
+
 export async function trocarResponsavel(
   leadId: string,
   responsavelId: string | null,

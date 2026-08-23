@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const storeMock = {
   registrarNota: vi.fn(),
   aplicarEtiquetas: vi.fn(),
+  removerEtiqueta: vi.fn(),
   atribuirResponsavel: vi.fn(),
 }
 
@@ -22,7 +23,7 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePathMock(...args),
 }))
 
-import { adicionarNota, adicionarEtiquetas, trocarResponsavel } from './acoes'
+import { adicionarNota, adicionarEtiquetas, removerEtiqueta, trocarResponsavel } from './acoes'
 
 function contextoFeliz(papel: 'admin' | 'gestor' | 'vendedor' = 'admin') {
   criarStoreDoServidorMock.mockResolvedValue({
@@ -91,6 +92,38 @@ describe('adicionarEtiquetas', () => {
     storeMock.aplicarEtiquetas.mockResolvedValue({ ok: false, erro: 'lead_nao_encontrado' })
 
     const r = await adicionarEtiquetas('lead-1', ['quente'])
+
+    expect(r).toEqual({ ok: false, erro: 'lead_nao_encontrado' })
+    expect(revalidatePathMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('removerEtiqueta', () => {
+  it('sem sessao: propaga o erro do contexto sem tocar o store', async () => {
+    criarStoreDoServidorMock.mockResolvedValue({ ok: false, erro: 'sem_sessao' })
+
+    const r = await removerEtiqueta('lead-1', 'tag-1')
+
+    expect(r).toEqual({ ok: false, erro: 'sem_sessao' })
+    expect(storeMock.removerEtiqueta).not.toHaveBeenCalled()
+  })
+
+  it('caminho feliz: repassa lead e tag ao store e revalida a ficha', async () => {
+    contextoFeliz()
+    storeMock.removerEtiqueta.mockResolvedValue({ ok: true, valor: undefined })
+
+    const r = await removerEtiqueta('lead-1', 'tag-1')
+
+    expect(storeMock.removerEtiqueta).toHaveBeenCalledWith('lead-1', 'tag-1')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/leads/lead-1')
+    expect(r.ok).toBe(true)
+  })
+
+  it('falha do store propaga o codigo e nao revalida', async () => {
+    contextoFeliz()
+    storeMock.removerEtiqueta.mockResolvedValue({ ok: false, erro: 'lead_nao_encontrado' })
+
+    const r = await removerEtiqueta('lead-1', 'tag-1')
 
     expect(r).toEqual({ ok: false, erro: 'lead_nao_encontrado' })
     expect(revalidatePathMock).not.toHaveBeenCalled()

@@ -8,9 +8,11 @@ import type { Etiqueta } from '@/lib/domain/tipos'
 afterEach(cleanup)
 
 const adicionarEtiquetasMock = vi.fn()
+const removerEtiquetaMock = vi.fn()
 
 vi.mock('./acoes', () => ({
   adicionarEtiquetas: (...args: unknown[]) => adicionarEtiquetasMock(...args),
+  removerEtiqueta: (...args: unknown[]) => removerEtiquetaMock(...args),
 }))
 
 import { EditorEtiquetas } from './etiquetas'
@@ -110,6 +112,33 @@ describe('EditorEtiquetas — aplicar', () => {
     expect(
       await screen.findByText(/Não conseguimos falar com o servidor/),
     ).toBeTruthy()
+  })
+
+  it('cada chip tem botao de remover que chama a action com lead e tag', async () => {
+    removerEtiquetaMock.mockResolvedValue({ ok: true, valor: undefined })
+    render(
+      <EditorEtiquetas
+        leadId="lead-1"
+        atuais={[etiqueta('t1', 'quente'), etiqueta('t2', 'frio')]}
+        conhecidas={[]}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remover quente' }))
+
+    await waitFor(() => expect(removerEtiquetaMock).toHaveBeenCalledWith('lead-1', 't1'))
+    expect(removerEtiquetaMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('falha ao remover vira mensagem traduzida', async () => {
+    removerEtiquetaMock.mockResolvedValue({ ok: false, erro: 'sem_sessao' })
+    render(
+      <EditorEtiquetas leadId="lead-1" atuais={[etiqueta('t1', 'quente')]} conhecidas={[]} />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remover quente' }))
+
+    expect(await screen.findByText('Sua sessão expirou. Entre novamente.')).toBeTruthy()
   })
 
   it('codigo desconhecido cai no fallback cru (?? r.erro)', async () => {

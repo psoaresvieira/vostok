@@ -94,6 +94,70 @@ describe('InMemoryCrmStore', () => {
     expect(store.etapaDaEtiqueta(criado.valor, 'Preço alto')).toBe(qualificacao.id)
   })
 
+  it('removerEtiqueta tira a aplicacao, preserva o catalogo e grava na timeline', async () => {
+    const p = await store.pipelinePadrao()
+    if (!p.ok) throw new Error(p.erro)
+    const criado = await store.criarLead({
+      ...novoLead('Ana'),
+      pipelineId: p.valor.pipeline.id,
+      stageId: p.valor.etapas[0].id,
+    })
+    if (!criado.ok) throw new Error(criado.erro)
+    await store.aplicarEtiquetas(criado.valor, ['Preço alto'])
+    const etiquetas = await store.etiquetasDaConta()
+    if (!etiquetas.ok) throw new Error(etiquetas.erro)
+    const tagId = etiquetas.valor[0].id
+
+    const r = await store.removerEtiqueta(criado.valor, tagId)
+
+    expect(r.ok).toBe(true)
+    // A aplicacao some (inclusive da metrica, que le lead_tags)...
+    expect(store.etapaDaEtiqueta(criado.valor, 'Preço alto')).toBeNull()
+    const lead = await store.buscarLead(criado.valor)
+    if (!lead.ok || !lead.valor) throw new Error('lead sumiu')
+    expect(lead.valor.etiquetas).toHaveLength(0)
+    // ...mas o catalogo da conta nao encolhe: o nome segue como sugestao.
+    const depois = await store.etiquetasDaConta()
+    if (!depois.ok) throw new Error(depois.erro)
+    expect(depois.valor).toHaveLength(1)
+    // E a historia fica: quem tirou e qual etiqueta.
+    const eventos = await store.eventosDoLead(criado.valor)
+    if (!eventos.ok) throw new Error(eventos.erro)
+    expect(eventos.valor[0].tipo).toBe('etiqueta_removida')
+    expect(eventos.valor[0].payload.tag).toBe('Preço alto')
+  })
+
+  it('remover etiqueta nao aplicada e ok silencioso, sem evento fantasma', async () => {
+    const p = await store.pipelinePadrao()
+    if (!p.ok) throw new Error(p.erro)
+    const criado = await store.criarLead({
+      ...novoLead('Ana'),
+      pipelineId: p.valor.pipeline.id,
+      stageId: p.valor.etapas[0].id,
+    })
+    if (!criado.ok) throw new Error(criado.erro)
+    await store.aplicarEtiquetas(criado.valor, ['Preço alto'])
+    const etiquetas = await store.etiquetasDaConta()
+    if (!etiquetas.ok) throw new Error(etiquetas.erro)
+    const tagId = etiquetas.valor[0].id
+    await store.removerEtiqueta(criado.valor, tagId)
+    const antes = await store.eventosDoLead(criado.valor)
+    if (!antes.ok) throw new Error(antes.erro)
+
+    const r = await store.removerEtiqueta(criado.valor, tagId)
+
+    expect(r.ok).toBe(true)
+    const depois = await store.eventosDoLead(criado.valor)
+    if (!depois.ok) throw new Error(depois.erro)
+    expect(depois.valor).toHaveLength(antes.valor.length)
+  })
+
+  it('removerEtiqueta de lead inexistente falha com lead_nao_encontrado', async () => {
+    const r = await store.removerEtiqueta('lead-fantasma', 'tag-qualquer')
+
+    expect(r).toEqual({ ok: false, erro: 'lead_nao_encontrado' })
+  })
+
   it('reusa etiqueta existente ignorando caixa', async () => {
     const p = await store.pipelinePadrao()
     if (!p.ok) throw new Error(p.erro)

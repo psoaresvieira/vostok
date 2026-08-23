@@ -22,6 +22,10 @@ export function rotuloEvento(
     }
     case 'etiqueta_aplicada':
       return `Etiqueta "${String(p.tag ?? '?')}" aplicada em ${nomeEtapa.get(String(p.etapa)) ?? '?'}`
+    // Sem etapa no payload de proposito: o que importa registrar do desfazer e
+    // QUAL etiqueta saiu — a etapa da aplicacao ja esta no evento de cima.
+    case 'etiqueta_removida':
+      return `Etiqueta "${String(p.tag ?? '?')}" removida`
     case 'responsavel_alterado': {
       const para = p.para ? nomePessoa.get(String(p.para)) ?? '?' : 'ninguém'
       return `Responsável alterado para ${para}`

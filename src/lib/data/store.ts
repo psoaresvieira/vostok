@@ -87,6 +87,15 @@ export interface CrmStore {
 
   etiquetasDaConta(): Promise<Resultado<Etiqueta[]>>
   aplicarEtiquetas(leadId: string, nomes: string[]): Promise<Resultado<void>>
+  /**
+   * Desfaz UMA aplicacao de etiqueta no lead. Idempotente: remover o que nao
+   * esta aplicado e ok silencioso (o chip ja sumiu da tela; um erro aqui so
+   * ensinaria o usuario a ignorar erro). A linha de `tags` fica — o catalogo
+   * de sugestoes da conta nao encolhe porque um lead desmarcou. A aplicacao
+   * sai da metrica de etiquetas por etapa (e o uso correto: desfazer marcacao
+   * errada), mas a timeline guarda o evento `etiqueta_removida`.
+   */
+  removerEtiqueta(leadId: string, tagId: string): Promise<Resultado<void>>
 
   /**
    * A timeline do lead, mais recente primeiro. `limite` opcional porque a

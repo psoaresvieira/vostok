@@ -574,6 +574,36 @@ export class SupabaseCrmStore implements CrmStore {
     return ok(undefined)
   }
 
+  async removerEtiqueta(leadId: string, tagId: string): Promise<Resultado<void>> {
+    // buscarLead primeiro pelo mesmo motivo de aplicarEtiquetas: lead de outra
+    // conta (ou fora do recorte do vendedor) tem que virar lead_nao_encontrado
+    // aqui, e nao um delete silencioso de zero linhas mais adiante.
+    const lead = await this.buscarLead(leadId)
+    if (!lead.ok) return falha(lead.erro)
+    if (!lead.valor) return falha('lead_nao_encontrado')
+
+    // .select() no delete: sem ele nao da para saber se ALGO foi removido, e o
+    // evento da timeline so pode nascer quando a aplicacao existia de fato —
+    // remover o que nao esta aplicado e idempotente e nao deixa rastro.
+    const { data: removidas, error } = await this.cliente
+      .from('lead_tags')
+      .delete()
+      .eq('lead_id', leadId)
+      .eq('tag_id', tagId)
+      .select('tag_id')
+    if (error) return falha(error.message)
+    if (!removidas || removidas.length === 0) return ok(undefined)
+
+    const nome = lead.valor.etiquetas.find((e) => e.id === tagId)?.nome ?? '?'
+    await this.cliente.from('lead_events').insert({
+      lead_id: leadId,
+      tipo: 'etiqueta_removida',
+      payload: { tag: nome },
+      ator_id: this.usuarioId,
+    })
+    return ok(undefined)
+  }
+
   async eventosDoLead(leadId: string, limite?: number): Promise<Resultado<EventoLead[]>> {
     let q = this.cliente
       .from('lead_events')
