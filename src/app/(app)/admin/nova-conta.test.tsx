@@ -28,6 +28,26 @@ describe('NovaConta', () => {
     })
   })
 
+  it('botao Copiar escreve o link na area de transferencia e vira Copiado', async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn() } })
+    criarContaClienteAction.mockResolvedValue({ ok: true, valor: 'tok123' })
+    render(<NovaConta />)
+    fireEvent.change(screen.getByPlaceholderText('nome da conta'), { target: { value: 'Cliente X' } })
+    fireEvent.change(screen.getByPlaceholderText('email do cliente'), { target: { value: 'a@a.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Criar conta' }))
+    await waitFor(() => {
+      expect(screen.getByText(/\/convite\/tok123$/)).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar' }))
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        expect.stringContaining('/convite/tok123'),
+      )
+      expect(screen.getByRole('button', { name: 'Copiado' })).toBeTruthy()
+    })
+  })
+
   it('traduz o erro em mensagem na tela', async () => {
     criarContaClienteAction.mockResolvedValue({ ok: false, erro: 'email_invalido' })
     // fireEvent.submit no <form>, e nao fireEvent.click no botao: os dois

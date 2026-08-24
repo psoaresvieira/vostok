@@ -9,6 +9,7 @@ import { Campo } from '@/components/ui/campo'
 export function NovaConta() {
   const [erro, setErro] = useState<string | null>(null)
   const [link, setLink] = useState<string | null>(null)
+  const [copiado, setCopiado] = useState(false)
 
   async function acao(formData: FormData) {
     const r = await criarContaClienteAction(formData)
@@ -18,6 +19,7 @@ export function NovaConta() {
       return
     }
     setErro(null)
+    setCopiado(false)
     // Mesmo formato do convite de equipe (config/usuarios.tsx): o link
     // canonico e' /convite/<token>, que sabe encaminhar para signup ou login.
     setLink(`${window.location.origin}/convite/${r.valor}`)
@@ -34,8 +36,18 @@ export function NovaConta() {
         </Botao>
       </form>
       {link && (
-        <p className="mt-3 rounded bg-muted p-2 text-sm">
+        <p className="mt-3 flex flex-wrap items-center gap-2 rounded bg-muted p-2 text-sm">
           Envie este link ao cliente: <code className="break-all">{link}</code>
+          <button
+            type="button"
+            className="shrink-0 rounded-lg border border-border px-2 py-1 text-xs hover:bg-background"
+            onClick={async () => {
+              await navigator.clipboard.writeText(link)
+              setCopiado(true)
+            }}
+          >
+            {copiado ? 'Copiado' : 'Copiar'}
+          </button>
         </p>
       )}
       {erro && <p className="mt-2 text-sm text-destructive">{erro}</p>}

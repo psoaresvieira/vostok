@@ -15,6 +15,7 @@ function estadoDoConvite(c: ContaDaPlataforma['convite']): string {
 export function ListaContas({ contas }: { contas: ContaDaPlataforma[] }) {
   const [erro, setErro] = useState<string | null>(null)
   const [links, setLinks] = useState<Record<string, string>>({})
+  const [copiados, setCopiados] = useState<Record<string, boolean>>({})
 
   return (
     <section className="surface mt-6 rounded-2xl p-5">
@@ -30,6 +31,9 @@ export function ListaContas({ contas }: { contas: ContaDaPlataforma[] }) {
               <span className="font-medium">{conta.nome}</span>
               <span className="text-muted-foreground">{conta.convite?.email ?? 'sem convite'}</span>
               <span className="text-muted-foreground">{estado}</span>
+              <span className="text-xs text-muted-foreground">
+                Criada em {conta.criadoEm.toLocaleDateString('pt-BR')}
+              </span>
               {conta.convite && !conta.convite.aceitoEm && (
                 <button
                   type="button"
@@ -41,6 +45,7 @@ export function ListaContas({ contas }: { contas: ContaDaPlataforma[] }) {
                       return
                     }
                     setErro(null)
+                    setCopiados((atual) => ({ ...atual, [conta.id]: false }))
                     setLinks((atual) => ({
                       ...atual,
                       [conta.id]: `${window.location.origin}/convite/${r.valor}`,
@@ -50,7 +55,21 @@ export function ListaContas({ contas }: { contas: ContaDaPlataforma[] }) {
                   Reemitir convite
                 </button>
               )}
-              {links[conta.id] && <code className="w-full break-all text-xs">{links[conta.id]}</code>}
+              {links[conta.id] && (
+                <span className="flex w-full items-center gap-2">
+                  <code className="break-all text-xs">{links[conta.id]}</code>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-lg border border-border px-2 py-1 text-xs hover:bg-muted"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(links[conta.id])
+                      setCopiados((atual) => ({ ...atual, [conta.id]: true }))
+                    }}
+                  >
+                    {copiados[conta.id] ? 'Copiado' : 'Copiar'}
+                  </button>
+                </span>
+              )}
             </li>
           )
         })}
