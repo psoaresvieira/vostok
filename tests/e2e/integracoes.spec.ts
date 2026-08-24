@@ -28,7 +28,7 @@ test('admin conecta uma Page do Meta e gera a URL do Google', async ({ page }) =
   const respostaResponsavel = page.waitForResponse(
     (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/config',
   )
-  await fonte.getByRole('combobox').selectOption({ label: 'Pedro E2E' })
+  await fonte.getByRole('combobox').selectOption({ label: 'Cliente E2E' })
   await respostaResponsavel
   await page.reload()
   await expect(

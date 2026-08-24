@@ -2,6 +2,22 @@ import { expect, type Locator, type Page } from '@playwright/test'
 
 export const SENHA = 'segredo123'
 
+/** Dono da plataforma semeado por supabase/seed.sql — so existe em local. */
+export const DONO = { email: 'dono@local.dev', senha: 'segredo123' }
+
+async function entrarComoDono(page: Page): Promise<void> {
+  await page.goto('/login')
+  await page.getByPlaceholder('email', { exact: true }).fill(DONO.email)
+  await page.getByPlaceholder('senha', { exact: true }).fill(DONO.senha)
+  await page.getByRole('button', { name: 'Entrar' }).click()
+  await expect(page).toHaveURL(/\/funil/)
+}
+
+async function sairDaSessao(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Sair' }).click()
+  await expect(page).toHaveURL(/\/login/)
+}
+
 // Email unico por conta: o banco local nao e limpo entre rodadas de E2E, e cada
 // teste cria pelo menos uma conta. O contador sobrevive a --repeat-each, que
 // reusaria o mesmo Date.now() dentro da mesma execucao; o sufixo aleatorio cobre
@@ -21,9 +37,23 @@ export async function criarConta(page: Page): Promise<ContaCriada> {
   const empresa = `Empresa ${id}`
   const email = `e2e-${id}@exemplo.com`
 
-  await page.goto('/signup')
-  await page.getByPlaceholder('seu nome', { exact: true }).fill('Pedro E2E')
-  await page.getByPlaceholder('nome da empresa', { exact: true }).fill(empresa)
+  // O cadastro aberto morreu: a conta nasce no /admin do dono e o "cliente"
+  // termina o proprio cadastro pelo link de convite — o caminho real do
+  // produto, exercitado em todo teste que precisa de uma conta.
+  await entrarComoDono(page)
+  await page.goto('/admin')
+  await page.getByPlaceholder('nome da conta', { exact: true }).fill(empresa)
+  await page.getByPlaceholder('email do cliente', { exact: true }).fill(email)
+  await page.getByRole('button', { name: 'Criar conta' }).click()
+  const codigoDoLink = page.locator('code')
+  await expect(codigoDoLink).toBeVisible()
+  const link = (await codigoDoLink.textContent())?.trim()
+  if (!link) throw new Error('link do convite nao apareceu')
+  await sairDaSessao(page)
+
+  await page.goto(link)
+  await page.getByRole('link', { name: 'Criar conta' }).click()
+  await page.getByPlaceholder('seu nome', { exact: true }).fill('Cliente E2E')
   await page.getByPlaceholder('email', { exact: true }).fill(email)
   await page.getByPlaceholder('senha (min. 8 caracteres)', { exact: true }).fill(SENHA)
   await page.getByRole('button', { name: 'Criar conta' }).click()

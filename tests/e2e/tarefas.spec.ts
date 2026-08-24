@@ -219,7 +219,7 @@ test.describe('ciclo de vida de uma tarefa, da ficha do lead a lista de /tarefas
       // Admin escolhe a si mesmo como responsavel — sem isto o lead fica
       // "sem responsável" e nao apareceria em /tarefas por padrao para
       // ninguem, o que provaria isolamento por acidente, nao por filtro.
-      await formNovoLead.getByRole('combobox').selectOption({ label: 'Pedro E2E' })
+      await formNovoLead.getByRole('combobox').selectOption({ label: 'Cliente E2E' })
       await paginaAdmin.getByRole('button', { name: 'Salvar' }).click()
       await expect(
         coluna(paginaAdmin, 'Novo lead').getByRole('link', { name: nomeLeadAdmin }),

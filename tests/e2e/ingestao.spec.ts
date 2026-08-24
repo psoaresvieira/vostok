@@ -44,7 +44,7 @@ test('lead do Google vira card sem reload, e o reenvio da mesma pessoa vira even
   const respostaResponsavel = page.waitForResponse(
     (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/config',
   )
-  await fonte.getByRole('combobox').selectOption({ label: 'Pedro E2E' })
+  await fonte.getByRole('combobox').selectOption({ label: 'Cliente E2E' })
   await respostaResponsavel
 
   // Fica em /funil ate a asserção 6: e o unico jeito de provar que o card

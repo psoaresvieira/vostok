@@ -40,7 +40,7 @@ test('lead novo acende o sino sem reload, e a entrada linka para a ficha do lead
   const respostaResponsavel = page.waitForResponse(
     (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/config',
   )
-  await fonte.getByRole('combobox').selectOption({ label: 'Pedro E2E' })
+  await fonte.getByRole('combobox').selectOption({ label: 'Cliente E2E' })
   await respostaResponsavel
 
   // Fica em /funil pelo resto do teste: nenhum goto, nenhum reload depois
