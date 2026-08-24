@@ -1,6 +1,13 @@
-import { describe, it, expect } from 'vitest'
-import { credenciaisSchema, cadastroSchema, cadastroPorConviteSchema } from './esquemas'
+import { describe, it, expect, vi } from 'vitest'
+import { credenciaisSchema, cadastroPorConviteSchema } from './esquemas'
 import { mensagemDeErro } from './erros'
+import { cadastrar } from './acoes'
+
+vi.mock('@/lib/supabase/servidor', () => ({
+  criarClienteServidor: vi.fn(async () => {
+    throw new Error('cadastro sem convite nao pode tocar o supabase')
+  }),
+}))
 
 describe('credenciaisSchema', () => {
   it('aceita email e senha validos', () => {
@@ -21,28 +28,6 @@ describe('credenciaisSchema', () => {
   it('normaliza o email para minusculas', () => {
     const r = credenciaisSchema.parse({ email: '  Ana@Exemplo.com ', senha: 'segredo123' })
     expect(r.email).toBe('ana@exemplo.com')
-  })
-})
-
-describe('cadastroSchema', () => {
-  it('exige nome da pessoa e nome da conta', () => {
-    expect(
-      cadastroSchema.safeParse({
-        email: 'ana@exemplo.com',
-        senha: 'segredo123',
-        nome: 'Ana',
-        nomeConta: 'Empresa Exemplo',
-      }).success,
-    ).toBe(true)
-
-    expect(
-      cadastroSchema.safeParse({
-        email: 'ana@exemplo.com',
-        senha: 'segredo123',
-        nome: 'Ana',
-        nomeConta: '  ',
-      }).success,
-    ).toBe(false)
   })
 })
 
@@ -89,5 +74,24 @@ describe('mensagemDeErro do fluxo de convite', () => {
 
   it('devolve o codigo cru quando nao conhece a mensagem', () => {
     expect(mensagemDeErro('coisa_estranha')).toBe('coisa_estranha')
+  })
+})
+
+describe('cadastrar sem convite', () => {
+  it('falha com cadastro_fechado antes de qualquer chamada ao supabase', async () => {
+    const fd = new FormData()
+    fd.set('nome', 'Ana')
+    fd.set('email', 'ana@exemplo.com')
+    fd.set('senha', 'segredo123')
+    const r = await cadastrar(fd)
+    expect(r).toEqual({ ok: false, erro: 'cadastro_fechado' })
+  })
+})
+
+describe('mensagemDeErro do cadastro fechado', () => {
+  it('explica que o cadastro e por convite', () => {
+    expect(mensagemDeErro('cadastro_fechado')).toBe(
+      'O cadastro é feito por convite. Peça o link ao administrador.',
+    )
   })
 })

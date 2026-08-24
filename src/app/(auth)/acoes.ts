@@ -4,7 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
-import { cadastroSchema, cadastroPorConviteSchema, credenciaisSchema } from './esquemas'
+import { cadastroPorConviteSchema, credenciaisSchema } from './esquemas'
 
 /** Token do convite carregado pelo formulario, ou null quando nao ha convite. */
 function tokenDoConvite(formData: FormData): string | null {
@@ -40,33 +40,12 @@ export async function entrar(formData: FormData): Promise<Resultado<void>> {
 
 export async function cadastrar(formData: FormData): Promise<Resultado<void>> {
   const convite = tokenDoConvite(formData)
-  // Dois caminhos de verdade diferentes, nao um if no meio de um so: com convite
-  // o usuario ENTRA numa conta existente; sem convite ele ABRE uma conta e vira
-  // admin dela. Chamar criar_conta no caminho do convite era o bug — o convidado
-  // caia numa empresa vazia sua e o convite nunca era resgatado.
-  return convite ? cadastrarComConvite(formData, convite) : cadastrarAbrindoConta(formData)
-}
-
-async function cadastrarAbrindoConta(formData: FormData): Promise<Resultado<void>> {
-  const parsed = cadastroSchema.safeParse({
-    email: formData.get('email'),
-    senha: formData.get('senha'),
-    nome: formData.get('nome'),
-    nomeConta: formData.get('nomeConta'),
-  })
-  if (!parsed.success) return falha(parsed.error.issues[0].message)
-
-  const cliente = await criarClienteServidor()
-  const criado = await criarUsuario(cliente, parsed.data)
-  if (!criado.ok) return falha(criado.erro)
-
-  // criar_conta roda como DEFINER e usa auth.uid(): precisa da sessao ja ativa.
-  const { error: erroConta } = await cliente.rpc('criar_conta', {
-    p_nome: parsed.data.nomeConta,
-  })
-  if (erroConta) return falha(erroConta.message)
-
-  redirect('/funil')
+  // O cadastro aberto morreu com o modelo de negocio: conta nasce pela mao do
+  // dono da plataforma (/admin), e quem chega aqui sem convite nao tem o que
+  // cadastrar. A guarda de verdade esta no banco (criar_conta exige dono);
+  // esta e' so a traducao educada.
+  if (!convite) return falha('cadastro_fechado')
+  return cadastrarComConvite(formData, convite)
 }
 
 async function cadastrarComConvite(

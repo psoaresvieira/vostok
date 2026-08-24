@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { credenciaisSchema, cadastroSchema, cadastroPorConviteSchema } from './esquemas'
+import { credenciaisSchema, cadastroPorConviteSchema } from './esquemas'
 
 describe('credenciaisSchema', () => {
   it('email e trimado e minusculado antes da validacao de formato', () => {
@@ -21,32 +21,6 @@ describe('credenciaisSchema', () => {
 
     expect(r.success).toBe(false)
     if (!r.success) expect(r.error.issues[0].message).toBe('senha_curta')
-  })
-})
-
-describe('cadastroSchema', () => {
-  it('exige nome e nomeConta alem das credenciais', () => {
-    const r = cadastroSchema.safeParse({
-      email: 'maria@empresa.com',
-      senha: '12345678',
-      nome: '  ',
-      nomeConta: 'Agência X',
-    })
-
-    expect(r.success).toBe(false)
-    if (!r.success) expect(r.error.issues[0].message).toBe('nome_obrigatorio')
-  })
-
-  it('nomeConta vazio falha com nome_conta_obrigatorio', () => {
-    const r = cadastroSchema.safeParse({
-      email: 'maria@empresa.com',
-      senha: '12345678',
-      nome: 'Maria',
-      nomeConta: '   ',
-    })
-
-    expect(r.success).toBe(false)
-    if (!r.success) expect(r.error.issues[0].message).toBe('nome_conta_obrigatorio')
   })
 })
 
