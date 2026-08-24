@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { comoServico, comoUsuario, criarUsuario, limparBanco } from './helpers/db'
+import { criarContaAvulsa } from './helpers/cenario'
 
 describe('0002 — pipeline e criacao de conta', () => {
   beforeEach(limparBanco)
@@ -7,9 +8,7 @@ describe('0002 — pipeline e criacao de conta', () => {
   it('criar_conta faz o seed completo e torna o chamador admin', async () => {
     const ana = await criarUsuario('ana@a.com')
 
-    const accountId = await comoUsuario(ana, async (c) =>
-      (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['Empresa Exemplo'])).rows[0].id,
-    )
+    const accountId = await criarContaAvulsa(ana, 'Empresa Exemplo')
 
     const dados = await comoServico(async (c) => ({
       papel: (
@@ -66,8 +65,8 @@ describe('0002 — pipeline e criacao de conta', () => {
   it('etapas de uma conta nao sao visiveis por outra', async () => {
     const ana = await criarUsuario('ana@a.com')
     const bruno = await criarUsuario('bruno@b.com')
-    await comoUsuario(ana, (c) => c.query('select public.criar_conta($1)', ['Conta A']))
-    await comoUsuario(bruno, (c) => c.query('select public.criar_conta($1)', ['Conta B']))
+    await criarContaAvulsa(ana, 'Conta A')
+    await criarContaAvulsa(bruno, 'Conta B')
 
     const doBruno = await comoUsuario(bruno, async (c) =>
       (await c.query('select nome from public.pipelines')).rows,
@@ -87,9 +86,7 @@ describe('0002 — pipeline e criacao de conta', () => {
     // isolamento entre contas, nao mais o de papel dentro da conta.
     const ana = await criarUsuario('ana@a.com')
     const vendedor = await criarUsuario('v@a.com')
-    const accountId = await comoUsuario(ana, async (c) =>
-      (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['Empresa Exemplo'])).rows[0].id,
-    )
+    const accountId = await criarContaAvulsa(ana, 'Empresa Exemplo')
     await comoServico((c) =>
       c.query(
         `insert into public.memberships (account_id, user_id, papel) values ($1, $2, 'vendedor')`,
@@ -114,7 +111,7 @@ describe('0002 — pipeline e criacao de conta', () => {
     )
 
     const outroAdmin = await criarUsuario('outro-admin@b.com')
-    await comoUsuario(outroAdmin, (c) => c.query('select public.criar_conta($1)', ['Conta B']))
+    await criarContaAvulsa(outroAdmin, 'Conta B')
     const alteradasPeloOutroAdmin = await comoUsuario(outroAdmin, async (c) =>
       (await c.query(`update public.stages set nome = 'Hackeada' where id = $1`, [stageDaContaA]))
         .rowCount,

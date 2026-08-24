@@ -3,17 +3,14 @@ import { SupabaseCrmStore } from '@/lib/data/supabase'
 import { leadSchema } from '@/lib/domain/lead'
 import { comoServico, comoUsuario, limparBanco, criarUsuario } from './helpers/db'
 import { clienteDoUsuario } from './helpers/cliente'
-import { montarCenario, etapa, type Cenario } from './helpers/cenario'
+import { criarContaAvulsa, montarCenario, etapa, type Cenario } from './helpers/cenario'
 
 /** Uma segunda conta, so para provar o isolamento — mesmo padrao usado em
  * admin-store.test.ts e 0004_move_lead_stage.test.ts: criar_conta ja semeia
  * a pipeline padrao dessa conta nova, que e o dado que o caso 2 precisa. */
 async function outraConta(email: string): Promise<{ accountId: string; pipelineId: string }> {
   const userId = await criarUsuario(email)
-  const accountId = await comoUsuario(
-    userId,
-    async (c) => (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['Outra'])).rows[0].id,
-  )
+  const accountId = await criarContaAvulsa(userId, 'Outra')
   const pipelineId = await comoServico(
     async (c) =>
       (await c.query<{ id: string }>('select id from public.pipelines where account_id = $1', [accountId]))

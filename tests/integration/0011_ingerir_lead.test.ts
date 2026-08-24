@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { comoServico, comoUsuario, criarUsuario, limparBanco } from './helpers/db'
-import { montarCenario, etapa, type Cenario } from './helpers/cenario'
+import { criarContaAvulsa, montarCenario, etapa, type Cenario } from './helpers/cenario'
 import { SEGREDO, unico, criarFonteMeta, registrarEntrega } from './helpers/ingestao'
 
 const ERRADO = 'segredo-errado'
@@ -114,11 +114,7 @@ async function contaSecundaria(): Promise<{ accountId: string; vendedorId: strin
   const sufixo = unico('conta-b')
   const adminId = await criarUsuario(`admin-${sufixo}@b.com`)
   const vendedorId = await criarUsuario(`vend-${sufixo}@b.com`)
-  const accountId = await comoUsuario(
-    adminId,
-    async (cli) =>
-      (await cli.query<{ id: string }>('select public.criar_conta($1) as id', ['Conta B'])).rows[0].id,
-  )
+  const accountId = await criarContaAvulsa(adminId, 'Conta B')
   await comoServico((cli) =>
     cli.query(`insert into public.memberships (account_id, user_id, papel) values ($1, $2, 'vendedor')`, [
       accountId,

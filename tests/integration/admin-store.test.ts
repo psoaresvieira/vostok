@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import { SupabaseAdminStore } from '@/lib/data/admin'
 import { comoServico, comoUsuario, criarUsuario, limparBanco } from './helpers/db'
-import { montarCenario, type Cenario } from './helpers/cenario'
+import { criarContaAvulsa, montarCenario, type Cenario } from './helpers/cenario'
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321'
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -63,9 +63,7 @@ describe('SupabaseAdminStore', () => {
     // Conta vizinha, com admin proprio. Sob RLS os ids abaixo nao casam com
     // nenhuma linha visivel, e "zero linhas" nao e error no PostgREST.
     const outroAdmin = await criarUsuario('admin@outra.com')
-    const outraConta = await comoUsuario(outroAdmin, async (cli) =>
-      (await cli.query<{ id: string }>('select public.criar_conta($1) as id', ['Outra'])).rows[0].id,
-    )
+    const outraConta = await criarContaAvulsa(outroAdmin, 'Outra')
     // Os casos de etapa deste teste (renomearEtapa em id de outra conta)
     // MUDARAM para etapas-store.test.ts na Task 2 do Plano 15 — mesmo
     // racional, agora contra SupabaseEtapaStore.

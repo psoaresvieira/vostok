@@ -48,7 +48,9 @@ const MAPA: Record<string, Privilegios> = {
   'conectar_fonte_google(uuid,text,text,text,uuid)': { anon: false, authenticated: true },
   'conectar_fonte_meta(text,uuid,text,text,text,uuid)': { anon: false, authenticated: true },
   'conectar_whatsapp(text,uuid,text,text,text,text,text)': { anon: false, authenticated: true },
+  'contas_da_plataforma()': { anon: false, authenticated: true },
   'criar_conta(text)': { anon: false, authenticated: true },
+  'criar_conta_cliente(text,text)': { anon: false, authenticated: true },
   'desconectar_fonte(uuid)': { anon: false, authenticated: true },
   'desconectar_whatsapp(text,uuid)': { anon: false, authenticated: true },
   'excluir_etapa(uuid)': { anon: false, authenticated: true },
@@ -70,9 +72,11 @@ const MAPA: Record<string, Privilegios> = {
   // Guarda de delete da policy pipelines_membro_delete (migration 0025):
   // definer para enxergar leads de colegas que a RLS do chamador esconderia.
   'pipeline_tem_leads(uuid)': { anon: false, authenticated: true },
+  'reemitir_convite(uuid)': { anon: false, authenticated: true },
   'reivindicar_fonte_meta(text,uuid,text,text,text,uuid)': { anon: false, authenticated: true },
   'reordenar_etapas(uuid[])': { anon: false, authenticated: true },
   'resumo_etapas(uuid)': { anon: false, authenticated: true },
+  'sou_dono_da_plataforma()': { anon: false, authenticated: true },
 
   // Helpers de RLS: avaliados na pele do papel que consulta a tabela — hoje
   // sempre `authenticated`, porque `anon` nao tem select em tabela nenhuma.
@@ -101,6 +105,7 @@ const MAPA: Record<string, Privilegios> = {
   'guarda_ultima_etapa_do_tipo()': { anon: false, authenticated: false },
   'handle_new_user()': { anon: false, authenticated: false },
   'hash_segredo(text)': { anon: false, authenticated: false },
+  'montar_conta(text)': { anon: false, authenticated: false },
   'segredo_confere(text)': { anon: false, authenticated: false },
   'snapshot_lead_tags()': { anon: false, authenticated: false },
   'snapshot_stage_history()': { anon: false, authenticated: false },

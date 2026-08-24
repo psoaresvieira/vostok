@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { comoServico, comoUsuario, criarUsuario, limparBanco } from './helpers/db'
-import { montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario'
+import { criarContaAvulsa, montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario'
 
 describe('0003 — leads, etiquetas, historico', () => {
   let c: Cenario
@@ -37,7 +37,7 @@ describe('0003 — leads, etiquetas, historico', () => {
     const novo = etapa(c, 'Novo lead')
     await criarLead(c, 'Lead do A', c.vendedorAId, novo)
     const forasteiro = await criarUsuario('fora@b.com')
-    await comoUsuario(forasteiro, (cli) => cli.query('select public.criar_conta($1)', ['Outra']))
+    await criarContaAvulsa(forasteiro, 'Outra')
 
     const n = await comoUsuario(forasteiro, async (cli) =>
       (await cli.query('select count(*)::int as n from public.leads')).rows[0].n,

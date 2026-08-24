@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { comoServico, comoUsuario, criarUsuario, limparBanco } from './helpers/db'
-import { montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario'
+import { criarContaAvulsa, montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario'
 
 describe('0004 — move_lead_stage', () => {
   let c: Cenario
@@ -106,9 +106,7 @@ describe('0004 — move_lead_stage', () => {
     const leadId = await criarLead(c, 'Lead', c.vendedorAId, novo)
 
     const forasteiro = await criarUsuario('fora@b.com')
-    const outraConta = await comoUsuario(forasteiro, async (cli) =>
-      (await cli.query<{ id: string }>('select public.criar_conta($1) as id', ['Outra'])).rows[0].id,
-    )
+    const outraConta = await criarContaAvulsa(forasteiro, 'Outra')
     const motivoAlheio = await comoServico(async (cli) =>
       (
         await cli.query<{ id: string }>(
@@ -130,9 +128,7 @@ describe('0004 — move_lead_stage', () => {
     const leadId = await criarLead(c, 'Lead', c.vendedorAId, novo)
 
     const forasteiro = await criarUsuario('fora@b.com')
-    const outraConta = await comoUsuario(forasteiro, async (cli) =>
-      (await cli.query<{ id: string }>('select public.criar_conta($1) as id', ['Outra'])).rows[0].id,
-    )
+    const outraConta = await criarContaAvulsa(forasteiro, 'Outra')
     const etapaAlheia = await comoServico(async (cli) =>
       (
         await cli.query<{ id: string }>(

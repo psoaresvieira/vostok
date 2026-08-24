@@ -9,7 +9,7 @@ import {
   limparBanco,
 } from './helpers/db'
 import { clienteDoUsuario } from './helpers/cliente'
-import { montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario'
+import { criarContaAvulsa, montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario'
 
 /**
  * Task 2 do Plano 15: estes casos MUDARAM de admin-store.test.ts para ca —
@@ -23,12 +23,7 @@ import { montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario
  * pipelines-store.test.ts. */
 async function outraConta(email: string): Promise<{ etapaId: string; pipelineId: string }> {
   const userId = await criarUsuario(email)
-  const accountId = await comoUsuario(
-    userId,
-    async (c) =>
-      (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['Outra'])).rows[0]
-        .id,
-  )
+  const accountId = await criarContaAvulsa(userId, 'Outra')
   const { etapaId, pipelineId } = await comoServico(async (cli) => {
     const r = await cli.query<{ id: string; pipeline_id: string }>(
       `select s.id, s.pipeline_id from public.stages s

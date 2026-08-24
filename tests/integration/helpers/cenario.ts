@@ -18,9 +18,16 @@ export async function montarCenario(): Promise<Cenario> {
   const vendedorAId = await criarUsuario('va@a.com')
   const vendedorBId = await criarUsuario('vb@a.com')
 
+  // criar_conta agora exige dono da plataforma. O admin do cenario vira dono
+  // SO' durante a criacao e volta a ser um admin comum em seguida — os testes
+  // de RLS existentes continuam valendo para um usuario sem privilegio global.
+  await comoServico((c) =>
+    c.query('insert into public.platform_owners (user_id) values ($1) on conflict do nothing', [adminId]),
+  )
   const accountId = await comoUsuario(adminId, async (c) =>
     (await c.query<{ id: string }>('select public.criar_conta($1) as id', ['Empresa Exemplo'])).rows[0].id,
   )
+  await comoServico((c) => c.query('delete from public.platform_owners where user_id = $1', [adminId]))
 
   await comoServico((c) =>
     c.query(
@@ -47,6 +54,21 @@ export async function montarCenario(): Promise<Cenario> {
   })
 
   return { accountId, pipelineId, etapas, motivoId, adminId, gestorId, vendedorAId, vendedorBId }
+}
+
+/** Cria uma conta avulsa, fora do cenario padrao — para os testes de
+ * isolamento entre contas ("outra conta", "conta vizinha", "forasteiro").
+ * Mesmo artificio de montarCenario: o usuario vira dono da plataforma SO'
+ * durante a chamada de criar_conta. */
+export async function criarContaAvulsa(userId: string, nome: string): Promise<string> {
+  await comoServico((c) =>
+    c.query('insert into public.platform_owners (user_id) values ($1) on conflict do nothing', [userId]),
+  )
+  const accountId = await comoUsuario(userId, async (c) =>
+    (await c.query<{ id: string }>('select public.criar_conta($1) as id', [nome])).rows[0].id,
+  )
+  await comoServico((c) => c.query('delete from public.platform_owners where user_id = $1', [userId]))
+  return accountId
 }
 
 export function etapa(c: Cenario, nome: string): string {

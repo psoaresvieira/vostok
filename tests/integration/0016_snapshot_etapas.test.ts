@@ -1,18 +1,13 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { comoServico, comoUsuario, criarUsuario, limparBanco } from './helpers/db'
-import { montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario'
+import { criarContaAvulsa, montarCenario, etapa, criarLead, type Cenario } from './helpers/cenario'
 
 /** Uma segunda conta completa, com admin proprio e pipeline padrao ja semeado
  * (via criar_conta, como montarCenario faz) — precisamos de uma etapa real
  * de outra conta para o caso de isolamento. */
 async function segundaConta(email: string): Promise<{ accountId: string; adminId: string; stageId: string }> {
   const adminId = await criarUsuario(email)
-  const accountId = await comoUsuario(
-    adminId,
-    async (cli) =>
-      (await cli.query<{ id: string }>('select public.criar_conta($1) as id', ['Conta B'])).rows[0]
-        .id,
-  )
+  const accountId = await criarContaAvulsa(adminId, 'Conta B')
   const stageId = await comoServico(
     async (cli) =>
       (
