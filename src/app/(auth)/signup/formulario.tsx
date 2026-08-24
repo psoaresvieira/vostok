@@ -7,7 +7,7 @@ import { mensagemDeErro } from '../erros'
 import { Botao } from '@/components/ui/botao'
 import { Campo } from '@/components/ui/campo'
 
-export function FormularioCadastro({ convite }: { convite: string | null }) {
+export function FormularioCadastro({ convite }: { convite: string }) {
   const [erro, setErro] = useState<string | null>(null)
 
   async function acao(formData: FormData) {
@@ -34,19 +34,15 @@ export function FormularioCadastro({ convite }: { convite: string | null }) {
           </div>
         </div>
 
-        {convite && (
-          <p className="mb-4 rounded-xl bg-primary/10 px-3 py-2 text-sm text-muted-foreground">
-            Você foi convidado para uma conta que já existe. Use o email que recebeu o convite.
-          </p>
-        )}
+        <p className="mb-4 rounded-xl bg-primary/10 px-3 py-2 text-sm text-muted-foreground">
+          Você foi convidado para uma conta que já existe. Use o email que recebeu o convite.
+        </p>
         <form action={acao} className="flex flex-col gap-3">
           {/* O token viaja no proprio formulario: a Server Action nao enxerga a
               query string da pagina. Sem ele o cadastro volta a abrir uma conta
               nova e o convite nunca e resgatado. */}
-          {convite && <input type="hidden" name="convite" value={convite} />}
+          <input type="hidden" name="convite" value={convite} />
           <Campo name="nome" placeholder="seu nome" required />
-          {/* Convidado nao nomeia empresa nenhuma — ele entra na de quem convidou. */}
-          {!convite && <Campo name="nomeConta" placeholder="nome da empresa" required />}
           <Campo name="email" type="email" placeholder="email" required />
           <Campo name="senha" type="password" placeholder="senha (min. 8 caracteres)" required />
           <Botao type="submit" tamanho="lg" className="mt-2 w-full">
@@ -55,7 +51,7 @@ export function FormularioCadastro({ convite }: { convite: string | null }) {
         </form>
         {erro && <p className="mt-3 text-sm text-destructive">{erro}</p>}
         <Link
-          href={convite ? `/login?convite=${encodeURIComponent(convite)}` : '/login'}
+          href={`/login?convite=${encodeURIComponent(convite)}`}
           className="mt-6 block text-center text-sm text-muted-foreground hover:text-foreground"
         >
           Já tenho conta

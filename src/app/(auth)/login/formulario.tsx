@@ -48,12 +48,14 @@ export function FormularioLogin({ convite }: { convite: string | null }) {
           </Botao>
         </form>
         {erro && <p className="mt-3 text-sm text-destructive">{erro}</p>}
-        <Link
-          href={convite ? `/signup?convite=${encodeURIComponent(convite)}` : '/signup'}
-          className="mt-6 block text-center text-sm text-muted-foreground hover:text-foreground"
-        >
-          Criar uma conta
-        </Link>
+        {convite && (
+          <Link
+            href={`/signup?convite=${encodeURIComponent(convite)}`}
+            className="mt-6 block text-center text-sm text-muted-foreground hover:text-foreground"
+          >
+            Criar uma conta
+          </Link>
+        )}
       </div>
     </main>
   )
