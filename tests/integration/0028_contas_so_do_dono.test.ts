@@ -98,6 +98,29 @@ describe('0028 — contas so pelo dono da plataforma', () => {
     ).rejects.toThrow(/convite_ja_aceito/)
   })
 
+  it('reemitir_convite falha para usuario comum com sem_permissao', async () => {
+    const dono = await criarUsuario('dono@a.com')
+    const comum = await criarUsuario('comum@a.com')
+    await tornarDono(dono)
+    const token = await comoUsuario(dono, async (c) =>
+      (await c.query<{ t: string }>(`select public.criar_conta_cliente('X', 'x@x.com') as t`)).rows[0].t,
+    )
+    const conviteId = await comoServico(async (c) =>
+      (await c.query<{ id: string }>('select id from public.invites where token = $1', [token])).rows[0].id,
+    )
+    await expect(
+      comoUsuario(comum, (c) => c.query('select public.reemitir_convite($1)', [conviteId])),
+    ).rejects.toThrow(/sem_permissao/)
+  })
+
+  it('reemitir_convite com uuid inexistente falha com convite_invalido', async () => {
+    const uid = await criarUsuario('dono@a.com')
+    await tornarDono(uid)
+    await expect(
+      comoUsuario(uid, (c) => c.query('select public.reemitir_convite(gen_random_uuid())')),
+    ).rejects.toThrow(/convite_invalido/)
+  })
+
   it('contas_da_plataforma lista tudo para o dono e vem VAZIA para usuario comum', async () => {
     const dono = await criarUsuario('dono@a.com')
     const comum = await criarUsuario('comum@a.com')
