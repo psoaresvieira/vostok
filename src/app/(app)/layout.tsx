@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { criarStoreDoServidor } from '@/lib/data/supabase'
 import { criarNotificacaoStoreDoServidor } from '@/lib/data/notificacoes'
 import type { Notificacao } from '@/lib/data/notificacoes'
+import { souDonoDaPlataforma } from '@/lib/data/plataforma'
 import { BarraLateral } from './barra-lateral'
 
 /** Quantas notificacoes recentes o painel do sino mostra. */
@@ -24,14 +25,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   //
   // Tudo o que o layout le anda em paralelo, porque nada aqui depende de nada:
   // perfil e notificacoes so' precisam da sessao, e as duas leituras de
-  // notificacao so' precisam do store.
+  // notificacao so' precisam do store. souDonoDaPlataforma() so' precisa da
+  // sessao tambem, e degrada para false em qualquer erro (ver plataforma.ts).
   //
   // `perfilAtual()` e nao `membros()`: o rodape da barra mostra UM nome, o de
   // quem esta logado, e `membros()` lia a membership + o perfil de toda a
   // conta para achar essa linha — em CADA navegacao, porque este layout
   // envolve toda pagina do app. Degrada para null (o avatar cai para as
   // iniciais da conta) em vez de derrubar a pagina, como antes.
-  const [perfil, notificacao] = await Promise.all([
+  const [perfil, notificacao, dono] = await Promise.all([
     r.valor.store.perfilAtual(),
     (async () => {
       const contextoNotif = await criarNotificacaoStoreDoServidor()
@@ -42,6 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ])
       return { contagem: c.ok ? c.valor : 0, lista: n.ok ? n.valor : [] }
     })(),
+    souDonoDaPlataforma(),
   ])
 
   const nomeUsuario = perfil.ok ? (perfil.valor?.nome ?? null) : null
@@ -60,6 +63,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         nomeUsuario={nomeUsuario}
         contagemNaoLidas={contagemNaoLidas}
         notificacoes={notificacoes}
+        dono={dono}
       />
       {/* min-w-0 e' obrigatorio: sem ele o <main> ganha `min-width: auto` de
           item flex e o quadro do funil, que rola na horizontal, EMPURRA a

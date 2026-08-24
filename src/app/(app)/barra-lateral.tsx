@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Columns3, LogOut, PanelLeft, ChartColumn, ListChecks, Settings } from 'lucide-react'
+import { Columns3, LogOut, PanelLeft, ChartColumn, ListChecks, Settings, Shield } from 'lucide-react'
 import { IconeWhatsApp } from '@/components/ui/icone-whatsapp'
 import type { Papel } from '@/lib/domain/tipos'
 import type { Notificacao } from '@/lib/data/notificacoes'
@@ -65,12 +65,14 @@ export function BarraLateral({
   nomeUsuario,
   contagemNaoLidas,
   notificacoes,
+  dono,
 }: {
   conta: string
   papel: Papel
   nomeUsuario: string | null
   contagemNaoLidas: number
   notificacoes: Notificacao[]
+  dono: boolean
 }) {
   const caminho = usePathname()
   // Comeca SEMPRE expandida e so recolhe depois do efeito, mesmo que o
@@ -91,6 +93,12 @@ export function BarraLateral({
       return !v
     })
   }
+
+  // Item extra so' para o dono da plataforma — nao mistura em ITENS porque
+  // ITENS e' modulo-level e compartilhado por toda navegacao, dono ou nao.
+  const itens = dono
+    ? [...ITENS, { href: '/admin', rotulo: 'Admin', icone: <Shield {...PROPS_ICONE} /> }]
+    : ITENS
 
   return (
     <aside
@@ -157,7 +165,7 @@ export function BarraLateral({
       )}
 
       <nav aria-label="Navegação principal" className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-1">
-        {ITENS.map(({ href, rotulo, icone }) => {
+        {itens.map(({ href, rotulo, icone }) => {
           // startsWith e nao ===: /leads/[id] e' a ficha aberta a partir do
           // funil e deve manter "Funil" aceso. A raiz '/' nunca aparece em
           // ITENS, entao nao ha o falso positivo de startsWith('/').
