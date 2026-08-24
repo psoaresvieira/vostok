@@ -12,7 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const r = await criarStoreDoServidor()
   if (!r.ok) {
     if (r.erro === 'sem_sessao') redirect('/login')
-    if (r.erro === 'sem_conta') redirect('/signup')
+    if (r.erro === 'sem_conta') redirect('/login?erro=sem_conta')
     throw new Error(r.erro)
   }
 

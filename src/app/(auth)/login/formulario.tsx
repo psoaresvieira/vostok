@@ -7,7 +7,13 @@ import { mensagemDeErro } from '../erros'
 import { Botao } from '@/components/ui/botao'
 import { Campo } from '@/components/ui/campo'
 
-export function FormularioLogin({ convite }: { convite: string | null }) {
+export function FormularioLogin({
+  convite,
+  semConta = false,
+}: {
+  convite: string | null
+  semConta?: boolean
+}) {
   const [erro, setErro] = useState<string | null>(null)
 
   async function acao(formData: FormData) {
@@ -36,6 +42,12 @@ export function FormularioLogin({ convite }: { convite: string | null }) {
         {convite && (
           <p className="mb-4 rounded-xl bg-primary/10 px-3 py-2 text-sm text-muted-foreground">
             Entre com o email que recebeu o convite para aceitá-lo.
+          </p>
+        )}
+        {semConta && (
+          <p className="mb-4 rounded-xl bg-primary/10 px-3 py-2 text-sm text-muted-foreground">
+            Sua conta ainda não está vinculada a nenhuma empresa. Peça um novo convite ao
+            administrador.
           </p>
         )}
         <form action={acao} className="flex flex-col gap-3">
