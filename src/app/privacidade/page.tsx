@@ -101,9 +101,14 @@ export default function PrivacidadePage() {
         </p>
       </section>
 
-      <Link href="/login" className="text-sm underline">
-        Voltar ao Vostok
-      </Link>
+      <div className="flex gap-4">
+        <Link href="/termos" className="text-sm underline">
+          Termos de Uso
+        </Link>
+        <Link href="/login" className="text-sm underline">
+          Voltar ao Vostok
+        </Link>
+      </div>
     </main>
   )
 }

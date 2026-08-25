@@ -44,6 +44,14 @@ describe('middleware', () => {
     expect(res.headers.get('location')).toBeNull()
   })
 
+  it('serve /termos sem sessao — pagina publica, como /privacidade', async () => {
+    const req = new NextRequest('http://localhost/termos')
+
+    const res = await middleware(req)
+
+    expect(res.headers.get('location')).toBeNull()
+  })
+
   it('continua redirecionando pra /login uma rota comum sem sessao', async () => {
     const req = new NextRequest('http://localhost/leads')
 
