@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { comoServico, comoUsuario, criarUsuario, limparBanco } from './helpers/db'
+import { comoServico, comoUsuario, criarUsuario, limparBanco, tornarDono } from './helpers/db'
 
 /**
  * Modo operador: a implantacao de cada cliente e feita MANUALMENTE pelo dono
@@ -13,12 +13,6 @@ import { comoServico, comoUsuario, criarUsuario, limparBanco } from './helpers/d
  * valor. Padrao copiado de 0019_conexao_whatsapp.test.ts / 0012_posse_da_page.test.ts.
  */
 const SEGREDO = 'segredo-de-ingestao-local'
-
-async function tornarDono(userId: string): Promise<void> {
-  await comoServico((c) =>
-    c.query('insert into public.platform_owners (user_id) values ($1) on conflict do nothing', [userId]),
-  )
-}
 
 /**
  * Nasce uma conta de cliente pela mao do dono (criar_conta_cliente) e insere
@@ -215,6 +209,25 @@ describe('0030 — conexoes pelo dono da plataforma (modo operador)', () => {
           'Page 6',
           'tok-6',
           membroId,
+        ]),
+      ),
+    ).rejects.toThrow(/sem_permissao/)
+  })
+
+  it('dono com account_id inexistente recebe sem_permissao, nao FK crua', async () => {
+    const dono = await criarUsuario('dono8-0030@a.com')
+    await tornarDono(dono)
+
+    await expect(
+      comoUsuario(dono, (c) =>
+        c.query('select public.conectar_whatsapp($1, $2, $3, $4, $5, $6, $7)', [
+          SEGREDO,
+          '00000000-0000-0000-0000-000000000000',
+          'pn-8',
+          'waba-8',
+          '+55 11 9...',
+          'Empresa 8',
+          'tok-8',
         ]),
       ),
     ).rejects.toThrow(/sem_permissao/)

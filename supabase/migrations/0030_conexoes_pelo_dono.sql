@@ -208,8 +208,15 @@ begin
   if auth.uid() is null then
     raise exception 'sem_sessao';
   end if;
+  -- Diferente das outras cinco RPCs de conexao, esta nao tem backstop depois
+  -- (nem e_membro_da_conta, nem um fetch previo do registro) — sem essa
+  -- checagem, o bypass do dono deixaria um p_account_id inexistente escapar
+  -- da guarda de papel (papel_na_conta de conta inexistente e' null) e
+  -- estourar como FK crua 23503 em whatsapp_connections. Restaura o
+  -- comportamento pre-0030 (sem_permissao) para conta inexistente.
   if public.papel_na_conta(p_account_id) is distinct from 'admin'
-     and not public.sou_dono_da_plataforma() then
+     and not (public.sou_dono_da_plataforma()
+              and exists (select 1 from public.accounts a where a.id = p_account_id)) then
     raise exception 'sem_permissao';
   end if;
   if p_phone_number_id is null or btrim(p_phone_number_id) = ''
