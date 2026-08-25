@@ -138,6 +138,14 @@ export async function esperarBloqueioEm(tabela: string, tentativas = 200): Promi
   throw new Error(`nenhuma sessao ficou bloqueada em ${tabela} — a corrida nao foi encenada`)
 }
 
+/** Insere userId em platform_owners (idempotente). Usado pelos testes das
+ * migrations que restringem operacoes ao dono da plataforma (0028+). */
+export async function tornarDono(userId: string): Promise<void> {
+  await comoServico((c) =>
+    c.query('insert into public.platform_owners (user_id) values ($1) on conflict do nothing', [userId]),
+  )
+}
+
 export async function criarUsuario(email: string): Promise<string> {
   return comoServico(async (c) => {
     const r = await c.query<{ id: string }>(

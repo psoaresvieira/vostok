@@ -1,11 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { comoServico, comoUsuario, criarUsuario, limparBanco } from './helpers/db'
-
-async function tornarDono(userId: string): Promise<void> {
-  await comoServico((c) =>
-    c.query('insert into public.platform_owners (user_id) values ($1) on conflict do nothing', [userId]),
-  )
-}
+import { comoServico, comoUsuario, criarUsuario, limparBanco, tornarDono } from './helpers/db'
 
 beforeEach(limparBanco)
 
