@@ -15,8 +15,9 @@ por mim"*.
 
 Dois fatos do código impedem esse modelo hoje:
 
-1. As cinco RPCs de conexão (`conectar_fonte_meta`, `conectar_fonte_google`,
-   `desconectar_fonte`, `conectar_whatsapp`, `desconectar_whatsapp`) exigem
+1. As seis RPCs de conexão (`conectar_fonte_meta`, `reivindicar_fonte_meta`,
+   `conectar_fonte_google`, `desconectar_fonte`, `conectar_whatsapp`,
+   `desconectar_whatsapp`) exigem
    `papel_na_conta(conta) = 'admin'` — e a 0028 decidiu, de propósito, que o
    dono **não** vira membro das contas de clientes (uma membership do dono
    roubaria a resolução de conta ativa, que é a membership mais antiga). O
@@ -37,7 +38,9 @@ Dois fatos do código impedem esse modelo hoje:
 
 ## Parte 1 — Migration 0030: bypass de dono nas conexões
 
-As cinco RPCs são recriadas idênticas, mudando SÓ a guarda de papel:
+As seis RPCs são recriadas idênticas, mudando SÓ a guarda de papel
+(`reivindicar_fonte_meta` entra porque a implantação também toma Page
+squattada — mesma família, mesma guarda):
 
     if public.papel_na_conta(<conta>) is distinct from 'admin'
        and not public.sou_dono_da_plataforma() then
