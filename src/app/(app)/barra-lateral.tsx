@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Columns3, LogOut, PanelLeft, ChartColumn, ListChecks, Settings, Shield } from 'lucide-react'
+import { Columns3, KeyRound, LogOut, PanelLeft, ChartColumn, ListChecks, Settings, Shield } from 'lucide-react'
 import { IconeWhatsApp } from '@/components/ui/icone-whatsapp'
 import type { Papel } from '@/lib/domain/tipos'
 import type { Notificacao } from '@/lib/data/notificacoes'
@@ -214,6 +214,20 @@ export function BarraLateral({
               <Settings size={19} strokeWidth={1.75} aria-hidden="true" />
             </Link>
           )}
+          {/* Trocar senha (Task 3): para TODOS os papeis, diferente do
+              /config acima — a senha e' do usuario, nao um privilegio de
+              admin. */}
+          <Link
+            href="/senha"
+            aria-label="Trocar senha"
+            title="Trocar senha"
+            className={cn(
+              'pressable rounded-xl p-2.5 text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground',
+              caminho.startsWith('/senha') && 'bg-sidebar-accent text-sidebar-foreground',
+            )}
+          >
+            <KeyRound {...PROPS_ICONE} />
+          </Link>
           <form action={sair} className={cn(!recolhida && 'ml-auto')}>
             <button
               type="submit"
