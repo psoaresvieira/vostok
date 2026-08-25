@@ -24,7 +24,7 @@ test('troca a senha, sai e entra so com a nova', async ({ page }) => {
   await page.getByPlaceholder('senha', { exact: true }).fill(SENHA)
   await page.getByRole('button', { name: 'Entrar' }).click()
   await expect(page).toHaveURL(/\/login/)
-  await expect(page.getByText('credenciais_invalidas')).toBeVisible()
+  await expect(page.getByText('Email ou senha incorretos.')).toBeVisible()
 
   // Senha nova entra. O form action reseta os campos (uncontrolled) apos a
   // tentativa anterior, entao o email precisa ser preenchido de novo.

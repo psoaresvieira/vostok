@@ -9,6 +9,7 @@
 // Vive fora de acoes.ts porque 'use server' exige que todo export daquele
 // arquivo seja uma Server Action assincrona.
 const MENSAGENS_ERRO: Record<string, string> = {
+  credenciais_invalidas: 'Email ou senha incorretos.',
   cadastro_fechado: 'O cadastro é feito por convite. Peça o link ao administrador.',
   convite_invalido: 'Convite não encontrado.',
   convite_expirado: 'Este convite expirou. Peça um novo ao administrador.',

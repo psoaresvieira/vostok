@@ -95,3 +95,9 @@ describe('mensagemDeErro do cadastro fechado', () => {
     )
   })
 })
+
+describe('mensagemDeErro do login', () => {
+  it('traduz credenciais invalidas em vez de mostrar o codigo cru', () => {
+    expect(mensagemDeErro('credenciais_invalidas')).toBe('Email ou senha incorretos.')
+  })
+})
