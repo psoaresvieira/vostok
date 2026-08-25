@@ -38,6 +38,19 @@ describe('ListaContas', () => {
     expect(screen.getByText(/15\/03\/2026/)).toBeTruthy()
   })
 
+  it('formata a data de criacao no fuso America/Sao_Paulo, nao no fuso da maquina', () => {
+    // A forma comportamental (afirmar "14/03" para um instante 02:00Z) seria
+    // VACUA nesta maquina: o fuso local ja e' America/Sao_Paulo, entao o codigo
+    // sem timeZone pinado passaria igual — e falharia so na Vercel (UTC), onde
+    // a madrugada local viraria o dia seguinte na tela. O spy e' a forma que
+    // discrimina em qualquer maquina (mesmo espirito do teste de duplo clique
+    // do repo).
+    const spy = vi.spyOn(Date.prototype, 'toLocaleDateString')
+    render(<ListaContas contas={[conta({ criadoEm: new Date('2026-03-15T02:00:00Z') })]} />)
+    expect(spy).toHaveBeenCalledWith('pt-BR', { timeZone: 'America/Sao_Paulo' })
+    spy.mockRestore()
+  })
+
   it('botao Copiar do link reemitido escreve na area de transferencia e vira Copiado', async () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn() } })
     reemitirConviteAction.mockResolvedValue({ ok: true, valor: 'tok456' })

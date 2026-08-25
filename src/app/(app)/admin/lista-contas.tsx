@@ -32,7 +32,9 @@ export function ListaContas({ contas }: { contas: ContaDaPlataforma[] }) {
               <span className="text-muted-foreground">{conta.convite?.email ?? 'sem convite'}</span>
               <span className="text-muted-foreground">{estado}</span>
               <span className="text-xs text-muted-foreground">
-                Criada em {conta.criadoEm.toLocaleDateString('pt-BR')}
+                {/* timeZone pinado: a Vercel roda em UTC, e sem ele a conta
+                    criada na madrugada local apareceria com o dia seguinte. */}
+                Criada em {conta.criadoEm.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
               </span>
               {conta.convite && !conta.convite.aceitoEm && (
                 <button
