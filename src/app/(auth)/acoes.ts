@@ -78,12 +78,25 @@ async function criarUsuario(
   cliente: SupabaseClient,
   dados: { email: string; senha: string; nome: string },
 ): Promise<Resultado<void>> {
-  const { error } = await cliente.auth.signUp({
+  const { data, error } = await cliente.auth.signUp({
     email: dados.email,
     password: dados.senha,
     options: { data: { nome: dados.nome } },
   })
-  if (error) return falha(error.message)
+  if (error) {
+    // Mensagem do GoTrue nunca vai crua para a tela — mesma disciplina dos
+    // codigoDoErroDo* de scripts/erros.ts. So o "ja registrado" tem acao clara
+    // para o usuario; o resto vira o generico.
+    if (error.message.toLowerCase().includes('already registered')) {
+      return falha('email_ja_cadastrado')
+    }
+    console.error('signup recusado pelo gotrue', error.message)
+    return falha('cadastro_indisponivel')
+  }
+  // signUp sem sessao = confirmacao de email ligada no projeto. accept_invite
+  // exige auth.uid(), entao seguir adiante devolveria 'sem_sessao' — mensagem
+  // errada para quem acabou de se cadastrar e so precisa confirmar o email.
+  if (!data.session) return falha('confirmacao_pendente')
   return ok(undefined)
 }
 
@@ -101,7 +114,10 @@ export async function aceitarConvite(token: string): Promise<Resultado<void>> {
     ]) {
       if (error.message.includes(codigo)) return falha(codigo)
     }
-    return falha(error.message)
+    // Codigo fora da lista e' mensagem crua do Postgres/PostgREST — normaliza
+    // para o generico em vez de ecoar texto de banco na tela.
+    console.error('accept_invite falhou fora do vocabulario', error.message)
+    return falha('erro_ao_aceitar_convite')
   }
   return ok(undefined)
 }

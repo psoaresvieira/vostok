@@ -17,6 +17,11 @@ const MENSAGENS_ERRO: Record<string, string> = {
     'Este convite foi enviado para outro email. Entre com o email convidado para aceitá-lo.',
   sem_email: 'Sua conta não tem email. Entre novamente para aceitar o convite.',
   sem_sessao: 'Crie sua conta ou entre para aceitar o convite.',
+  email_ja_cadastrado: 'Este email já tem conta. Entre com sua senha para aceitar o convite.',
+  confirmacao_pendente:
+    'Confirme seu email pelo link que enviamos e depois entre para aceitar o convite.',
+  cadastro_indisponivel: 'Não foi possível criar sua conta. Tente de novo em instantes.',
+  erro_ao_aceitar_convite: 'Não foi possível aceitar o convite. Tente de novo.',
 }
 
 export function mensagemDeErro(codigo: string): string {
