@@ -306,8 +306,12 @@ function ItemScript({
             >
               Confirmar envio
             </button>
+            {/* autoFocus no Cancelar: mesmo motivo de template-whatsapp.tsx —
+                foco entra no dialogo, na acao menos destrutiva (aqui, a que
+                NAO manda mensagem cobrada). */}
             <button
               type="button"
+              autoFocus
               onClick={() => {
                 setErroEnvio(null)
                 setConfirmando(false)

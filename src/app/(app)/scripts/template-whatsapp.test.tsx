@@ -491,3 +491,23 @@ describe('TemplateWhatsApp', () => {
     })
   })
 })
+
+describe('foco ao abrir o dialogo de exclusao', () => {
+  it('move o foco para o Cancelar — a acao menos destrutiva — ao abrir', () => {
+    const { fn: excluir } = stubRegistrando<[string], void>(ok(undefined))
+    render(
+      <TemplateWhatsApp
+        scriptId="script-1"
+        template={template()}
+        desatualizado={false}
+        semConexao={false}
+        agora={AGORA}
+        excluir={excluir}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir template' }))
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Cancelar exclusão do template' }),
+    )
+  })
+})

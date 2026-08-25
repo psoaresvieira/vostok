@@ -219,3 +219,15 @@ describe('Integracoes — nota beta do Meta', () => {
     expect(screen.queryByText(TEXTO_NOTA)).toBeNull()
   })
 })
+
+describe('foco ao abrir a confirmacao de desconexao', () => {
+  it('move o foco para o Cancelar — a acao menos destrutiva — ao abrir', () => {
+    const c = conexao({ id: 'conn-1' })
+    const { fn: desconectar } = stubRegistrando<[string], void>(ok(undefined))
+    render(<WhatsApp conexao={c} desconectar={desconectar} />)
+    fireEvent.click(screen.getByRole('button', { name: /desconectar/i }))
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Cancelar desconexão' }),
+    )
+  })
+})

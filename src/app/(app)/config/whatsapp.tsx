@@ -115,8 +115,12 @@ export function WhatsApp({
                 >
                   Confirmar desconexão
                 </button>
+                {/* autoFocus no Cancelar: mesmo motivo de
+                    template-whatsapp.tsx — foco entra no dialogo, na acao
+                    menos destrutiva. */}
                 <button
                   type="button"
+                  autoFocus
                   onClick={() => {
                     setErro(null)
                     setConfirmando(false)

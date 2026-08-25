@@ -487,3 +487,21 @@ describe('PainelScripts — disparo de WhatsApp', () => {
     expect(screen.queryByText('Enviado ✓')).toBeNull()
   })
 })
+
+describe('foco ao abrir a confirmacao de envio', () => {
+  it('move o foco para o Cancelar — a acao menos destrutiva — ao abrir', () => {
+    const enviar = enviarOk()
+    render(
+      <PainelScripts
+        leadId="lead-1"
+        scripts={[script()]}
+        contexto={CONTEXTO_COMPLETO}
+        telefoneE164={TELEFONE}
+        templates={[template()]}
+        enviar={enviar}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar WhatsApp' }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancelar envio' }))
+  })
+})

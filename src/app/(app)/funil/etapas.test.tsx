@@ -357,3 +357,14 @@ describe('EditarEtapas', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 })
+
+describe('foco ao abrir a confirmacao de exclusao de etapa', () => {
+  it('move o foco para o Cancelar — a acao menos destrutiva — ao abrir', () => {
+    const e = etapa({ id: 'e-1', nome: 'Engano' })
+    const { fn: excluir } = stubRegistrando<[string, string], void>(ok(undefined))
+    render(<EditarEtapas pipelineId="pip-1" etapas={[e]} resumo={[]} excluir={excluir} />)
+    abrirPainel()
+    fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancelar exclusão' }))
+  })
+})

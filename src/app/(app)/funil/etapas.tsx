@@ -279,10 +279,14 @@ export function EditarEtapas({
                     >
                       Confirmar exclusão
                     </Botao>
+                    {/* autoFocus no Cancelar: mesmo motivo de
+                        template-whatsapp.tsx — foco entra no dialogo, na acao
+                        menos destrutiva. */}
                     <Botao
                       type="button"
                       variante="fantasma"
                       tamanho="sm"
+                      autoFocus
                       onClick={() => setEtapaParaExcluir(null)}
                       aria-label="Cancelar exclusão"
                     >

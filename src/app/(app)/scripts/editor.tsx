@@ -360,8 +360,12 @@ export function Editor({
                 >
                   Confirmar exclusão
                 </button>
+                {/* autoFocus no Cancelar: mesmo motivo de
+                    template-whatsapp.tsx — foco entra no dialogo, na acao
+                    menos destrutiva. */}
                 <button
                   type="button"
+                  autoFocus
                   aria-label="Cancelar exclusão"
                   onClick={() => setConfirmando(false)}
                 >

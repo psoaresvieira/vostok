@@ -263,3 +263,13 @@ describe('Editor de script', () => {
     expect(screen.queryByRole('button', { name: 'Excluir' })).toBeNull()
   })
 })
+
+describe('foco ao abrir a confirmacao de exclusao', () => {
+  it('move o foco para o Cancelar — a acao menos destrutiva — ao abrir', () => {
+    const s = script({ id: 'script-9' })
+    const { fn: excluir } = stubRegistrando<[string], void>(ok(undefined))
+    render(<Editor script={s} etapas={ETAPAS} excluir={excluir} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir' }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancelar exclusão' }))
+  })
+})

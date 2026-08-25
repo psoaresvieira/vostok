@@ -219,8 +219,12 @@ export function TemplateWhatsApp({
             >
               Confirmar exclusão
             </button>
+            {/* autoFocus: o foco entra no dialogo ao abrir (leitor de tela
+                anuncia; teclado nao fica atras dele) e pousa na acao menos
+                destrutiva — Enter por engano nao exclui nada. */}
             <button
               type="button"
+              autoFocus
               onClick={() => setConfirmandoExclusao(false)}
               aria-label="Cancelar exclusão do template"
             >
