@@ -2,8 +2,8 @@ import { Client } from 'pg'
 import { exigirHostLocal } from './guarda-host'
 
 // exigirHostLocal lanca se SUPABASE_DB_URL apontar para fora de
-// 127.0.0.1/localhost. limparBanco() abaixo faz truncate em 14 tabelas mais
-// delete from auth.users — sem esta guarda, um .env copiado ou uma variavel
+// 127.0.0.1/localhost. limparBanco() abaixo trunca as tabelas raiz do schema
+// mais delete from auth.users — sem esta guarda, um .env copiado ou uma variavel
 // de shell errada apontando para um banco real seria destruido sem perguntar
 // nada. Ver comentario completo em ./guarda-host.ts.
 const CONN = exigirHostLocal(
@@ -158,7 +158,8 @@ export async function limparBanco(): Promise<void> {
         public.integration_log, public.notifications,
         public.lead_events, public.stage_history, public.lead_tags, public.tags,
         public.leads, public.loss_reasons, public.stages, public.pipelines,
-        public.invites, public.memberships, public.accounts, public.profiles
+        public.invites, public.memberships, public.accounts, public.profiles,
+        public.platform_owners
       restart identity cascade
     `)
     await c.query('delete from auth.users')
