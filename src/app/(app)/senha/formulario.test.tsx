@@ -48,7 +48,7 @@ describe('FormularioSenha', () => {
     })
 
     expect(chamadas).toHaveLength(1)
-    expect(await screen.findByText('Senha trocada ✓')).toBeTruthy()
+    expect((await screen.findByRole('status')).textContent).toBe('Senha trocada ✓')
 
     const [campoSenha, campoConfirmacao] = screen.getAllByPlaceholderText(
       /senha/i,
@@ -88,7 +88,9 @@ describe('FormularioSenha', () => {
       botao.click()
     })
 
-    expect(await screen.findByText('A senha nova precisa ser diferente da atual.')).toBeTruthy()
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'A senha nova precisa ser diferente da atual.',
+    )
     expect(screen.queryByText('senha_igual')).toBeNull()
   })
 
@@ -104,6 +106,6 @@ describe('FormularioSenha', () => {
     })
 
     expect(chamadas).toHaveLength(0)
-    expect(await screen.findByText('As duas senhas não conferem.')).toBeTruthy()
+    expect((await screen.findByRole('alert')).textContent).toBe('As duas senhas não conferem.')
   })
 })

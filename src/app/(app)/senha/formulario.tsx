@@ -85,8 +85,16 @@ export function FormularioSenha({ trocar = trocarSenha }: { trocar?: AcaoTrocar 
         onChange={(e) => setConfirmacao(e.target.value)}
         required
       />
-      {erro && <p className="text-sm text-destructive">{erro}</p>}
-      {sucesso && <p className="text-sm text-success">Senha trocada ✓</p>}
+      {erro && (
+        <p role="alert" className="text-sm text-destructive">
+          {erro}
+        </p>
+      )}
+      {sucesso && (
+        <p role="status" className="text-sm text-success">
+          Senha trocada ✓
+        </p>
+      )}
       <Botao type="submit" disabled={pendente} className="self-start">
         Trocar senha
       </Botao>
