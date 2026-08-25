@@ -36,9 +36,13 @@ type RespostaEnvio = { messages?: { id?: string }[] } & RespostaErro
  * do undici subir crua ate o route handler. So o nome do erro no log — nunca
  * o objeto cru, porque a URL carrega o token na query string.
  */
-async function buscar(url: URL, init?: RequestInit): Promise<Resultado<Response>> {
+async function buscar(
+  url: URL,
+  init?: RequestInit,
+  timeoutMs: number = TIMEOUT_MS,
+): Promise<Resultado<Response>> {
   try {
-    const r = await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) })
+    const r = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) })
     return ok(r)
   } catch (e) {
     console.error('whatsapp graph inalcancavel', e instanceof Error ? e.name : 'desconhecido')
@@ -147,8 +151,17 @@ export class WhatsAppGraphReal implements WhatsAppGraph {
     // nao virar um loop de rede dentro do request; 10 paginas cobrem centenas
     // de templates com o MESMO prefixo, que o sufixo aleatorio ja torna raro.
     const PAGINAS_MAX = 10
+    // O prazo e' AGREGADO: TIMEOUT_MS para a paginacao inteira, nao por pagina
+    // — 10 paginas lentas somariam 100s, e a plataforma mata o route handler
+    // muito antes disso. Cada pagina recebe so o que sobrou do orcamento.
+    const inicio = Date.now()
     for (let pagina = 0; pagina < PAGINAS_MAX; pagina++) {
-      const busca = await buscar(url)
+      const restante = TIMEOUT_MS - (Date.now() - inicio)
+      if (restante <= 0) {
+        console.error('whatsapp graph estourou o prazo total na consulta de status')
+        return falha('whatsapp_indisponivel')
+      }
+      const busca = await buscar(url, undefined, restante)
       if (!busca.ok) return busca
       const r = busca.valor
 

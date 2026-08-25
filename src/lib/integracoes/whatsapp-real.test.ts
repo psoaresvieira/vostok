@@ -209,6 +209,36 @@ describe('WhatsAppGraphReal — submeterTemplate, statusDoTemplate, apagarTempla
     expect(global.fetch).toHaveBeenCalledTimes(10)
   })
 
+  it('statusDoTemplate respeita um prazo TOTAL na paginacao: paginas lentas nao somam 10x o timeout', async () => {
+    // Sem deadline agregado, 10 paginas de ate 10s cada podem segurar o route
+    // handler por 100s — a plataforma o mataria muito antes, e o usuario ve um
+    // erro generico sem log nosso. O relogio falso avanca 6s por pagina: a
+    // primeira cabe no prazo, a segunda tambem comeca dentro dele, e a terceira
+    // ja nao comeca (12s > 10s de orcamento total).
+    let agora = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => agora)
+    global.fetch = vi.fn().mockImplementation(async () => {
+      agora += 6_000
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: [{ name: 'outro', status: 'APPROVED', rejected_reason: 'NONE' }],
+          paging: {
+            next: 'https://graph.facebook.com/v21.0/waba-1/message_templates?after=X&access_token=t',
+          },
+        }),
+      }
+    })
+    const g = new WhatsAppGraphReal()
+
+    const r = await g.statusDoTemplate('token-valido', 'waba-1', 'boas_vindas')
+    expect(r.ok).toBe(false)
+    if (r.ok) throw new Error('deveria ter falhado')
+    expect(r.erro).toBe('whatsapp_indisponivel')
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+  })
+
   it('statusDoTemplate com paging.next malformado devolve whatsapp_indisponivel em vez de estourar', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
