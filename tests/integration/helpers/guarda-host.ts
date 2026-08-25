@@ -2,7 +2,7 @@
  * Guarda contra o acidente mais perigoso do repo: se `SUPABASE_DB_URL` um dia
  * apontar para um banco real — um `.env` copiado, uma variavel exportada na
  * shell errada — `limparBanco()` (tests/integration/helpers/db.ts) destrói o
- * banco inteiro sem perguntar nada: `truncate` em 14 tabelas mais
+ * banco inteiro sem perguntar nada: `truncate` nas tabelas raiz do schema mais
  * `delete from auth.users`. O mesmo vale para o `delete` de
  * `tests/e2e/global-setup.ts`. Esta funcao e a unica coisa entre esse
  * acidente e o dano.

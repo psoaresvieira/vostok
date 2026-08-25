@@ -42,10 +42,38 @@ describe('cadastrar com convite — erro do signUp nunca chega cru na tela', () 
     expect(r).toEqual({ ok: false, erro: 'cadastro_indisponivel' })
   })
 
+  it('traduz o code estruturado user_already_exists mesmo com a mensagem reescrita', async () => {
+    // A mensagem do GoTrue nao e' versionada; o code e'. Um upgrade que
+    // reescreva o texto nao pode rebaixar o erro para o generico.
+    signUp.mockResolvedValue({
+      data: { session: null },
+      error: { code: 'user_already_exists', message: 'texto novo qualquer' },
+    })
+    const r = await cadastrar(formulario())
+    expect(r).toEqual({ ok: false, erro: 'email_ja_cadastrado' })
+  })
+
   it('signUp sem sessao (confirmacao de email ligada) vira confirmacao_pendente sem tocar o accept_invite', async () => {
-    signUp.mockResolvedValue({ data: { session: null }, error: null })
+    signUp.mockResolvedValue({
+      data: { session: null, user: { identities: [{ id: 'id-1' }] } },
+      error: null,
+    })
     const r = await cadastrar(formulario())
     expect(r).toEqual({ ok: false, erro: 'confirmacao_pendente' })
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('com confirmacao ligada, email ja registrado (user ofuscado, identities vazio) vira email_ja_cadastrado, nao confirmacao_pendente', async () => {
+    // Anti-enumeracao do GoTrue: signUp de email existente com confirmacao
+    // ligada devolve SUCESSO com user ofuscado (identities: []) e sem sessao.
+    // Sem esta guarda, o convidado que ja tem conta receberia "confirme seu
+    // email" — e o email nunca chega.
+    signUp.mockResolvedValue({
+      data: { session: null, user: { identities: [] } },
+      error: null,
+    })
+    const r = await cadastrar(formulario())
+    expect(r).toEqual({ ok: false, erro: 'email_ja_cadastrado' })
     expect(rpc).not.toHaveBeenCalled()
   })
 })

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { criarClienteServidor } from '@/lib/supabase/servidor'
 import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 import { cadastroPorConviteSchema, credenciaisSchema } from './esquemas'
+import { codigoDoErroDoConvite } from './erros'
 
 /** Token do convite carregado pelo formulario, ou null quando nao ha convite. */
 function tokenDoConvite(formData: FormData): string | null {
@@ -86,12 +87,24 @@ async function criarUsuario(
   if (error) {
     // Mensagem do GoTrue nunca vai crua para a tela — mesma disciplina dos
     // codigoDoErroDo* de scripts/erros.ts. So o "ja registrado" tem acao clara
-    // para o usuario; o resto vira o generico.
-    if (error.message.toLowerCase().includes('already registered')) {
+    // para o usuario; o resto vira o generico. O `code` e' a API estavel
+    // (mensagens sao reescritas sem versao); o substring fica de reserva.
+    if (
+      error.code === 'user_already_exists' ||
+      error.code === 'email_exists' ||
+      error.message.toLowerCase().includes('already registered')
+    ) {
       return falha('email_ja_cadastrado')
     }
     console.error('signup recusado pelo gotrue', error.message)
     return falha('cadastro_indisponivel')
+  }
+  // Anti-enumeracao do GoTrue: com confirmacao de email ligada, signUp de um
+  // email JA registrado devolve sucesso com user ofuscado (identities vazio) e
+  // sem sessao. Sem esta guarda cairia no confirmacao_pendente abaixo — e o
+  // email prometido nunca chegaria.
+  if (data.user && data.user.identities?.length === 0) {
+    return falha('email_ja_cadastrado')
   }
   // signUp sem sessao = confirmacao de email ligada no projeto. accept_invite
   // exige auth.uid(), entao seguir adiante devolveria 'sem_sessao' — mensagem
@@ -104,20 +117,13 @@ export async function aceitarConvite(token: string): Promise<Resultado<void>> {
   const cliente = await criarClienteServidor()
   const { error } = await cliente.rpc('accept_invite', { p_token: token })
   if (error) {
-    for (const codigo of [
-      'convite_invalido',
-      'convite_expirado',
-      'convite_ja_aceito',
-      'convite_de_outro_email',
-      'sem_email',
-      'sem_sessao',
-    ]) {
-      if (error.message.includes(codigo)) return falha(codigo)
+    // O tradutor deriva do mapa de mensagens: codigo conhecido passa, mensagem
+    // crua do Postgres/PostgREST vira o generico em vez de ecoar na tela.
+    const codigo = codigoDoErroDoConvite(error.message)
+    if (codigo === 'erro_ao_aceitar_convite') {
+      console.error('accept_invite falhou fora do vocabulario', error.message)
     }
-    // Codigo fora da lista e' mensagem crua do Postgres/PostgREST — normaliza
-    // para o generico em vez de ecoar texto de banco na tela.
-    console.error('accept_invite falhou fora do vocabulario', error.message)
-    return falha('erro_ao_aceitar_convite')
+    return falha(codigo)
   }
   return ok(undefined)
 }

@@ -58,7 +58,7 @@ describe('0029 — follow-ups do plano contas-so-pelo-dono', () => {
              from pg_class c
              cross join (values ('anon'), ('authenticated')) as r(rolname)
             where c.relnamespace = 'public'::regnamespace
-              and c.relkind = 'r'
+              and c.relkind in ('r', 'p')
               and has_table_privilege(r.rolname, c.oid, 'TRUNCATE')
             order by 1, 2`,
         )

@@ -368,6 +368,7 @@ export function Editor({
                   autoFocus
                   aria-label="Cancelar exclusão"
                   onClick={() => setConfirmando(false)}
+                  className="rounded border border-border px-3 py-1 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Cancelar
                 </button>

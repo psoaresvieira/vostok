@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { FUSO_PADRAO } from '@/lib/domain/tarefa'
 import type { ContaDaPlataforma } from '@/lib/data/plataforma'
 import { reemitirConviteAction } from './acoes'
 import { mensagemDeErro } from './erros'
@@ -34,7 +35,7 @@ export function ListaContas({ contas }: { contas: ContaDaPlataforma[] }) {
               <span className="text-xs text-muted-foreground">
                 {/* timeZone pinado: a Vercel roda em UTC, e sem ele a conta
                     criada na madrugada local apareceria com o dia seguinte. */}
-                Criada em {conta.criadoEm.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
+                Criada em {conta.criadoEm.toLocaleDateString('pt-BR', { timeZone: FUSO_PADRAO })}
               </span>
               {conta.convite && !conta.convite.aceitoEm && (
                 <button

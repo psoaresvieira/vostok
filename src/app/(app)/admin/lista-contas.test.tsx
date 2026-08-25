@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { FUSO_PADRAO } from '@/lib/domain/tarefa'
 import type { ContaDaPlataforma } from '@/lib/data/plataforma'
 
 const reemitirConviteAction = vi.fn()
@@ -47,7 +48,7 @@ describe('ListaContas', () => {
     // do repo).
     const spy = vi.spyOn(Date.prototype, 'toLocaleDateString')
     render(<ListaContas contas={[conta({ criadoEm: new Date('2026-03-15T02:00:00Z') })]} />)
-    expect(spy).toHaveBeenCalledWith('pt-BR', { timeZone: 'America/Sao_Paulo' })
+    expect(spy).toHaveBeenCalledWith('pt-BR', { timeZone: FUSO_PADRAO })
     spy.mockRestore()
   })
 

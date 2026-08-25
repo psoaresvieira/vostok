@@ -256,6 +256,11 @@ export function EditarEtapas({
 
               {etapaParaExcluir && (
                 <div
+                  // key: retargetear de uma etapa para outra troca o conteudo
+                  // SEM desmontar (o condicional continua truthy) — e autoFocus
+                  // so dispara na montagem. Sem o remount, a segunda abertura
+                  // ficaria com o foco fora do dialogo.
+                  key={etapaParaExcluir.id}
                   role="dialog"
                   aria-label={`Excluir etapa ${etapaParaExcluir.nome}`}
                   className="mt-3 flex flex-col gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm"

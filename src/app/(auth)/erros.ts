@@ -27,3 +27,17 @@ const MENSAGENS_ERRO: Record<string, string> = {
 export function mensagemDeErro(codigo: string): string {
   return MENSAGENS_ERRO[codigo] ?? codigo
 }
+
+/**
+ * Acha no erro do accept_invite um codigo do vocabulario deste mapa, ou o
+ * generico. Derivado das CHAVES do proprio mapa — mesma disciplina dos
+ * codigoDoErroDo* de scripts/erros.ts: uma lista paralela mantida a mao
+ * derivaria do mapa com o tempo, e o codigo novo com traducao registrada
+ * seria colapsado no generico sem nenhum teste falhar.
+ */
+export function codigoDoErroDoConvite(mensagem: string): string {
+  for (const codigo of Object.keys(MENSAGENS_ERRO)) {
+    if (mensagem.includes(codigo)) return codigo
+  }
+  return 'erro_ao_aceitar_convite'
+}

@@ -367,4 +367,27 @@ describe('foco ao abrir a confirmacao de exclusao de etapa', () => {
     fireEvent.click(screen.getByRole('button', { name: /excluir/i }))
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancelar exclusão' }))
   })
+
+  it('retargetear o dialogo (excluir A, depois excluir B) volta o foco para o Cancelar', () => {
+    // Diferente dos outros quatro dialogos, este e' condicionado a UM estado
+    // que troca de valor sem passar por null: sem remount, o autoFocus so
+    // dispara na primeira abertura e o retarget fica mudo para leitor de tela.
+    const a = etapa({ id: 'e-1', nome: 'Alfa', ordem: 1 })
+    const b = etapa({ id: 'e-2', nome: 'Beta', ordem: 2 })
+    const { fn: excluir } = stubRegistrando<[string, string], void>(ok(undefined))
+    render(<EditarEtapas pipelineId="pip-1" etapas={[a, b]} resumo={[]} excluir={excluir} />)
+    abrirPainel()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir etapa Alfa' }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancelar exclusão' }))
+
+    // No navegador, clicar foca o botao clicado — o jsdom nao faz isso
+    // sozinho, entao o teste reproduz o passo que revela o defeito.
+    const excluirBeta = screen.getByRole('button', { name: 'Excluir etapa Beta' })
+    excluirBeta.focus()
+    fireEvent.click(excluirBeta)
+
+    expect(screen.getByRole('dialog', { name: 'Excluir etapa Beta' })).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancelar exclusão' }))
+  })
 })

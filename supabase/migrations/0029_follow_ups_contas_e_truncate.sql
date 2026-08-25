@@ -90,20 +90,17 @@ $$;
 --    pontuais conhecidos; aqui a varredura e' total, e o default privilege
 --    cobre tabela futura criada por migration. O teste de integracao da 0029
 --    enumera pg_class — tabela nova com TRUNCATE largo quebra a suite.
-do $$
-declare
-  t record;
-begin
-  for t in
-    select c.relname
-      from pg_class c
-     where c.relnamespace = 'public'::regnamespace
-       and c.relkind = 'r'
-  loop
-    execute format('revoke truncate on table public.%I from anon, authenticated', t.relname);
-  end loop;
-end;
-$$;
+--    `on all tables` de proposito, e nao um loop por relkind='r': a forma da
+--    gramatica cobre tambem tabela particionada (relkind 'p'), onde um
+--    TRUNCATE no pai esvazia todas as particoes.
+revoke truncate on all tables in schema public from anon, authenticated;
 
 alter default privileges in schema public
   revoke truncate on tables from anon, authenticated;
+
+-- Limite conhecido: o comando acima so' edita o default ACL do role que roda a
+-- migration (postgres). A imagem tambem tem um default ACL de supabase_admin
+-- concedendo TRUNCATE a anon/authenticated em tabela futura criada POR ELE
+-- (extensao ligada pelo dashboard, tooling da plataforma) — inalcancavel
+-- daqui, porque postgres nao e' membro de supabase_admin. O teste da 0029
+-- pega o caso na primeira vez que uma tabela dessas aparecer.

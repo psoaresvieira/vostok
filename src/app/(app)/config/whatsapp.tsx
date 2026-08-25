@@ -126,6 +126,7 @@ export function WhatsApp({
                     setConfirmando(false)
                   }}
                   aria-label="Cancelar desconexão"
+                  className="pressable inline-flex shrink-0 items-center justify-center font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background h-10 rounded-xl border border-border px-4 text-sm hover:bg-muted"
                 >
                   Cancelar
                 </button>

@@ -154,6 +154,10 @@ export class WhatsAppGraphReal implements WhatsAppGraph {
     // O prazo e' AGREGADO: TIMEOUT_MS para a paginacao inteira, nao por pagina
     // — 10 paginas lentas somariam 100s, e a plataforma mata o route handler
     // muito antes disso. Cada pagina recebe so o que sobrou do orcamento.
+    // O total ser o MESMO valor do timeout por request e' decisao, nao
+    // descuido: uma consulta que precisasse de mais que TIMEOUT_MS nao
+    // devolveria resposta ao cliente de qualquer forma (limite da funcao), e o
+    // chamador degrada para o status gravado e re-consulta no proximo poll.
     const inicio = Date.now()
     for (let pagina = 0; pagina < PAGINAS_MAX; pagina++) {
       const restante = TIMEOUT_MS - (Date.now() - inicio)
