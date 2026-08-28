@@ -322,16 +322,17 @@ export class InMemoryCrmStore implements CrmStore {
     )
   }
 
-  async moverEtapa(
-    leadId: string,
-    stageDestino: string,
+  /**
+   * Nucleo compartilhado por moverEtapa e moverParaPipeline: valida motivo de
+   * perda, grava o movimento (stage_history) e muta o lead. Cada chamador
+   * cuida das suas proprias guardas e do seu proprio evento — este metodo nao
+   * empurra evento nenhum.
+   */
+  private aplicarMovimento(
+    lead: Lead,
+    destino: Etapa,
     lossReasonId?: string | null,
-  ): Promise<Resultado<void>> {
-    const lead = this.leads.find((l) => l.id === leadId)
-    if (!lead) return falha('lead_nao_encontrado')
-    const destino = this.etapaPorId(stageDestino)
-    if (!destino) return falha('etapa_invalida')
-
+  ): Resultado<{ origem: string; agora: Date }> {
     if (destino.tipo === 'perdido') {
       if (!lossReasonId) return falha('motivo_perda_obrigatorio')
       if (!this.motivos.some((m) => m.id === lossReasonId && m.ativo)) {
@@ -343,20 +344,39 @@ export class InMemoryCrmStore implements CrmStore {
     const agora = new Date()
     // Espelha stage_history: metricasDaCoorte precisa da uniao de toda etapa
     // que o lead ja ocupou, nao so da atual.
-    this.movimentos.push({ leadId, origem, destino: destino.id })
+    this.movimentos.push({ leadId: lead.id, origem, destino: destino.id })
+    lead.pipelineId = destino.pipelineId
     lead.stageId = destino.id
     lead.status = destino.tipo === 'aberta' ? 'aberto' : destino.tipo
     lead.lossReasonId = destino.tipo === 'perdido' ? lossReasonId! : null
     lead.entrouNaEtapaEm = agora
     lead.atualizadoEm = agora
+    return ok({ origem, agora })
+  }
+
+  async moverEtapa(
+    leadId: string,
+    stageDestino: string,
+    lossReasonId?: string | null,
+  ): Promise<Resultado<void>> {
+    const lead = this.leads.find((l) => l.id === leadId)
+    if (!lead) return falha('lead_nao_encontrado')
+    const destino = this.etapaPorId(stageDestino)
+    if (!destino) return falha('etapa_invalida')
+    // Espelha move_lead_stage (0032): etapa de outra pipeline e' invalida
+    // aqui — trocar de funil e' trabalho de moverParaPipeline.
+    if (destino.pipelineId !== lead.pipelineId) return falha('etapa_invalida')
+
+    const r = this.aplicarMovimento(lead, destino, lossReasonId)
+    if (!r.ok) return r
 
     this.eventos.push({
       id: randomUUID(),
       leadId,
       tipo: 'etapa_alterada',
-      payload: { de: origem, para: destino.id, loss_reason_id: lossReasonId ?? null },
+      payload: { de: r.valor.origem, para: destino.id, loss_reason_id: lossReasonId ?? null },
       atorId: this.usuarioAtual,
-      criadoEm: agora,
+      criadoEm: r.valor.agora,
     })
     return ok(undefined)
   }
@@ -374,23 +394,9 @@ export class InMemoryCrmStore implements CrmStore {
     // trabalho de moverEtapa, nao um segundo caminho por aqui.
     if (destino.pipelineId === lead.pipelineId) return falha('mesma_pipeline')
 
-    if (destino.tipo === 'perdido') {
-      if (!lossReasonId) return falha('motivo_perda_obrigatorio')
-      if (!this.motivos.some((m) => m.id === lossReasonId && m.ativo)) {
-        return falha('motivo_perda_invalido')
-      }
-    }
-
-    const origem = lead.stageId
     const pipelineOrigem = lead.pipelineId
-    const agora = new Date()
-    this.movimentos.push({ leadId, origem, destino: destino.id })
-    lead.pipelineId = destino.pipelineId
-    lead.stageId = destino.id
-    lead.status = destino.tipo === 'aberta' ? 'aberto' : destino.tipo
-    lead.lossReasonId = destino.tipo === 'perdido' ? lossReasonId! : null
-    lead.entrouNaEtapaEm = agora
-    lead.atualizadoEm = agora
+    const r = this.aplicarMovimento(lead, destino, lossReasonId)
+    if (!r.ok) return r
 
     this.eventos.push({
       id: randomUUID(),
@@ -399,12 +405,12 @@ export class InMemoryCrmStore implements CrmStore {
       payload: {
         de_pipeline: pipelineOrigem,
         para_pipeline: destino.pipelineId,
-        de: origem,
+        de: r.valor.origem,
         para: destino.id,
         loss_reason_id: lossReasonId ?? null,
       },
       atorId: this.usuarioAtual,
-      criadoEm: agora,
+      criadoEm: r.valor.agora,
     })
     return ok(undefined)
   }
