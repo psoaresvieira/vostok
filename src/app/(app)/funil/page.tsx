@@ -67,7 +67,11 @@ export default async function FunilPage({
   // O lead do drawer sai na MESMA rodada do quadro: ele nao depende de nada
   // que as outras leituras produzem, e em serie a tela pagaria a latencia das
   // duas etapas somadas so' porque a URL trazia `?lead=`.
-  const leadParam = params.lead
+  // `|| undefined` normaliza `?lead=` vazio para "sem lead" AQUI, uma vez so —
+  // sem isto o carregamento (linha abaixo, checagem por truthy) e o aviso de
+  // nao encontrado (checagem por `=== undefined`) usavam criterios diferentes
+  // e discordavam sobre o mesmo `?lead=`.
+  const leadParam = params.lead || undefined
 
   const [pipelines, colunas, membros, motivos, etiquetas, resumoEtapas, drawer] = await Promise.all([
     store.listarPipelines(),
@@ -201,6 +205,11 @@ export default async function FunilPage({
       </div>
       {dadosDoDrawer && contextoScript && (
         <DrawerLead
+          // Sem key, trocar de `?lead=` (voltar/avancar do navegador entre
+          // dois leads, por exemplo) so troca as props do MESMO componente
+          // montado — aba ativa, rascunho de nota e campos de tarefa (estado
+          // local dos filhos) sobrevivem e podem vazar de um lead para outro.
+          key={dadosDoDrawer.lead.id}
           dados={dadosDoDrawer}
           hrefFechar={semLead}
           // Server component dentro de client component, por children: o unico

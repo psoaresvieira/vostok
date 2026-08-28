@@ -183,4 +183,70 @@ describe('DrawerLead', () => {
     fireEvent.click(within(dialogo).getByRole('button', { name: 'Fechar' }))
     expect(empurroes).toEqual(['/funil?busca=kar'])
   })
+
+  // Fix wave 1 (review da Task 4): sem `key={lead.id}` em quem monta o
+  // DrawerLead, trocar de `?lead=` so troca as PROPS do mesmo componente
+  // montado, e o estado local dos filhos (aba ativa, rascunho de nota)
+  // sobrevive de um lead para o outro. Os dois testes abaixo simulam a `key`
+  // trocando diretamente aqui — `rerender` do Testing Library preserva a
+  // raiz, mas uma `key` diferente entre uma renderizacao e outra ainda faz o
+  // React desmontar e montar de novo, exatamente como acontece dentro do
+  // <div> de page.tsx quando a URL troca de lead.
+  describe('troca de lead via key (fix wave 1)', () => {
+    const LEAD_B: Lead = { ...LEAD, id: 'lead-2', nome: 'Bruno' }
+
+    it('a aba ativa nao sobrevive a troca de lead', async () => {
+      const { rerender } = render(
+        <DrawerLead key={LEAD.id} dados={dados()} hrefFechar="/funil" blocoScripts={<p>bloco</p>} />,
+      )
+      let dialogo = await screen.findByRole('dialog')
+      fireEvent.click(within(dialogo).getByRole('tab', { name: 'Histórico' }))
+      expect(
+        within(dialogo).getByRole('tab', { name: 'Histórico' }).getAttribute('aria-selected'),
+      ).toBe('true')
+
+      rerender(
+        <DrawerLead
+          key={LEAD_B.id}
+          dados={dados({ lead: LEAD_B })}
+          hrefFechar="/funil"
+          blocoScripts={<p>bloco</p>}
+        />,
+      )
+      dialogo = await screen.findByRole('dialog')
+      expect(
+        within(dialogo).getByRole('tab', { name: 'Principal' }).getAttribute('aria-selected'),
+      ).toBe('true')
+      expect(
+        within(dialogo).getByRole('tab', { name: 'Histórico' }).getAttribute('aria-selected'),
+      ).toBe('false')
+    })
+
+    it('um rascunho de nota digitado para o lead A nao aparece no formulario do lead B', async () => {
+      const { rerender } = render(
+        <DrawerLead key={LEAD.id} dados={dados()} hrefFechar="/funil" blocoScripts={<p>bloco</p>} />,
+      )
+      let dialogo = await screen.findByRole('dialog')
+      fireEvent.click(within(dialogo).getByRole('tab', { name: 'Histórico' }))
+      const campoA = within(dialogo).getByPlaceholderText('registrar uma nota') as HTMLTextAreaElement
+      fireEvent.change(campoA, { target: { value: 'nota digitada para o lead A, nunca enviada' } })
+      expect(campoA.value).toBe('nota digitada para o lead A, nunca enviada')
+
+      rerender(
+        <DrawerLead
+          key={LEAD_B.id}
+          dados={dados({ lead: LEAD_B })}
+          hrefFechar="/funil"
+          blocoScripts={<p>bloco</p>}
+        />,
+      )
+      dialogo = await screen.findByRole('dialog')
+      fireEvent.click(within(dialogo).getByRole('tab', { name: 'Histórico' }))
+      // Sem a key, este seria o MESMO <textarea> React com o rascunho do lead
+      // A ainda dentro — um clique em "Salvar nota" aqui gravaria a nota
+      // errada no lead B.
+      const campoB = within(dialogo).getByPlaceholderText('registrar uma nota') as HTMLTextAreaElement
+      expect(campoB.value).toBe('')
+    })
+  })
 })

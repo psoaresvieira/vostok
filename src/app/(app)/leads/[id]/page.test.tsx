@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { InMemoryCrmStore } from '@/lib/data/memory'
 import { leadSchema } from '@/lib/domain/lead'
+import { falha } from '@/lib/domain/resultado'
 
 const criarStoreDoServidorMock = vi.fn()
 vi.mock('@/lib/data/supabase', () => ({
@@ -90,6 +91,23 @@ describe('/leads/[id] — a ficha virou o drawer do funil', () => {
     store.semear('Empresa Exemplo', 'user-1')
 
     expect(await destinoDe(store, '00000000-0000-4000-8000-000000000000')).toBe('/funil')
+  })
+
+  it('falha do store (nao lead inexistente): manda pro funil JA com ?lead=, para tentar de novo', async () => {
+    // Ao contrario do "lead inexistente" acima (buscarLead devolve ok(null)),
+    // aqui o PROPRIO buscarLead falha — sem_sessao, conexao caida, RLS
+    // quebrada. Nao e' o mesmo caso: redirecionar para /funil cru engoliria o
+    // erro em silencio. O redirect carrega `?lead=` para o funil tentar
+    // carregar de novo e, numa segunda falha, mostrar o proprio aviso dele.
+    const storeComFalha = { buscarLead: async () => falha('sem_sessao') } as unknown as InMemoryCrmStore
+    criarStoreDoServidorMock.mockResolvedValue({
+      ok: true,
+      valor: { store: storeComFalha, conta: { id: 'conta-1' }, usuarioId: 'user-1', papel: 'admin' },
+    })
+
+    await expect(LeadPage({ params: Promise.resolve({ id: 'lead-1' }) })).rejects.toThrow(
+      'redirect:/funil?lead=lead-1',
+    )
   })
 
   it('sem sessao: vai para o login antes de tocar no store', async () => {

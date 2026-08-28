@@ -15,6 +15,11 @@ const ABAS = [
 ]
 
 describe('Abas', () => {
+  it('a tablist tem nome acessivel', () => {
+    render(<Abas abas={ABAS} />)
+    expect(screen.getByRole('tablist', { name: 'Seções do lead' })).toBeTruthy()
+  })
+
   it('marca a primeira aba como selecionada e mostra so o painel dela', () => {
     render(<Abas abas={ABAS} />)
 

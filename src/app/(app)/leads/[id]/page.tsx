@@ -15,7 +15,12 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const contexto = await criarStoreDoServidor()
   if (!contexto.ok) redirect('/login')
   const lead = await contexto.valor.store.buscarLead(id)
-  if (!lead.ok || !lead.valor) redirect('/funil')
+  // Falha do store (conexao, RLS quebrada) e' outra coisa que "lead nao
+  // existe": manda pro funil JA com `?lead=`, que tenta carregar de novo e,
+  // numa segunda falha, mostra o proprio aviso da tela em vez de engolir o
+  // erro em silencio como um redirect puro faria.
+  if (!lead.ok) redirect(hrefDoFunil('', { lead: id }))
+  if (!lead.valor) redirect('/funil')
   const pipeline = await contexto.valor.store.pipelinePorId(lead.valor.pipelineId)
   const pipelineParam = pipeline.ok && !pipeline.valor.pipeline.isDefault ? lead.valor.pipelineId : null
   redirect(hrefDoFunil('', { pipeline: pipelineParam, lead: id }))

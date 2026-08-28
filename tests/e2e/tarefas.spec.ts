@@ -88,33 +88,29 @@ function itemDaTarefa(secao: import('@playwright/test').Locator, texto: string) 
   return secao.locator('li').filter({ hasText: texto })
 }
 
-/** O lead cujo drawer esta aberto agora — assim `abaDoLead` nao precisa repetir
- * o nome a cada passo. */
-let leadAberto = ''
-
-/** Clica o link do lead (do quadro ou de /tarefas) e espera o drawer abrir.
- * O link de /tarefas ainda aponta para `/leads/<id>`, que redireciona. */
+/** Clica o link do lead (do quadro ou de /tarefas) e espera o drawer abrir. O
+ * link de /tarefas ainda aponta para `/leads/<id>`, que redireciona. */
 async function abrirLead(page: Page, nomeDoLead: string) {
   await page.getByRole('link', { name: nomeDoLead }).click()
   await expect(
     drawerDoLead(page, nomeDoLead).getByRole('heading', { name: nomeDoLead, exact: true }),
   ).toBeVisible()
-  leadAberto = nomeDoLead
 }
 
-/** Vai para uma aba do drawer e espera o painel dela trocar. */
-async function abaDoLead(page: Page, rotulo: string) {
-  const aba = drawerDoLead(page, leadAberto).getByRole('tab', { name: rotulo })
+/** Vai para uma aba do drawer do lead indicado e espera o painel dela trocar. */
+async function abaDoLead(page: Page, nomeDoLead: string, rotulo: string) {
+  const aba = drawerDoLead(page, nomeDoLead).getByRole('tab', { name: rotulo })
   await aba.click()
   await expect(aba).toHaveAttribute('aria-selected', 'true')
 }
 
 async function criarTarefaNaFicha(
   page: Page,
+  nomeDoLead: string,
   titulo: string,
   venceEmLocal: string,
 ): Promise<void> {
-  await abaDoLead(page, 'Tarefas')
+  await abaDoLead(page, nomeDoLead, 'Tarefas')
   await page.getByPlaceholder('título da tarefa').fill(titulo)
   await page.locator('input[type="datetime-local"]').fill(venceEmLocal)
   // A Server Action agora e postada de /funil (a pagina que hospeda o drawer),
@@ -153,7 +149,7 @@ test.describe('ciclo de vida de uma tarefa, da ficha do lead a lista de /tarefas
       const amanha = somarDias(hoje, 1)
       const ontem = somarDias(hoje, -1)
       const tituloUrgente = 'Ligar para negociar'
-      await criarTarefaNaFicha(paginaA, tituloUrgente, datetimeLocal(amanha, '14:00'))
+      await criarTarefaNaFicha(paginaA, nomeLead, tituloUrgente, datetimeLocal(amanha, '14:00'))
 
       // Positiva na propria ficha, antes de sair dela: a tarefa aberta
       // aparece na secao "Abertas" do painel.
@@ -170,7 +166,7 @@ test.describe('ciclo de vida de uma tarefa, da ficha do lead a lista de /tarefas
       // --- Passo 4: segunda tarefa, prazo ontem, sob "Atrasadas" ---
       await abrirLead(paginaA, nomeLead)
       const tituloAtrasado = 'Confirmar orçamento'
-      await criarTarefaNaFicha(paginaA, tituloAtrasado, datetimeLocal(ontem, '09:00'))
+      await criarTarefaNaFicha(paginaA, nomeLead, tituloAtrasado, datetimeLocal(ontem, '09:00'))
       await expect(
         itemDaTarefa(secaoBalde(paginaA, 'Abertas'), tituloAtrasado),
       ).toBeVisible()
@@ -193,7 +189,7 @@ test.describe('ciclo de vida de uma tarefa, da ficha do lead a lista de /tarefas
 
       // --- Passo 6: voltar ao lead, ver "Tarefa concluída" na timeline ---
       await abrirLead(paginaA, nomeLead)
-      await abaDoLead(paginaA, 'Histórico')
+      await abaDoLead(paginaA, nomeLead, 'Histórico')
       await expect(
         drawerDoLead(paginaA, nomeLead).getByText(`Tarefa concluída: ${tituloAtrasado}`, {
           exact: true,
@@ -249,7 +245,7 @@ test.describe('ciclo de vida de uma tarefa, da ficha do lead a lista de /tarefas
 
       await abrirLead(paginaAdmin, nomeLeadAdmin)
       const tituloDoAdmin = 'Follow-up do admin'
-      await criarTarefaNaFicha(paginaAdmin, tituloDoAdmin, datetimeLocal(amanha, '10:00'))
+      await criarTarefaNaFicha(paginaAdmin, nomeLeadAdmin, tituloDoAdmin, datetimeLocal(amanha, '10:00'))
 
       // Positiva: por padrao (sem filtro), o admin ve a tarefa dele proprio.
       await paginaAdmin.goto('/tarefas')

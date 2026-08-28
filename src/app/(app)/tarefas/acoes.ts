@@ -14,9 +14,8 @@ import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 //
 // `/funil` e nao `/leads/<id>`: o painel de tarefas do lead virou a aba
 // Tarefas do drawer do funil (spec 2026-08-28), e a rota antiga so' redireciona
-// — revalida-la nao repinta tela nenhuma. `leadId` fica na assinatura porque a
-// aba de UM lead so' se atualiza junto com o funil que a contem.
-function revalidarTelasDeTarefa(_leadId: string) {
+// — revalida-la nao repinta tela nenhuma.
+function revalidarTelasDeTarefa() {
   revalidatePath('/funil')
   revalidatePath('/tarefas')
 }
@@ -43,11 +42,15 @@ export async function criarTarefa(d: {
   const r = await contexto.valor.criar({ leadId: d.leadId, titulo, tipo: d.tipo, venceEm })
   if (!r.ok) return falha(r.erro)
 
-  revalidarTelasDeTarefa(d.leadId)
+  revalidarTelasDeTarefa()
   return ok(undefined)
 }
 
-export async function concluirTarefa(id: string, leadId: string): Promise<Resultado<void>> {
+// `leadId` fica na assinatura das tres actions abaixo so' para simetria com
+// os chamadores (tarefas.tsx e lista.tsx passam sempre `(id, leadId)`) — a
+// unica leitura que fazia dele virou `revalidarTelasDeTarefa()` sem
+// parametro nenhum.
+export async function concluirTarefa(id: string, _leadId: string): Promise<Resultado<void>> {
   const contexto = await criarTarefaStoreDoServidor()
   if (!contexto.ok) return falha(contexto.erro)
 
@@ -61,15 +64,15 @@ export async function concluirTarefa(id: string, leadId: string): Promise<Result
     // revalidada assim mesmo — sem isto o painel seguiria mostrando a tarefa
     // aberta com o botao "Concluir", e o proximo clique re-carimbaria
     // concluida_em/concluida_por e gravaria um segundo evento.
-    if (r.erro === TAREFA_CONCLUIDA_SEM_EVENTO) revalidarTelasDeTarefa(leadId)
+    if (r.erro === TAREFA_CONCLUIDA_SEM_EVENTO) revalidarTelasDeTarefa()
     return falha(r.erro)
   }
 
-  revalidarTelasDeTarefa(leadId)
+  revalidarTelasDeTarefa()
   return ok(undefined)
 }
 
-export async function reabrirTarefa(id: string, leadId: string): Promise<Resultado<void>> {
+export async function reabrirTarefa(id: string, _leadId: string): Promise<Resultado<void>> {
   const contexto = await criarTarefaStoreDoServidor()
   if (!contexto.ok) return falha(contexto.erro)
 
@@ -79,17 +82,17 @@ export async function reabrirTarefa(id: string, leadId: string): Promise<Resulta
   const r = await contexto.valor.reabrir(id)
   if (!r.ok) return falha(r.erro)
 
-  revalidarTelasDeTarefa(leadId)
+  revalidarTelasDeTarefa()
   return ok(undefined)
 }
 
-export async function excluirTarefa(id: string, leadId: string): Promise<Resultado<void>> {
+export async function excluirTarefa(id: string, _leadId: string): Promise<Resultado<void>> {
   const contexto = await criarTarefaStoreDoServidor()
   if (!contexto.ok) return falha(contexto.erro)
 
   const r = await contexto.valor.excluir(id)
   if (!r.ok) return falha(r.erro)
 
-  revalidarTelasDeTarefa(leadId)
+  revalidarTelasDeTarefa()
   return ok(undefined)
 }

@@ -45,7 +45,11 @@ export function Abas({ abas }: { abas: AbaDoDrawer[] }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div role="tablist" className="flex shrink-0 gap-1 border-b border-border px-4">
+      <div
+        role="tablist"
+        aria-label="Seções do lead"
+        className="flex shrink-0 gap-1 border-b border-border px-4"
+      >
         {abas.map((a, i) => (
           <button
             key={a.id}
