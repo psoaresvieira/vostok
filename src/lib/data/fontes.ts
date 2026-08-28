@@ -111,7 +111,7 @@ const CODIGOS = [
  * para um responsavel valido. Hoje a tela so escreve colunas concedidas
  * (responsavel_padrao_id e atualizado_em); se isso mudar, o rotulo mente.
  */
-function codigo(erro: Pick<PostgrestError, 'message' | 'code'>): string {
+export function codigo(erro: Pick<PostgrestError, 'message' | 'code'>): string {
   const achado = CODIGOS.find((c) => erro.message.includes(c))
   if (achado) return achado
   if (erro.code === '42501') return 'responsavel_invalido'

@@ -68,6 +68,28 @@ Antes do App Review do WhatsApp/Facebook passar, todo cliente que precisa testar
 
 O Embedded Signup (autoatendimento real do WhatsApp — popup do Meta que cria a WABA e devolve o token sem o cliente precisar copiar nada à mão) fica como caminho **futuro e não desenhado**: depende do onboarding de Tech Provider do Meta, cujos detalhes mudam até o App Review sair. O MVP é colar credencial mesmo.
 
+## Conectar Page de cliente (modo operador)
+
+A implantação de cliente é manual do dono da plataforma (migration `0030`). O script abaixo conecta uma Page ao tenant do cliente com token de **System User** — sem OAuth pelo navegador.
+
+Pré-condições, nesta ordem:
+
+1. **App do Meta** dentro do BM da Vostok, com Webhooks → Page → `leadgen` apontando para `https://vostok-beta.vercel.app/api/webhooks/meta` e verificado com o `META_VERIFY_TOKEN` da Vercel. Conferir com `GET /{app-id}/subscriptions?access_token={app-id}|{app-secret}`.
+2. **System User** no BM da Vostok com a Page do cliente **atribuída** e token permanente com `pages_show_list`, `pages_manage_metadata`, `leads_retrieval`, gerado para esse app.
+3. O cliente **aceitou o convite** e é membro do tenant (senão `responsavel_invalido` ao passar `--responsavel`).
+
+Execução:
+
+```bash
+vercel env pull prod.env --environment=production --yes
+# acrescente ao prod.env: OPERADOR_EMAIL, OPERADOR_SENHA (login do dono), META_TOKEN_SYSTEM_USER
+npm run meta:conectar -- --env prod.env --conta <account_id> --page <page_id> [--responsavel <user_id>] [--reivindicar]
+```
+
+`META_API_VERSION` é lida na carga do módulo do Graph, antes do arquivo de env: exporte-a no shell se precisar de versão diferente de `v21.0`. Segunda execução para a mesma Page devolve `page_ja_conectada` e para — tomar a Page de outra conta é ato explícito (`--reivindicar`). Apague `prod.env` ao terminar.
+
+Prova ponta a ponta: Lead Ads Testing Tool (`developers.facebook.com/tools/lead-ads-testing`) na Page → lead no `/funil` do cliente com campanha/conjunto/anúncio; reenvio do mesmo lead não duplica.
+
 ## Getting Started
 
 First, run the development server:
