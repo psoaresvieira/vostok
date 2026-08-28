@@ -4,6 +4,12 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { Cartao } from './cartao'
 import type { LeadDoFunil } from '@/lib/domain/tipos'
 
+// O cleanup automatico do @testing-library/react so se registra quando
+// globals: true esta ligado, e este vitest.config nao liga de proposito — o
+// repo importa helper de teste explicitamente em todo lugar. Sem o registro
+// manual abaixo, o document do jsdom persiste entre os it() deste arquivo e,
+// do segundo render() em diante, as consultas acham no velho ou estouram
+// "multiple elements found".
 afterEach(cleanup)
 
 function lead(sobre: Partial<LeadDoFunil> = {}): LeadDoFunil {
@@ -30,11 +36,15 @@ describe('Cartao', () => {
     expect(screen.getByText('sem telefone')).toBeTruthy()
     expect(screen.getByText('sem responsável')).toBeTruthy()
   })
+  it('sem etiquetas: nao renderiza lista', () => {
+    render(<Cartao lead={lead({ etiquetas: [] })} nomeResponsavel={null} href="/x" />)
+    expect(screen.queryByRole('list')).toBeNull()
+  })
   it('bolinha de parado so a partir de 72h na etapa', () => {
     const h71 = new Date(Date.now() - 71 * 3600_000)
     const h72 = new Date(Date.now() - 72 * 3600_000)
     const { unmount } = render(<Cartao lead={lead({ entrouNaEtapaEm: h71 })} nomeResponsavel={null} href="/x" />)
-    expect(screen.getByLabelText(/na etapa há/).className).toContain('bg-muted-foreground/40')
+    expect(screen.getByLabelText(/na etapa há/i).className).toContain('bg-muted-foreground/40')
     unmount()
     render(<Cartao lead={lead({ entrouNaEtapaEm: h72 })} nomeResponsavel={null} href="/x" />)
     expect(screen.getByLabelText(/parado há/i).className).toContain('bg-destructive')

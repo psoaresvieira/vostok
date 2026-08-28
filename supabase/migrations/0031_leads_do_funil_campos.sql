@@ -118,9 +118,16 @@ $$;
 -- tinha feito. A assinatura (tipos dos parametros) nao mudou — so' o
 -- returns table — entao a entrada do mapa em 0024_sweep_grants_rpc.test.ts
 -- continua valendo sem edicao.
+--
+-- `from public, anon`, nao so' `from public`: o ACL padrao do papel postgres
+-- nesta imagem/nuvem ja concede EXECUTE explicitamente a anon, authenticated
+-- e service_role em toda funcao nova — `revoke ... from public` so remove a
+-- entrada `=X/`, e `anon=X/postgres` sobrevive. Sem o `anon` aqui, o Caso 3
+-- de 0024_sweep_grants_rpc.test.ts (has_function_privilege('anon', …)) acha
+-- anon com EXECUTE onde o mapa espera false.
 revoke execute on function public.leads_do_funil(
   uuid, integer, integer, uuid, uuid, public.lead_origem, timestamptz, text
-) from public;
+) from public, anon;
 grant execute on function public.leads_do_funil(
   uuid, integer, integer, uuid, uuid, public.lead_origem, timestamptz, text
 ) to authenticated;

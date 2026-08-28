@@ -13,8 +13,7 @@ import { Selo } from '@/components/ui/selo'
 export function Cartao({ lead, nomeResponsavel, href }: { lead: LeadDoFunil; nomeResponsavel: string | null; href: string }) {
   const horas = horasNaEtapa(lead.entrouNaEtapaEm, new Date())
   const parado = horas >= 72
-  // minusculo de proposito: o teste casa /na etapa há/ sem flag "i".
-  const rotuloStatus = parado ? `parado há ${rotuloTempoNaEtapa(horas)}` : `na etapa há ${rotuloTempoNaEtapa(horas)}`
+  const rotuloStatus = parado ? `Parado há ${rotuloTempoNaEtapa(horas)}` : `Na etapa há ${rotuloTempoNaEtapa(horas)}`
   return (
     <article className="surface pressable group rounded-2xl p-2.5 hover:border-primary/40">
       <div className="flex items-center justify-between gap-2">

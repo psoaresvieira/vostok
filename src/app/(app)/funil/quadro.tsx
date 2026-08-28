@@ -29,6 +29,9 @@ function aplicarMovimento(atual: LeadDoFunil[], patch: MovimentoOtimista): LeadD
   return atual.map((l) => (l.id === patch.leadId ? { ...l, stageId: patch.stageId } : l))
 }
 
+// Destino provisorio do link do cartao ate a Task 4 trocar por ?lead= (drawer).
+const hrefDoCartao = (id: string) => `/leads/${id}`
+
 // O cartao de origem fica onde esta, esmaecido, marcando de onde o lead saiu.
 // Quem segue o ponteiro e a copia no DragOverlay (ver Quadro).
 //
@@ -67,8 +70,7 @@ const CartaoArrastavel = memo(function CartaoArrastavel({
       // (era 92px no cartao de tres blocos anterior).
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 72px' }}
     >
-      {/* /leads/${id}: destino provisorio ate a Task 4 trocar por ?lead= (drawer). */}
-      <Cartao lead={lead} nomeResponsavel={nomeResponsavel} href={`/leads/${lead.id}`} />
+      <Cartao lead={lead} nomeResponsavel={nomeResponsavel} href={hrefDoCartao(lead.id)} />
     </div>
   )
 })
@@ -376,7 +378,7 @@ export function Quadro({
               <Cartao
                 lead={arrastando}
                 nomeResponsavel={nomeDoResponsavel(arrastando)}
-                href={`/leads/${arrastando.id}`}
+                href={hrefDoCartao(arrastando.id)}
               />
             </div>
           )}
