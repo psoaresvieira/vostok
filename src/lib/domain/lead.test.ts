@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { leadSchema, horasNaEtapa, rotuloTempoNaEtapa } from './lead'
+import { leadSchema, horasNaEtapa, rotuloTempoNaEtapa, formatarDataCurta } from './lead'
 
 describe('leadSchema', () => {
   it('aceita lead so com nome', () => {
@@ -52,5 +52,14 @@ describe('rotuloTempoNaEtapa', () => {
   it('mostra dias a partir de 24h', () => {
     expect(rotuloTempoNaEtapa(24)).toBe('1d')
     expect(rotuloTempoNaEtapa(75)).toBe('3d')
+  })
+})
+
+describe('formatarDataCurta', () => {
+  it('dd/MM/yyyy no fuso de Sao Paulo (23:30Z de 22/08 e 20:30 de 22/08)', () => {
+    expect(formatarDataCurta(new Date('2026-08-22T23:30:00Z'))).toBe('22/08/2026')
+  })
+  it('01:30Z de 23/08 ainda e 22/08 em Sao Paulo', () => {
+    expect(formatarDataCurta(new Date('2026-08-23T01:30:00Z'))).toBe('22/08/2026')
   })
 })

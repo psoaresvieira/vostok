@@ -35,6 +35,8 @@ function lead(id: string, stageId: string, valorCents: number | null = null): Le
     responsavelId: null,
     valorCents,
     entrouNaEtapaEm: new Date(Date.now() - 3_600_000),
+    telefoneE164: null,
+    criadoEm: new Date(),
     etiquetas: [],
   }
 }

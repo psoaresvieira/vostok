@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { normalizarEmail, normalizarTelefone } from './normalizacao'
+import { FUSO_PADRAO } from './tarefa'
 
 export const leadSchema = z
   .object({
@@ -33,4 +34,11 @@ export function rotuloTempoNaEtapa(horas: number): string {
   if (horas < 1) return 'agora'
   if (horas < 24) return `${horas}h`
   return `${Math.floor(horas / 24)}d`
+}
+
+const DATA_CURTA = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: FUSO_PADRAO })
+
+/** dd/MM/yyyy no fuso da operacao — a data que o cartao mostra a direita do nome. */
+export function formatarDataCurta(d: Date): string {
+  return DATA_CURTA.format(d)
 }

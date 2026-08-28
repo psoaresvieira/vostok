@@ -249,6 +249,8 @@ export class InMemoryCrmStore implements CrmStore {
       responsavelId: l.responsavelId,
       valorCents: l.valorCents,
       entrouNaEtapaEm: l.entrouNaEtapaEm,
+      telefoneE164: l.telefoneE164,
+      criadoEm: l.criadoEm,
       etiquetas: l.etiquetas,
     })
 

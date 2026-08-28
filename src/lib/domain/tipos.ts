@@ -66,6 +66,10 @@ export type LeadDoFunil = {
   responsavelId: string | null
   valorCents: number | null
   entrouNaEtapaEm: Date
+  // O cartao mostra telefone e data de criacao — decisao da spec Kommo
+  // (2026-08-28-crm-funil-kommo).
+  telefoneE164: string | null
+  criadoEm: Date
   etiquetas: Etiqueta[]
 }
 

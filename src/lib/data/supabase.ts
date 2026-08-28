@@ -368,6 +368,8 @@ export class SupabaseCrmStore implements CrmStore {
       responsavel_id: string | null
       valor_cents: number | null
       entrou_na_etapa_em: string
+      telefone_e164: string | null
+      criado_em: string
       etiquetas: Etiqueta[]
       total_na_etapa: number
       soma_cents_na_etapa: number | string | null
@@ -397,6 +399,8 @@ export class SupabaseCrmStore implements CrmStore {
         responsavelId: l.responsavel_id,
         valorCents: l.valor_cents,
         entrouNaEtapaEm: new Date(l.entrou_na_etapa_em),
+        telefoneE164: l.telefone_e164,
+        criadoEm: new Date(l.criado_em),
         etiquetas: l.etiquetas ?? [],
       })
     }

@@ -63,10 +63,12 @@ const CartaoArrastavel = memo(function CartaoArrastavel({
       // diferenca entre pintar 50 cartoes (com sombra de 40px de blur cada,
       // ver .surface) e pintar os 6 que aparecem. contain-intrinsic-size da o
       // tamanho presumido do que foi pulado, senao a barra de rolagem da
-      // coluna salta enquanto se rola.
-      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 92px' }}
+      // coluna salta enquanto se rola. 72px: altura do cartao compacto novo
+      // (era 92px no cartao de tres blocos anterior).
+      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 72px' }}
     >
-      <Cartao lead={lead} nomeResponsavel={nomeResponsavel} />
+      {/* /leads/${id}: destino provisorio ate a Task 4 trocar por ?lead= (drawer). */}
+      <Cartao lead={lead} nomeResponsavel={nomeResponsavel} href={`/leads/${lead.id}`} />
     </div>
   )
 })
@@ -371,7 +373,11 @@ export function Quadro({
         <DragOverlay dropAnimation={null}>
           {arrastando && (
             <div className="cursor-grabbing shadow-lg">
-              <Cartao lead={arrastando} nomeResponsavel={nomeDoResponsavel(arrastando)} />
+              <Cartao
+                lead={arrastando}
+                nomeResponsavel={nomeDoResponsavel(arrastando)}
+                href={`/leads/${arrastando.id}`}
+              />
             </div>
           )}
         </DragOverlay>
