@@ -11,18 +11,21 @@ export type ArgumentosOperador = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+const OPCOES = {
+  conta: { type: 'string' },
+  page: { type: 'string' },
+  responsavel: { type: 'string' },
+  env: { type: 'string' },
+  reivindicar: { type: 'boolean', default: false },
+} as const
+
 export function lerArgumentos(argv: string[]): Resultado<ArgumentosOperador> {
-  const { values } = parseArgs({
-    args: argv,
-    options: {
-      conta: { type: 'string' },
-      page: { type: 'string' },
-      responsavel: { type: 'string' },
-      env: { type: 'string' },
-      reivindicar: { type: 'boolean', default: false },
-    },
-    strict: true,
-  })
+  let values: ReturnType<typeof parseArgs<{ args: string[]; options: typeof OPCOES; strict: true }>>['values']
+  try {
+    ;({ values } = parseArgs({ args: argv, options: OPCOES, strict: true }))
+  } catch {
+    return falha('argumentos_invalidos')
+  }
   if (!values.conta || !UUID.test(values.conta)) return falha('conta_invalida')
   if (!values.page || values.page.trim().length === 0) return falha('page_invalida')
   if (values.responsavel !== undefined && !UUID.test(values.responsavel)) return falha('responsavel_invalido')

@@ -39,10 +39,18 @@ async function main() {
     auth: { persistSession: false, autoRefreshToken: false },
   })
   const login = await supabase.auth.signInWithPassword({ email: e.email, password: e.senha })
-  if (login.error) sair('credenciais_invalidas')
+  if (login.error) {
+    console.error(`login: ${login.error.message}`)
+    sair('credenciais_invalidas')
+  }
 
   const rpc = a.reivindicar ? 'reivindicar_fonte_meta' : 'conectar_fonte_meta'
   const r = await conectarPaginaComoOperador({
+    // appId/appSecret so sao usados por trocarCodePorTokenLongo (OAuth), que
+    // este script nunca chama: a orquestracao aqui so usa listarPaginas,
+    // posseDaPagina, assinarLeadgen e desassinarLeadgen. Por isso strings
+    // vazias sao seguras. Se algum dia entrar aqui uma chamada ao Graph que
+    // precise delas, elas precisam entrar em envsObrigatorias.
     graph: new MetaGraphReal(process.env.META_APP_ID ?? '', process.env.META_APP_SECRET ?? ''),
     pageId: a.page,
     tokenDoUsuario: e.tokenMeta,

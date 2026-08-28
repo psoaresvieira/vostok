@@ -22,6 +22,10 @@ describe('lerArgumentos', () => {
     expect(lerArgumentos(['--page', '1', '--env', 'e'])).toEqual(falha('conta_invalida'))
     expect(lerArgumentos(['--conta', CONTA, '--page', '1'])).toEqual(falha('env_invalido'))
   })
+  it('flag desconhecida ou argumento posicional: argumentos_invalidos, sem excecao', () => {
+    expect(lerArgumentos(['--pagina', '1'])).toEqual(falha('argumentos_invalidos'))
+    expect(lerArgumentos(['prod.env'])).toEqual(falha('argumentos_invalidos'))
+  })
 })
 
 describe('envsObrigatorias', () => {
