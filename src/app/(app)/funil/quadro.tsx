@@ -16,6 +16,7 @@ import type { ColunaDoFunil, Etapa, Etiqueta, LeadDoFunil, Membro, MotivoPerda }
 import { formatarMoeda } from '@/lib/domain/formato'
 import { chamarAcao } from '@/lib/ui/acao'
 import { Cartao } from './cartao'
+import { hrefDoFunil } from './params'
 import { ModalMovimento, type PedidoMovimento } from './modal-movimento'
 import { moverEtapaAction } from './acoes'
 import { maisLeadsDaEtapaAction } from './acoes-paginacao'
@@ -28,9 +29,6 @@ type MovimentoOtimista = { leadId: string; stageId: string }
 function aplicarMovimento(atual: LeadDoFunil[], patch: MovimentoOtimista): LeadDoFunil[] {
   return atual.map((l) => (l.id === patch.leadId ? { ...l, stageId: patch.stageId } : l))
 }
-
-// Destino provisorio do link do cartao ate a Task 4 trocar por ?lead= (drawer).
-const hrefDoCartao = (id: string) => `/leads/${id}`
 
 // O cartao de origem fica onde esta, esmaecido, marcando de onde o lead saiu.
 // Quem segue o ponteiro e a copia no DragOverlay (ver Quadro).
@@ -50,9 +48,11 @@ const hrefDoCartao = (id: string) => `/leads/${id}`
 const CartaoArrastavel = memo(function CartaoArrastavel({
   lead,
   nomeResponsavel,
+  href,
 }: {
   lead: LeadDoFunil
   nomeResponsavel: string | null
+  href: string
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id })
   return (
@@ -70,7 +70,7 @@ const CartaoArrastavel = memo(function CartaoArrastavel({
       // (era 92px no cartao de tres blocos anterior).
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 72px' }}
     >
-      <Cartao lead={lead} nomeResponsavel={nomeResponsavel} href={hrefDoCartao(lead.id)} />
+      <Cartao lead={lead} nomeResponsavel={nomeResponsavel} href={href} />
     </div>
   )
 })
@@ -163,6 +163,7 @@ export function Quadro({
   etiquetasConhecidas,
   pipelineId,
   filtros,
+  queryAtual,
 }: {
   etapas: Etapa[]
   colunas: ColunaDoFunil[]
@@ -171,6 +172,9 @@ export function Quadro({
   etiquetasConhecidas: Etiqueta[]
   pipelineId: string
   filtros: FiltrosDaUrl
+  /** searchParams da pagina, ja serializados — o href do cartao e' esta mesma
+   * URL mais `lead=<id>`, para o drawer abrir SEM perder filtro nem pipeline. */
+  queryAtual: string
 }) {
   const [pedido, setPedido] = useState<PedidoMovimento | null>(null)
   const [erro, setErro] = useState<string | null>(null)
@@ -252,6 +256,15 @@ export function Quadro({
     [nomePorId],
   )
   const arrastando = arrastandoId ? posicoes.find((l) => l.id === arrastandoId) ?? null : null
+
+  // Uma unica fonte para o href do cartao: o CartaoArrastavel e a copia do
+  // DragOverlay tem que apontar para o mesmo lugar. useCallback porque
+  // CartaoArrastavel e' memo() — uma funcao nova a cada render anularia o memo
+  // e re-renderizaria todos os cartoes a cada pegada do arrasto.
+  const hrefDoCartao = useCallback(
+    (id: string) => hrefDoFunil(queryAtual, { lead: id }),
+    [queryAtual],
+  )
 
   function aoPegar(evento: DragStartEvent) {
     setArrastandoId(String(evento.active.id))
@@ -354,6 +367,7 @@ export function Quadro({
                     key={lead.id}
                     lead={lead}
                     nomeResponsavel={nomeDoResponsavel(lead)}
+                    href={hrefDoCartao(lead.id)}
                   />
                 ))}
               </Coluna>

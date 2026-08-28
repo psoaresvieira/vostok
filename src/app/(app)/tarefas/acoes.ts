@@ -11,8 +11,13 @@ import { ok, falha, type Resultado } from '@/lib/domain/resultado'
 // Task 6 chama concluirTarefa (e as demais) de /tarefas tambem — um lugar so
 // para as Server Actions, revalidando os dois caminhos que dependem do
 // estado de uma tarefa.
-function revalidarTelasDeTarefa(leadId: string) {
-  revalidatePath(`/leads/${leadId}`)
+//
+// `/funil` e nao `/leads/<id>`: o painel de tarefas do lead virou a aba
+// Tarefas do drawer do funil (spec 2026-08-28), e a rota antiga so' redireciona
+// — revalida-la nao repinta tela nenhuma. `leadId` fica na assinatura porque a
+// aba de UM lead so' se atualiza junto com o funil que a contem.
+function revalidarTelasDeTarefa(_leadId: string) {
+  revalidatePath('/funil')
   revalidatePath('/tarefas')
 }
 

@@ -41,7 +41,7 @@ function lead(id: string, stageId: string, valorCents: number | null = null): Le
   }
 }
 
-function montar(colunas: ColunaDoFunil[]) {
+function montar(colunas: ColunaDoFunil[], queryAtual = '') {
   return render(
     <Quadro
       etapas={ETAPAS}
@@ -51,6 +51,7 @@ function montar(colunas: ColunaDoFunil[]) {
       etiquetasConhecidas={[]}
       pipelineId="p1"
       filtros={{}}
+      queryAtual={queryAtual}
     />,
   )
 }
@@ -69,6 +70,18 @@ describe('Quadro — paginacao por coluna', () => {
     // Dois cartoes na tela, 128 no cabecalho: e' o numero do banco.
     expect(within(coluna('Novo lead')).getByText(/128 leads/)).toBeTruthy()
     expect(within(coluna('Novo lead')).getAllByRole('link')).toHaveLength(2)
+  })
+
+  it('o cartao aponta para o drawer (?lead=) preservando os filtros da URL', () => {
+    montar(
+      [{ etapaId: 'e1', leads: [lead('a', 'e1')], total: 1, somaCents: null }],
+      'pipeline=p1&busca=kar',
+    )
+
+    // Nao e' mais /leads/<id>: o lead abre como painel do proprio funil, entao
+    // o href e a URL de agora mais a chave `lead`.
+    const link = within(coluna('Novo lead')).getByRole('link')
+    expect(link.getAttribute('href')).toBe('/funil?pipeline=p1&busca=kar&lead=a')
   })
 
   it('caso 2 — soma omitida quando nenhum lead da etapa tem valor', () => {
@@ -94,6 +107,7 @@ describe('Quadro — paginacao por coluna', () => {
         etiquetasConhecidas={[]}
         pipelineId="p1"
         filtros={{}}
+        queryAtual=""
       />,
     )
     expect(

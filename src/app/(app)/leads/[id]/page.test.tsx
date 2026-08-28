@@ -1,42 +1,25 @@
-// @vitest-environment jsdom
-import { describe, it, expect, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { InMemoryCrmStore } from '@/lib/data/memory'
 import { leadSchema } from '@/lib/domain/lead'
-import { ok, falha } from '@/lib/domain/resultado'
-
-// Mesmo motivo de disparar.test.tsx: o cleanup automatico do
-// @testing-library/react so se registra com globals: true, e este
-// vitest.config nao liga de proposito.
-afterEach(cleanup)
 
 const criarStoreDoServidorMock = vi.fn()
 vi.mock('@/lib/data/supabase', () => ({
   criarStoreDoServidor: (...args: unknown[]) => criarStoreDoServidorMock(...args),
 }))
 
-// A ficha so precisa que o painel de tarefas resolva — o conteudo dele nao e'
-// o que estes casos verificam.
-vi.mock('@/lib/data/tarefas', () => ({
-  criarTarefaStoreDoServidor: async () => ok({ doLead: async () => ok([]) }),
-}))
-
-// Falha proposital: com scripts.length === 0 (nenhum script chega da etapa),
-// templatesDoPainel devolve [] sem tocar em '@/lib/data/templates' — o painel
-// de scripts degrada para aviso, exatamente como page.tsx ja prevê para
-// biblioteca fora do ar. Evita ter que simular Supabase real de templates.
-vi.mock('@/lib/data/scripts', () => ({
-  criarScriptStoreDoServidor: async () => falha('sem_conta'),
-}))
-
+// `redirect` do Next LANCA para interromper o render — quem chama nunca ve o
+// retorno. O mock preserva esse contrato (uma funcao que so' registrasse o
+// destino deixaria a pagina seguir executando linhas que o produto nunca roda)
+// e carrega o destino na mensagem.
+class Redirecionou extends Error {
+  constructor(readonly destino: string) {
+    super(`redirect:${destino}`)
+  }
+}
 vi.mock('next/navigation', () => ({
-  notFound: () => {
-    throw new Error('notFound chamado inesperadamente')
+  redirect: (destino: string) => {
+    throw new Redirecionou(destino)
   },
-  redirect: () => {
-    throw new Error('redirect chamado inesperadamente')
-  },
-  useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {} }),
 }))
 
 import LeadPage from './page'
@@ -45,60 +28,74 @@ function novoLead(nome: string, extras: Record<string, unknown> = {}) {
   return leadSchema.parse({ nome, ...extras })
 }
 
-async function montarFicha(store: InMemoryCrmStore, leadId: string) {
+/** Para onde a rota manda o navegador. Falha se ela NAO redirecionar. */
+async function destinoDe(store: InMemoryCrmStore, leadId: string): Promise<string> {
   criarStoreDoServidorMock.mockResolvedValue({
     ok: true,
     valor: { store, conta: { id: 'conta-1' }, usuarioId: 'user-1', papel: 'admin' },
   })
-  const jsx = await LeadPage({ params: Promise.resolve({ id: leadId }) })
-  return render(jsx)
+  try {
+    await LeadPage({ params: Promise.resolve({ id: leadId }) })
+  } catch (e) {
+    if (e instanceof Redirecionou) return e.destino
+    throw e
+  }
+  throw new Error('a rota nao redirecionou')
 }
 
-describe('LeadPage (ficha) — pipeline do lead', () => {
-  it('caso 2 — seletor de etapas mostra as etapas da pipeline do lead, nao as da padrao', async () => {
+beforeEach(() => {
+  criarStoreDoServidorMock.mockReset()
+})
+
+describe('/leads/[id] — a ficha virou o drawer do funil', () => {
+  it('lead da pipeline PADRAO: abre o drawer no funil padrao, sem ?pipeline=', async () => {
     const store = new InMemoryCrmStore()
     store.semear('Empresa Exemplo', 'user-1')
-
-    const pipelineB2B = await store.criarPipeline('B2B', ['Contato', 'Negociação'])
-    if (!pipelineB2B.ok) throw new Error(pipelineB2B.erro)
-    const infoB2B = await store.pipelinePorId(pipelineB2B.valor)
-    if (!infoB2B.ok) throw new Error(infoB2B.erro)
+    const padrao = await store.pipelinePadrao()
+    if (!padrao.ok) throw new Error(padrao.erro)
 
     const criado = await store.criarLead({
       ...novoLead('Carlos'),
-      pipelineId: pipelineB2B.valor,
-      stageId: infoB2B.valor.etapas[0].id,
+      pipelineId: padrao.valor.pipeline.id,
+      stageId: padrao.valor.etapas[0].id,
     })
     if (!criado.ok) throw new Error(criado.erro)
 
-    await montarFicha(store, criado.valor)
-
-    const seletor = screen.getByLabelText('Mover para') as HTMLSelectElement
-    const opcoes = within(seletor)
-      .getAllByRole('option')
-      .map((o) => o.textContent)
-    expect(opcoes).toEqual(['Contato', 'Negociação', 'Ganho', 'Perdido'])
+    expect(await destinoDe(store, criado.valor)).toBe(`/funil?lead=${criado.valor}`)
   })
 
-  it('caso 3 — link de voltar carrega a pipeline quando o lead nao esta na padrao', async () => {
+  it('lead de OUTRA pipeline: carrega a pipeline junto, senao o funil abriria a padrao', async () => {
     const store = new InMemoryCrmStore()
     store.semear('Empresa Exemplo', 'user-1')
 
-    const pipelineB2B = await store.criarPipeline('B2B', ['Contato'])
-    if (!pipelineB2B.ok) throw new Error(pipelineB2B.erro)
-    const infoB2B = await store.pipelinePorId(pipelineB2B.valor)
-    if (!infoB2B.ok) throw new Error(infoB2B.erro)
+    const b2b = await store.criarPipeline('B2B', ['Contato'])
+    if (!b2b.ok) throw new Error(b2b.erro)
+    const info = await store.pipelinePorId(b2b.valor)
+    if (!info.ok) throw new Error(info.erro)
 
     const criado = await store.criarLead({
       ...novoLead('Carlos'),
-      pipelineId: pipelineB2B.valor,
-      stageId: infoB2B.valor.etapas[0].id,
+      pipelineId: b2b.valor,
+      stageId: info.valor.etapas[0].id,
     })
     if (!criado.ok) throw new Error(criado.erro)
 
-    await montarFicha(store, criado.valor)
+    expect(await destinoDe(store, criado.valor)).toBe(
+      `/funil?pipeline=${b2b.valor}&lead=${criado.valor}`,
+    )
+  })
 
-    const link = screen.getByRole('link', { name: /voltar ao funil/i })
-    expect(link.getAttribute('href')).toBe(`/funil?pipeline=${pipelineB2B.valor}`)
+  it('lead inexistente (ou escondido pela RLS): funil sem painel, nunca 404', async () => {
+    const store = new InMemoryCrmStore()
+    store.semear('Empresa Exemplo', 'user-1')
+
+    expect(await destinoDe(store, '00000000-0000-4000-8000-000000000000')).toBe('/funil')
+  })
+
+  it('sem sessao: vai para o login antes de tocar no store', async () => {
+    criarStoreDoServidorMock.mockResolvedValue({ ok: false, erro: 'sem_sessao' })
+    await expect(LeadPage({ params: Promise.resolve({ id: 'lead-1' }) })).rejects.toThrow(
+      'redirect:/login',
+    )
   })
 })

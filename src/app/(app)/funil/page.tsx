@@ -1,5 +1,8 @@
+import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { criarStoreDoServidor } from '@/lib/data/supabase'
+import { contextoDoLead } from '@/lib/domain/script'
+import { ok } from '@/lib/domain/resultado'
 import { criarEtapaStoreDoServidor } from '@/lib/data/etapas'
 import type { CrmStore } from '@/lib/data/store'
 import { BarraPipelines } from './barra-pipelines'
@@ -8,6 +11,12 @@ import { EditarEtapas } from './etapas'
 import { Filtros } from './filtros'
 import { NovoLead } from './novo-lead'
 import { Quadro } from './quadro'
+import { hrefDoFunil } from './params'
+import { mensagemDeErro } from './erros'
+import { carregarDrawer } from './drawer/carregar'
+import { mapasDoLead } from './drawer/mapas'
+import { DrawerLead } from './drawer/drawer-lead'
+import { BlocoScripts } from './drawer/bloco-scripts'
 import { LIMITE_CARTOES_POR_ETAPA, filtroDoFunil, type FiltrosDaUrl } from './paginacao'
 
 /**
@@ -55,7 +64,12 @@ export default async function FunilPage({
   // que config/page.tsx aplicava antes de Task 5 (Plano 15) mover as etapas
   // para ca. Por isso ele entra aqui como uma funcao que nunca rejeita, e nao
   // como um Resultado a conferir logo abaixo.
-  const [pipelines, colunas, membros, motivos, etiquetas, resumoEtapas] = await Promise.all([
+  // O lead do drawer sai na MESMA rodada do quadro: ele nao depende de nada
+  // que as outras leituras produzem, e em serie a tela pagaria a latencia das
+  // duas etapas somadas so' porque a URL trazia `?lead=`.
+  const leadParam = params.lead
+
+  const [pipelines, colunas, membros, motivos, etiquetas, resumoEtapas, drawer] = await Promise.all([
     store.listarPipelines(),
     // Uma pagina por coluna, com total e soma da etapa inteira vindos do
     // banco — nao a pipeline inteira. Ver paginacao.ts.
@@ -69,6 +83,7 @@ export default async function FunilPage({
       const resumo = await etapaStore.valor.etapas.resumoEtapas()
       return resumo.ok ? resumo.valor : []
     })(),
+    leadParam ? carregarDrawer(store, papel, leadParam) : Promise.resolve(ok(null)),
   ])
   if (!pipelines.ok) throw new Error(pipelines.erro)
   if (!colunas.ok) throw new Error(colunas.erro)
@@ -82,6 +97,43 @@ export default async function FunilPage({
   const queryAtual = new URLSearchParams(
     Object.entries(params).filter((par): par is [string, string] => par[1] !== undefined),
   ).toString()
+
+  // A MESMA query SEM `lead`. Duas coisas dependem dela:
+  //
+  // 1. A `key` do Quadro. Se `lead` entrasse nela, abrir o drawer remontaria o
+  //    quadro inteiro e as paginas que o "carregar mais" trouxe (estado local)
+  //    sumiriam — o usuario clicaria num cartao da terceira pagina e voltaria
+  //    a ver so' a primeira atras do painel.
+  // 2. Os links da barra de pipelines: trocar de pipeline com um lead aberto
+  //    deve fechar o painel, nao carrega-lo por cima de outro funil.
+  const semLead = hrefDoFunil(queryAtual, { lead: null })
+  const queryDoQuadro = semLead.includes('?') ? semLead.slice(semLead.indexOf('?') + 1) : ''
+
+  // `?lead=` que nao resolve (lead excluido, de outra conta, escondido pela
+  // RLS) e' aviso acima do quadro, e nunca 404: o funil ao lado continua
+  // valido, e derrubar a tela inteira por um link velho seria trocar um
+  // painel que falhou por uma pagina de erro.
+  const avisoDoDrawer =
+    leadParam === undefined
+      ? null
+      : !drawer.ok
+        ? mensagemDeErro(drawer.erro)
+        : drawer.valor === null
+          ? mensagemDeErro('lead_nao_encontrado')
+          : null
+
+  // Os mapas de nome vem da MESMA funcao que o drawer usa, entao o contexto do
+  // script enxerga as etapas de todas as pipelines, nao so' as da atual.
+  const dadosDoDrawer = drawer.ok ? drawer.valor : null
+  const contextoScript = dadosDoDrawer
+    ? (() => {
+        const { nomeEtapa, nomePessoa } = mapasDoLead(
+          dadosDoDrawer.pipelines,
+          dadosDoDrawer.membros,
+        )
+        return contextoDoLead(dadosDoDrawer.lead, nomeEtapa, nomePessoa)
+      })()
+    : null
 
   return (
     // min-w-0 tambem AQUI, e nao so no <main> e na coluna da direita: este
@@ -97,7 +149,7 @@ export default async function FunilPage({
         <BarraPipelines
           pipelines={pipelines.valor}
           pipelineAtivaId={pipelineId}
-          queryAtual={queryAtual}
+          queryAtual={queryDoQuadro}
         />
         <div className="mt-auto flex flex-col gap-1 border-t border-border p-2">
           <NovaPipeline />
@@ -120,13 +172,23 @@ export default async function FunilPage({
             pipelineId={pipelineId}
           />
         </div>
-        {/* key pelos filtros ATIVOS: o Quadro guarda as paginas extras que o
-            "carregar mais" trouxe em estado local, e trocar de filtro ou de
-            pipeline invalida todas elas de uma vez. Sem a key, as paginas da
-            consulta anterior sobreviveriam a navegacao e apareceriam
-            misturadas com o resultado do filtro novo. */}
+        {avisoDoDrawer && (
+          <p
+            className="mx-6 mt-3 rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            role="alert"
+          >
+            {avisoDoDrawer}
+          </p>
+        )}
+        {/* key pelos filtros ATIVOS, mas SEM `lead`: o Quadro guarda as
+            paginas extras que o "carregar mais" trouxe em estado local, e
+            trocar de filtro ou de pipeline invalida todas elas de uma vez. Sem
+            a key, as paginas da consulta anterior sobreviveriam a navegacao e
+            apareceriam misturadas com o resultado do filtro novo — e com
+            `lead` dentro dela, abrir o drawer jogaria fora as mesmas paginas
+            sem que nada no quadro tivesse mudado. */}
         <Quadro
-          key={`${pipelineId}|${queryAtual}`}
+          key={`${pipelineId}|${queryDoQuadro}`}
           etapas={pipeline.valor.etapas}
           colunas={colunas.valor}
           membros={membros.valor}
@@ -134,8 +196,36 @@ export default async function FunilPage({
           etiquetasConhecidas={etiquetas.valor}
           pipelineId={pipelineId}
           filtros={filtros}
+          queryAtual={queryAtual}
         />
       </div>
+      {dadosDoDrawer && contextoScript && (
+        <DrawerLead
+          dados={dadosDoDrawer}
+          hrefFechar={semLead}
+          // Server component dentro de client component, por children: o unico
+          // bloco do painel que fala com a rede EXTERNA (o Graph do Meta, para
+          // refrescar status de template nao-final) chega streamado, e o resto
+          // do drawer pinta na hora. Mesmo arranjo que a ficha usava.
+          blocoScripts={
+            <Suspense
+              fallback={
+                <div className="flex flex-col gap-3" aria-busy="true">
+                  <p className="eyebrow">Scripts</p>
+                  <p className="text-sm text-muted-foreground">Carregando scripts…</p>
+                </div>
+              }
+            >
+              <BlocoScripts
+                leadId={dadosDoDrawer.lead.id}
+                stageId={dadosDoDrawer.lead.stageId}
+                contexto={contextoScript}
+                telefoneE164={dadosDoDrawer.lead.telefoneE164}
+              />
+            </Suspense>
+          }
+        />
+      )}
     </div>
   )
 }

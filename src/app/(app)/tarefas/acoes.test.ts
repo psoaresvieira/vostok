@@ -66,7 +66,7 @@ describe('criarTarefa', () => {
       tipo: 'ligacao',
       venceEm: new Date('2026-08-30T12:00:00Z'),
     })
-    expect(revalidatePathMock).toHaveBeenCalledWith('/leads/lead-1')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/funil')
     expect(revalidatePathMock).toHaveBeenCalledWith('/tarefas')
     expect(r.ok).toBe(true)
   })
@@ -90,7 +90,7 @@ describe('concluirTarefa', () => {
     const r = await concluirTarefa('tarefa-1', 'lead-1')
 
     expect(r).toEqual({ ok: false, erro: TAREFA_CONCLUIDA_SEM_EVENTO })
-    expect(revalidatePathMock).toHaveBeenCalledWith('/leads/lead-1')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/funil')
     expect(revalidatePathMock).toHaveBeenCalledWith('/tarefas')
   })
 
@@ -101,7 +101,7 @@ describe('concluirTarefa', () => {
     const r = await concluirTarefa('tarefa-1', 'lead-1')
 
     expect(tarefaStoreMock.concluir).toHaveBeenCalledWith('tarefa-1')
-    expect(revalidatePathMock).toHaveBeenCalledWith('/leads/lead-1')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/funil')
     expect(revalidatePathMock).toHaveBeenCalledWith('/tarefas')
     expect(r.ok).toBe(true)
   })

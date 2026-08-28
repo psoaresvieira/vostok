@@ -91,10 +91,18 @@ export function Drawer({
       >
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border p-4">
           <div className="min-w-0 flex-1">
-            <h2 id={tituloId} className="sr-only">
-              {titulo}
-            </h2>
-            {cabecalho}
+            {/* O <h2> so' existe quando NAO ha `cabecalho`. Um cabecalho
+                proprio ja traz o nome visivel do painel, e e' ele que carrega
+                `id={tituloId}` (o alvo do aria-labelledby): renderizar a copia
+                sr-only junto criaria DOIS elementos com o mesmo id — HTML
+                invalido, e `getElementById` resolveria para o errado — alem de
+                anunciar o mesmo titulo duas vezes na navegacao por cabecalhos.
+                Sem `cabecalho`, esta linha e' a unica fonte do nome. */}
+            {cabecalho ?? (
+              <h2 id={tituloId} className="sr-only">
+                {titulo}
+              </h2>
+            )}
           </div>
           <button
             ref={fecharRef}

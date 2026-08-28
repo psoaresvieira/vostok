@@ -302,7 +302,7 @@ describe('enviarWhatsApp', () => {
       template: NOME_META,
       texto: esperado,
     })
-    expect(revalidados).toEqual(['/leads/lead-1'])
+    expect(revalidados).toEqual(['/funil'])
   })
 
   it('caso 3 — envio ok e evento falho vira whatsapp_enviado_sem_evento, COM revalidate', async () => {
@@ -317,9 +317,9 @@ describe('enviarWhatsApp', () => {
     // A mensagem FOI para o cliente: nunca um codigo que diga o contrario.
     expect(r).toEqual({ ok: false, erro: 'whatsapp_enviado_sem_evento' })
     expect(falso.enviados).toHaveLength(1)
-    // Revalida mesmo assim — a ficha mudou de estado no mundo, ainda que a
+    // Revalida mesmo assim — o lead mudou de estado no mundo, ainda que a
     // linha do tempo nao registre.
-    expect(revalidados).toEqual(['/leads/lead-1'])
+    expect(revalidados).toEqual(['/funil'])
   })
 
   it('recusa do Graph nao escreve evento nenhum na timeline', async () => {

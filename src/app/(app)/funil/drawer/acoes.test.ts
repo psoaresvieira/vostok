@@ -51,7 +51,7 @@ describe('adicionarNota', () => {
     const r = await adicionarNota('lead-1', '  ligou de volta  ')
 
     expect(storeMock.registrarNota).toHaveBeenCalledWith('lead-1', 'ligou de volta')
-    expect(revalidatePathMock).toHaveBeenCalledWith('/leads/lead-1')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/funil')
     expect(r.ok).toBe(true)
   })
 
@@ -83,7 +83,7 @@ describe('adicionarEtiquetas', () => {
     const r = await adicionarEtiquetas('lead-1', ['quente', 'indicação'])
 
     expect(storeMock.aplicarEtiquetas).toHaveBeenCalledWith('lead-1', ['quente', 'indicação'])
-    expect(revalidatePathMock).toHaveBeenCalledWith('/leads/lead-1')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/funil')
     expect(r.ok).toBe(true)
   })
 
@@ -115,7 +115,7 @@ describe('removerEtiqueta', () => {
     const r = await removerEtiqueta('lead-1', 'tag-1')
 
     expect(storeMock.removerEtiqueta).toHaveBeenCalledWith('lead-1', 'tag-1')
-    expect(revalidatePathMock).toHaveBeenCalledWith('/leads/lead-1')
+    expect(revalidatePathMock).toHaveBeenCalledWith('/funil')
     expect(r.ok).toBe(true)
   })
 
@@ -147,7 +147,6 @@ describe('trocarResponsavel', () => {
     const r = await trocarResponsavel('lead-1', 'user-2')
 
     expect(storeMock.atribuirResponsavel).toHaveBeenCalledWith('lead-1', 'user-2')
-    expect(revalidatePathMock).toHaveBeenCalledWith('/leads/lead-1')
     expect(revalidatePathMock).toHaveBeenCalledWith('/funil')
     expect(r.ok).toBe(true)
   })

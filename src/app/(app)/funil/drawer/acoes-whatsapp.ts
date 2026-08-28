@@ -131,7 +131,9 @@ export async function enviarWhatsApp(
   // para o cliente. Se so o evento falhou, a ficha ainda precisa recarregar (o
   // codigo proprio conta a verdade — enviou, nao registrou), e nunca um erro
   // que sugira tentar de novo um envio que ja aconteceu.
-  revalidatePath(`/leads/${leadId}`)
+  // `/funil` e nao `/leads/<id>`: o painel de scripts mora na aba Principal do
+  // drawer do funil desde a spec 2026-08-28, e a rota antiga so' redireciona.
+  revalidatePath('/funil')
   if (!evento.ok) return falha('whatsapp_enviado_sem_evento')
   return ok(undefined)
 }

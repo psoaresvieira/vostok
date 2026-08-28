@@ -20,6 +20,25 @@ describe('Drawer', () => {
     expect(dialogo.getAttribute('aria-labelledby')).toBe('titulo-drawer')
   })
 
+  it('com cabecalho proprio, NAO duplica o titulo: o id fica so no cabecalho', async () => {
+    render(
+      <Drawer
+        titulo="Kariny"
+        tituloId="titulo-drawer"
+        aoFechar={() => {}}
+        cabecalho={<h2 id="titulo-drawer">Kariny</h2>}
+      >
+        <p>conteudo</p>
+      </Drawer>,
+    )
+    const dialogo = await screen.findByRole('dialog')
+    // Um unico elemento com esse id (dois seriam HTML invalido) e um unico
+    // cabecalho com esse nome.
+    expect(document.querySelectorAll('#titulo-drawer')).toHaveLength(1)
+    expect(screen.getAllByRole('heading', { name: 'Kariny' })).toHaveLength(1)
+    expect(dialogo.getAttribute('aria-labelledby')).toBe('titulo-drawer')
+  })
+
   it('foca o botao Fechar apos montar', async () => {
     render(
       <Drawer titulo="Kariny" tituloId="titulo-drawer" aoFechar={() => {}}>
