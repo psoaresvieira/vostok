@@ -4,15 +4,16 @@ import { useCallback, useMemo, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { Drawer } from '@/components/ui/drawer'
 import { formatarMoeda, formatarTelefone } from '@/lib/domain/formato'
-import { horasNaEtapa, rotuloTempoNaEtapa } from '@/lib/domain/lead'
 import type { LeadOrigem } from '@/lib/domain/tipos'
 // `import type`, e nunca valor: `carregar.ts` alcanca `next/headers` pela
 // cadeia do store, e um import de valor arrastaria o modulo inteiro para o
 // pacote do cliente (erro de build do Next). O tipo e' apagado na compilacao.
 import type { DadosDoDrawer } from './carregar'
 import { mapasDoLead } from './mapas'
+import { hrefDoFunil } from '../params'
 import { Abas } from './abas'
 import { CabecalhoLead } from './cabecalho'
+import { SeletorEtapa } from './seletor-etapa'
 import { AcoesLead } from './acoes-lead'
 import { FormularioNota } from './nota'
 import { PainelTarefas } from './tarefas'
@@ -52,10 +53,14 @@ function Linha({ rotulo, children }: { rotulo: string; children: ReactNode }) {
 export function DrawerLead({
   dados,
   hrefFechar,
+  queryAtual,
   blocoScripts,
 }: {
   dados: DadosDoDrawer
   hrefFechar: string
+  /** searchParams da pagina, ja serializados — o seletor de etapa parte daqui
+   * para levar o funil ate a pipeline nova SEM perder os filtros. */
+  queryAtual: string
   blocoScripts: ReactNode
 }) {
   const router = useRouter()
@@ -75,10 +80,38 @@ export function DrawerLead({
   )
 
   const daPipeline = dados.pipelines.find((p) => p.pipeline.id === lead.pipelineId) ?? null
-  const etapaAtual = nomeEtapa.get(lead.stageId) ?? '—'
-  const horas = horasNaEtapa(lead.entrouNaEtapaEm, new Date())
 
   const tituloId = `titulo-lead-${lead.id}`
+
+  /**
+   * Depois de o servidor confirmar o movimento feito pelo seletor.
+   *
+   * Mesma pipeline: `router.refresh()` — o quadro atras e o cabecalho do painel
+   * voltam a ler o servidor, e a URL continua descrevendo a mesma tela.
+   *
+   * Outra pipeline: o lead saiu do funil que esta na tela, entao a URL tem que
+   * acompanha-lo — senao o painel fica aberto sobre um quadro onde o cartao
+   * nao existe mais. `hrefDoFunil` preserva filtros e `?lead=`; `pipeline`
+   * some quando o destino e' a pipeline PADRAO, que e' o que `/funil` sem
+   * parametro ja mostra.
+   */
+  const aoMover = useCallback(
+    (destino: { pipelineId: string; stageId: string }) => {
+      if (destino.pipelineId === lead.pipelineId) {
+        router.refresh()
+        return
+      }
+      const nova = dados.pipelines.find((p) => p.pipeline.id === destino.pipelineId)
+      router.push(
+        hrefDoFunil(queryAtual, {
+          pipeline: nova?.pipeline.isDefault ? null : destino.pipelineId,
+          lead: lead.id,
+        }),
+        { scroll: false },
+      )
+    },
+    [router, queryAtual, lead.id, lead.pipelineId, dados.pipelines],
+  )
 
   const principal = (
     <div className="flex flex-col gap-5">
@@ -146,11 +179,14 @@ export function DrawerLead({
             pipeline={daPipeline.pipeline}
             etapas={daPipeline.etapas}
             etiquetasConhecidas={dados.etiquetasConhecidas}
-            // Na Task 5 este <span> vira o botao que abre o seletor de etapa.
             gatilhoEtapa={
-              <span className="font-medium">
-                {etapaAtual} · {horas < 1 ? 'agora' : `há ${rotuloTempoNaEtapa(horas)}`}
-              </span>
+              <SeletorEtapa
+                lead={lead}
+                pipelines={dados.pipelines}
+                motivos={dados.motivos}
+                etiquetasConhecidas={dados.etiquetasConhecidas}
+                aoMover={aoMover}
+              />
             }
           />
         )

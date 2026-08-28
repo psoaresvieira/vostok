@@ -212,6 +212,9 @@ export default async function FunilPage({
           key={dadosDoDrawer.lead.id}
           dados={dadosDoDrawer}
           hrefFechar={semLead}
+          // COM `lead=` dentro: mover para outra pipeline navega para a
+          // pipeline nova mantendo o painel aberto no mesmo lead.
+          queryAtual={queryAtual}
           // Server component dentro de client component, por children: o unico
           // bloco do painel que fala com a rede EXTERNA (o Graph do Meta, para
           // refrescar status de template nao-final) chega streamado, e o resto

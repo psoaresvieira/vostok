@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
+import { act, render, screen, cleanup, fireEvent, within } from '@testing-library/react'
 import type { Etapa, EventoLead, Lead, Membro, Pipeline } from '@/lib/domain/tipos'
 import type { DadosDoDrawer } from './carregar'
 import { DrawerLead } from './drawer-lead'
@@ -11,11 +11,12 @@ import { DrawerLead } from './drawer-lead'
 afterEach(cleanup)
 
 const empurroes: string[] = []
+const refresh = vi.fn()
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: (destino: string) => empurroes.push(destino),
     replace: () => {},
-    refresh: () => {},
+    refresh: () => refresh(),
   }),
 }))
 
@@ -24,6 +25,16 @@ vi.mock('./acoes', () => ({
   adicionarEtiquetas: async () => ({ ok: true, valor: undefined }),
   removerEtiqueta: async () => ({ ok: true, valor: undefined }),
   trocarResponsavel: async () => ({ ok: true, valor: undefined }),
+}))
+
+// O seletor de etapa do cabecalho chama as duas actions de movimento. Sem o
+// mock, `funil/acoes.ts` ('use server') arrastaria o store — e `next/headers`
+// junto — para dentro do jsdom.
+const moverEtapaMock = vi.fn()
+const moverParaPipelineMock = vi.fn()
+vi.mock('../acoes', () => ({
+  moverEtapaAction: (...args: unknown[]) => moverEtapaMock(...args),
+  moverParaPipelineAction: (...args: unknown[]) => moverParaPipelineMock(...args),
 }))
 
 const PADRAO: Pipeline = { id: 'pipe-1', nome: 'Funil de vendas', isDefault: true }
@@ -85,7 +96,12 @@ function dados(extras: Partial<DadosDoDrawer> = {}): DadosDoDrawer {
 
 function montar(d: DadosDoDrawer = dados()) {
   return render(
-    <DrawerLead dados={d} hrefFechar="/funil?busca=kar" blocoScripts={<p>bloco de scripts</p>} />,
+    <DrawerLead
+      dados={d}
+      hrefFechar="/funil?busca=kar"
+      queryAtual="busca=kar&lead=lead-1"
+      blocoScripts={<p>bloco de scripts</p>}
+    />,
   )
 }
 
@@ -197,7 +213,13 @@ describe('DrawerLead', () => {
 
     it('a aba ativa nao sobrevive a troca de lead', async () => {
       const { rerender } = render(
-        <DrawerLead key={LEAD.id} dados={dados()} hrefFechar="/funil" blocoScripts={<p>bloco</p>} />,
+        <DrawerLead
+          key={LEAD.id}
+          dados={dados()}
+          hrefFechar="/funil"
+          queryAtual="lead=lead-1"
+          blocoScripts={<p>bloco</p>}
+        />,
       )
       let dialogo = await screen.findByRole('dialog')
       fireEvent.click(within(dialogo).getByRole('tab', { name: 'Histórico' }))
@@ -210,6 +232,7 @@ describe('DrawerLead', () => {
           key={LEAD_B.id}
           dados={dados({ lead: LEAD_B })}
           hrefFechar="/funil"
+          queryAtual="lead=lead-1"
           blocoScripts={<p>bloco</p>}
         />,
       )
@@ -224,7 +247,13 @@ describe('DrawerLead', () => {
 
     it('um rascunho de nota digitado para o lead A nao aparece no formulario do lead B', async () => {
       const { rerender } = render(
-        <DrawerLead key={LEAD.id} dados={dados()} hrefFechar="/funil" blocoScripts={<p>bloco</p>} />,
+        <DrawerLead
+          key={LEAD.id}
+          dados={dados()}
+          hrefFechar="/funil"
+          queryAtual="lead=lead-1"
+          blocoScripts={<p>bloco</p>}
+        />,
       )
       let dialogo = await screen.findByRole('dialog')
       fireEvent.click(within(dialogo).getByRole('tab', { name: 'Histórico' }))
@@ -237,6 +266,7 @@ describe('DrawerLead', () => {
           key={LEAD_B.id}
           dados={dados({ lead: LEAD_B })}
           hrefFechar="/funil"
+          queryAtual="lead=lead-1"
           blocoScripts={<p>bloco</p>}
         />,
       )
@@ -248,5 +278,83 @@ describe('DrawerLead', () => {
       const campoB = within(dialogo).getByPlaceholderText('registrar uma nota') as HTMLTextAreaElement
       expect(campoB.value).toBe('')
     })
+  })
+})
+
+// Task 5: o gatilho de etapa do cabecalho e' o seletor, e quem sabe para onde
+// a URL vai depois do movimento e' o drawer (o seletor so' avisa que moveu).
+describe('DrawerLead — o que acontece depois de mover pelo seletor', () => {
+  async function moverPara(nomeDaEtapa: string, nomeDaPipeline?: string) {
+    const dialogo = await screen.findByRole('dialog')
+    fireEvent.click(within(dialogo).getByRole('button', { name: /^Novo lead ·/ }))
+    const lista = within(dialogo).getByRole('listbox')
+    if (nomeDaPipeline) {
+      fireEvent.click(within(lista).getByRole('button', { name: nomeDaPipeline }))
+    }
+    fireEvent.click(within(lista).getByRole('option', { name: nomeDaEtapa }))
+    await act(async () => {
+      fireEvent.click(within(dialogo).getByRole('button', { name: 'Confirmar' }))
+    })
+  }
+
+  beforeEach(() => {
+    empurroes.length = 0
+    refresh.mockClear()
+    moverEtapaMock.mockClear()
+    moverParaPipelineMock.mockClear()
+    moverEtapaMock.mockResolvedValue({ ok: true, valor: undefined })
+    moverParaPipelineMock.mockResolvedValue({ ok: true, valor: undefined })
+  })
+
+  it('na MESMA pipeline basta refrescar: a URL ja descreve a tela certa', async () => {
+    montar()
+
+    await moverPara('Proposta')
+
+    expect(moverEtapaMock).toHaveBeenCalledWith('lead-1', 'p1-e2', null, [])
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(empurroes).toEqual([])
+  })
+
+  it('para OUTRA pipeline a URL acompanha o lead, sem perder os filtros', async () => {
+    montar()
+
+    await moverPara('Implantação', 'Onboarding')
+
+    expect(moverParaPipelineMock).toHaveBeenCalledWith('lead-1', 'p2-e1', null, [])
+    // `busca` sobrevive, `pipeline` entra, `lead` continua: o painel fica
+    // aberto no mesmo lead, agora sobre o quadro da pipeline nova.
+    expect(empurroes).toEqual(['/funil?busca=kar&lead=lead-1&pipeline=pipe-2'])
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('voltando para a pipeline PADRAO, `pipeline=` sai da URL', async () => {
+    const naOutra: Lead = { ...LEAD, pipelineId: B2B.id, stageId: 'p2-e1' }
+    render(
+      <DrawerLead
+        dados={dados({
+          lead: naOutra,
+          // A etapa em que o lead esta precisa se chamar "Novo lead" para o
+          // gatilho ser o mesmo do helper acima.
+          pipelines: [
+            {
+              pipeline: PADRAO,
+              etapas: [etapa('p1-e1', PADRAO.id, 'Primeiro contato', 1)],
+            },
+            { pipeline: B2B, etapas: [etapa('p2-e1', B2B.id, 'Novo lead', 1)] },
+          ],
+        })}
+        hrefFechar="/funil"
+        queryAtual="pipeline=pipe-2&lead=lead-1"
+        blocoScripts={<p>bloco</p>}
+      />,
+    )
+
+    await moverPara('Primeiro contato', 'Funil de vendas')
+
+    expect(moverParaPipelineMock).toHaveBeenCalledWith('lead-1', 'p1-e1', null, [])
+    // `/funil` sem parametro JA e' a pipeline padrao: mante-la na URL so'
+    // deixaria um id colado no endereco sem mudar nada do que se ve.
+    expect(empurroes).toEqual(['/funil?lead=lead-1'])
   })
 })

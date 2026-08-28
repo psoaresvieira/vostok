@@ -185,3 +185,59 @@ test('movimento recusado pelo servidor: o quadro pinta, volta atras e avisa', as
   // que ela nao vale para mais nada depois daqui.
   await page.unroute(rotaDoFunil)
 })
+
+test('seletor do drawer leva o lead para outra pipeline, e a URL vai junto', async ({ page }) => {
+  await criarConta(page)
+
+  // 1. Uma segunda pipeline, criada pela UI (mesmo fluxo de pipelines.spec.ts):
+  // sobram "Qualificação" e "Fechamento" das 5 sugeridas, mais Ganho e Perdido
+  // que a action acrescenta.
+  await page.getByRole('button', { name: 'Nova pipeline', exact: true }).click()
+  await page.getByLabel('Nome da pipeline').fill('Pós-venda')
+  for (const etapa of ['Novo lead', 'Contato feito', 'Proposta']) {
+    await page.getByRole('button', { name: `Remover ${etapa}`, exact: true }).click()
+  }
+  await page.getByRole('button', { name: 'Salvar', exact: true }).click()
+  await expect(page).toHaveURL(/\/funil\?pipeline=/)
+  const idDaPos = new URL(page.url()).searchParams.get('pipeline')
+  expect(idDaPos).toBeTruthy()
+
+  // 2. De volta a padrao (o link dela nao carrega `pipeline=`), onde o lead nasce.
+  await page
+    .getByRole('navigation', { name: 'Pipelines' })
+    .getByRole('link', { name: 'Funil de vendas' })
+    .click()
+  await expect(page).not.toHaveURL(/pipeline=/)
+  await criarLead(page, 'Cliente Pós')
+
+  // 3. O drawer, e o gatilho de etapa do cabecalho abrindo o seletor.
+  await page.getByRole('link', { name: 'Cliente Pós' }).click()
+  const drawer = drawerDoLead(page, 'Cliente Pós')
+  await drawer.getByRole('button', { name: /^Novo lead ·/ }).click()
+
+  const seletor = drawer.getByRole('listbox')
+  // A outra pipeline comeca so como cabecalho: de saida a lista tem as 7
+  // etapas da pipeline ATUAL. "Contato feito" so existe nela — as outras tres
+  // que sobraram na Pós-venda tem nomes iguais nas duas.
+  await expect(seletor.getByRole('option')).toHaveCount(7)
+  await seletor.getByRole('button', { name: 'Pós-venda' }).click()
+  await expect(seletor.getByRole('option', { name: 'Contato feito' })).toHaveCount(0)
+  await expect(seletor.getByRole('option')).toHaveCount(4)
+  await seletor.getByRole('option', { name: 'Qualificação' }).click()
+
+  await expect(
+    page.getByRole('heading', { name: 'Cliente Pós → Qualificação', exact: true }),
+  ).toBeVisible()
+  await confirmarMovimento(page)
+
+  // 4. A URL acompanha o lead: pipeline nova, painel ainda aberto no mesmo lead.
+  await expect(page).toHaveURL(new RegExp(`pipeline=${idDaPos}`))
+  await expect(page).toHaveURL(/lead=/)
+  await expect(coluna(page, 'Qualificação').getByRole('link', { name: 'Cliente Pós' })).toBeVisible()
+
+  // 5. E a historia registra a travessia, nomeando as DUAS pipelines.
+  await drawer.getByRole('tab', { name: 'Histórico' }).click()
+  await expect(
+    drawer.getByText('Movido de Funil de vendas · Novo lead para Pós-venda · Qualificação'),
+  ).toBeVisible()
+})
