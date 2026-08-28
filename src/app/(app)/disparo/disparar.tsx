@@ -14,7 +14,7 @@ import { mensagemDeErroScript } from '@/app/(app)/scripts/erros'
 import { PreviaSegmentos } from '@/app/(app)/scripts/previa'
 // 'use server': enviarWhatsApp e' a MESMA action da ficha do lead — nenhuma
 // action de envio nova, todas as guardas do Plano 11 vem com ela.
-import { enviarWhatsApp } from '@/app/(app)/leads/[id]/acoes-whatsapp'
+import { enviarWhatsApp } from '@/app/(app)/funil/drawer/acoes-whatsapp'
 import { buscarLeadsParaDisparo, type LeadParaDisparo } from './acoes'
 
 /** Quanto tempo o "Enviado ✓" fica visivel — mesma duracao e mesmo motivo do

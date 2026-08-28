@@ -3,10 +3,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Etapa, Etiqueta, Lead, Membro, MotivoPerda } from '@/lib/domain/tipos'
-import { ModalMovimento, type PedidoMovimento } from '@/app/(app)/funil/modal-movimento'
-import { moverEtapaAction } from '@/app/(app)/funil/acoes'
+import { ModalMovimento, type PedidoMovimento } from '../modal-movimento'
+import { moverEtapaAction } from '../acoes'
 import { chamarAcao } from '@/lib/ui/acao'
-import { mensagemDeErro } from '@/app/(app)/funil/erros'
+import { mensagemDeErro } from '../erros'
 import { trocarResponsavel } from './acoes'
 
 export function AcoesLead({

@@ -9,12 +9,12 @@ import { criarTarefaStoreDoServidor, type Tarefa } from '@/lib/data/tarefas'
 import { falha } from '@/lib/domain/resultado'
 import { formatarMoeda, formatarTelefone } from '@/lib/domain/formato'
 import { contextoDoLead } from '@/lib/domain/script'
-import { Timeline } from './timeline'
-import { EditorEtiquetas } from './etiquetas'
-import { FormularioNota } from './nota'
-import { AcoesLead } from './acoes-lead'
-import { PainelTarefas } from './tarefas'
-import { BlocoScripts } from './bloco-scripts'
+import { Timeline } from '@/app/(app)/funil/drawer/timeline'
+import { EditorEtiquetas } from '@/app/(app)/funil/drawer/etiquetas'
+import { FormularioNota } from '@/app/(app)/funil/drawer/nota'
+import { AcoesLead } from '@/app/(app)/funil/drawer/acoes-lead'
+import { PainelTarefas } from '@/app/(app)/funil/drawer/tarefas'
+import { BlocoScripts } from '@/app/(app)/funil/drawer/bloco-scripts'
 
 /**
  * Quantos eventos a linha do tempo carrega.
