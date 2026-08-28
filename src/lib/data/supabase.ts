@@ -484,6 +484,20 @@ export class SupabaseCrmStore implements CrmStore {
     return ok(undefined)
   }
 
+  async moverParaPipeline(
+    leadId: string,
+    stageDestino: string,
+    lossReasonId?: string | null,
+  ): Promise<Resultado<void>> {
+    const { error } = await this.cliente.rpc('mover_lead_pipeline', {
+      p_lead_id: leadId,
+      p_stage_destino: stageDestino,
+      p_loss_reason_id: lossReasonId ?? null,
+    })
+    if (error) return falha(codigoDoErroPostgres(error))
+    return ok(undefined)
+  }
+
   async atribuirResponsavel(
     leadId: string,
     responsavelId: string | null,

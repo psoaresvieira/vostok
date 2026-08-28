@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { criarStoreDoServidor } from '@/lib/data/supabase'
+import type { CrmStore } from '@/lib/data/store'
 import { leadSchema } from '@/lib/domain/lead'
 import { normalizarEmail, normalizarTelefone } from '@/lib/domain/normalizacao'
 import { parsearReaisEmCentavos } from '@/lib/domain/formato'
@@ -74,16 +75,22 @@ export async function criarLeadAction(formData: FormData): Promise<Resultado<str
   return ok(r.valor)
 }
 
-export async function moverEtapaAction(
+/**
+ * O miolo comum de moverEtapaAction e moverParaPipelineAction: as duas
+ * gravam as etiquetas antes de mover e precisam da mesma rede de seguranca
+ * quando o movimento recusa depois. So' o `mover` muda entre elas — deixar
+ * as duas com copias do mesmo tratamento faria a proxima correcao valer
+ * para uma so'.
+ *
+ * Nao e' `export`: 'use server' exige que todo export deste arquivo seja uma
+ * Server Action, e este helper nao e' um endpoint.
+ */
+async function moverComEtiquetas(
+  store: CrmStore,
   leadId: string,
-  stageDestino: string,
-  lossReasonId: string | null,
   etiquetas: string[],
+  mover: () => Promise<Resultado<void>>,
 ): Promise<Resultado<void>> {
-  const contexto = await criarStoreDoServidor()
-  if (!contexto.ok) return falha(contexto.erro)
-  const { store } = contexto.valor
-
   // Etiquetas primeiro: o snapshot precisa gravar a etapa de ORIGEM, que e onde
   // a qualificacao aconteceu. Depois de mover, o snapshot registraria o destino.
   let etiquetasSalvas = false
@@ -93,7 +100,7 @@ export async function moverEtapaAction(
     etiquetasSalvas = true
   }
 
-  const r = await store.moverEtapa(leadId, stageDestino, lossReasonId)
+  const r = await mover()
   if (!r.ok) {
     // Sem transacao cobrindo as duas chamadas: as etiquetas ja estao gravadas.
     // Devolvemos um codigo proprio para a UI contar isso em vez de dizer que
@@ -114,4 +121,36 @@ export async function moverEtapaAction(
 
   revalidatePath('/funil')
   return ok(undefined)
+}
+
+export async function moverEtapaAction(
+  leadId: string,
+  stageDestino: string,
+  lossReasonId: string | null,
+  etiquetas: string[],
+): Promise<Resultado<void>> {
+  const contexto = await criarStoreDoServidor()
+  if (!contexto.ok) return falha(contexto.erro)
+  const { store } = contexto.valor
+
+  return moverComEtiquetas(store, leadId, etiquetas, () =>
+    store.moverEtapa(leadId, stageDestino, lossReasonId),
+  )
+}
+
+/** Mover o lead para uma etapa de OUTRA pipeline. Mesma pipeline devolve
+ * `mesma_pipeline` — esse movimento e' moverEtapaAction. */
+export async function moverParaPipelineAction(
+  leadId: string,
+  stageDestino: string,
+  lossReasonId: string | null,
+  etiquetas: string[],
+): Promise<Resultado<void>> {
+  const contexto = await criarStoreDoServidor()
+  if (!contexto.ok) return falha(contexto.erro)
+  const { store } = contexto.valor
+
+  return moverComEtiquetas(store, leadId, etiquetas, () =>
+    store.moverParaPipeline(leadId, stageDestino, lossReasonId),
+  )
 }

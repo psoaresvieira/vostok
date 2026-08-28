@@ -361,6 +361,54 @@ export class InMemoryCrmStore implements CrmStore {
     return ok(undefined)
   }
 
+  async moverParaPipeline(
+    leadId: string,
+    stageDestino: string,
+    lossReasonId?: string | null,
+  ): Promise<Resultado<void>> {
+    const lead = this.leads.find((l) => l.id === leadId)
+    if (!lead) return falha('lead_nao_encontrado')
+    const destino = this.etapaPorId(stageDestino)
+    if (!destino) return falha('etapa_invalida')
+    // Espelha a RPC mover_lead_pipeline (0032): mover dentro do mesmo funil e'
+    // trabalho de moverEtapa, nao um segundo caminho por aqui.
+    if (destino.pipelineId === lead.pipelineId) return falha('mesma_pipeline')
+
+    if (destino.tipo === 'perdido') {
+      if (!lossReasonId) return falha('motivo_perda_obrigatorio')
+      if (!this.motivos.some((m) => m.id === lossReasonId && m.ativo)) {
+        return falha('motivo_perda_invalido')
+      }
+    }
+
+    const origem = lead.stageId
+    const pipelineOrigem = lead.pipelineId
+    const agora = new Date()
+    this.movimentos.push({ leadId, origem, destino: destino.id })
+    lead.pipelineId = destino.pipelineId
+    lead.stageId = destino.id
+    lead.status = destino.tipo === 'aberta' ? 'aberto' : destino.tipo
+    lead.lossReasonId = destino.tipo === 'perdido' ? lossReasonId! : null
+    lead.entrouNaEtapaEm = agora
+    lead.atualizadoEm = agora
+
+    this.eventos.push({
+      id: randomUUID(),
+      leadId,
+      tipo: 'pipeline_alterada',
+      payload: {
+        de_pipeline: pipelineOrigem,
+        para_pipeline: destino.pipelineId,
+        de: origem,
+        para: destino.id,
+        loss_reason_id: lossReasonId ?? null,
+      },
+      atorId: this.usuarioAtual,
+      criadoEm: agora,
+    })
+    return ok(undefined)
+  }
+
   async atribuirResponsavel(
     leadId: string,
     responsavelId: string | null,

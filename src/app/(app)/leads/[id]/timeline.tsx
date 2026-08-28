@@ -10,6 +10,7 @@ export function rotuloEvento(
   evento: EventoLead,
   nomeEtapa: Map<string, string>,
   nomePessoa: Map<string, string>,
+  nomePipeline: Map<string, string>,
 ): string {
   const p = evento.payload
   switch (evento.tipo) {
@@ -19,6 +20,18 @@ export function rotuloEvento(
       const de = p.de ? nomeEtapa.get(String(p.de)) ?? '?' : 'início'
       const para = nomeEtapa.get(String(p.para)) ?? '?'
       return `Etapa alterada: ${de} → ${para}`
+    }
+    // Movimento entre pipelines (RPC mover_lead_pipeline, 0032). O rotulo
+    // nomeia as DUAS pipelines: sem elas, "de Qualificação para Onboarding"
+    // nao conta o que de fato mudou na vida do lead.
+    case 'pipeline_alterada': {
+      const dePipe = nomePipeline.get(String(p.de_pipeline)) ?? '?'
+      const paraPipe = nomePipeline.get(String(p.para_pipeline)) ?? '?'
+      // 'etapa removida' e nao '?': a ficha so' carrega os nomes da pipeline
+      // ATUAL do lead, entao a etapa de ORIGEM quase sempre falta no mapa.
+      const de = p.de ? nomeEtapa.get(String(p.de)) ?? 'etapa removida' : 'início'
+      const para = nomeEtapa.get(String(p.para)) ?? 'etapa removida'
+      return `Movido de ${dePipe} · ${de} para ${paraPipe} · ${para}`
     }
     case 'etiqueta_aplicada':
       return `Etiqueta "${String(p.tag ?? '?')}" aplicada em ${nomeEtapa.get(String(p.etapa)) ?? '?'}`
@@ -49,10 +62,12 @@ export function Timeline({
   eventos,
   nomeEtapa,
   nomePessoa,
+  nomePipeline,
 }: {
   eventos: EventoLead[]
   nomeEtapa: Map<string, string>
   nomePessoa: Map<string, string>
+  nomePipeline: Map<string, string>
 }) {
   if (eventos.length === 0) {
     return <p className="text-sm text-muted-foreground">Nada aconteceu ainda.</p>
@@ -62,7 +77,7 @@ export function Timeline({
     <ol className="flex flex-col gap-3">
       {eventos.map((e) => (
         <li key={e.id} className="border-l-2 pl-3">
-          <p className="text-sm">{rotuloEvento(e, nomeEtapa, nomePessoa)}</p>
+          <p className="text-sm">{rotuloEvento(e, nomeEtapa, nomePessoa, nomePipeline)}</p>
           <p className="text-xs text-muted-foreground">
             {FORMATO.format(e.criadoEm)}
             {e.atorId ? ` · ${nomePessoa.get(e.atorId) ?? ''}` : ''}

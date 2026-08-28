@@ -36,7 +36,7 @@ describe('rotuloEvento', () => {
       payload: { de: 'id-a', para: 'id-b' },
     })
 
-    const resultado = rotuloEvento(e, nomeEtapa, nomePessoa)
+    const resultado = rotuloEvento(e, nomeEtapa, nomePessoa, new Map())
 
     expect(resultado).toContain('Novo Lead')
     expect(resultado).toContain('Qualificado')
@@ -45,7 +45,7 @@ describe('rotuloEvento', () => {
   it('traduz etiqueta_removida com o nome da etiqueta do payload', () => {
     const e = evento({ tipo: 'etiqueta_removida', payload: { tag: 'Preço alto' } })
 
-    const resultado = rotuloEvento(e, new Map(), new Map())
+    const resultado = rotuloEvento(e, new Map(), new Map(), new Map())
 
     expect(resultado).toBe('Etiqueta "Preço alto" removida')
   })
@@ -58,7 +58,7 @@ describe('rotuloEvento', () => {
       payload: { titulo: 'Ligar para confirmar reuniao', tipo: 'ligacao' },
     })
 
-    const resultado = rotuloEvento(e, new Map(), new Map())
+    const resultado = rotuloEvento(e, new Map(), new Map(), new Map())
 
     expect(resultado).toBe('Tarefa concluída: Ligar para confirmar reuniao')
   })
@@ -69,7 +69,7 @@ describe('rotuloEvento', () => {
     // nunca 'undefined' nem quebra.
     const e = evento({ tipo: 'tarefa_concluida', payload: {} })
 
-    const resultado = rotuloEvento(e, new Map(), new Map())
+    const resultado = rotuloEvento(e, new Map(), new Map(), new Map())
 
     expect(resultado).toBe('Tarefa concluída: ?')
   })
@@ -87,7 +87,7 @@ describe('rotuloEvento', () => {
       },
     })
 
-    const resultado = rotuloEvento(e, new Map(), new Map())
+    const resultado = rotuloEvento(e, new Map(), new Map(), new Map())
 
     expect(resultado).toBe('WhatsApp enviado: Olá Maria, tudo bem na Loja da Maria?')
   })
@@ -97,7 +97,56 @@ describe('rotuloEvento', () => {
     // outro caminho pode nao ter texto.
     const e = evento({ tipo: 'whatsapp_enviado', payload: {} })
 
-    expect(rotuloEvento(e, new Map(), new Map())).toBe('WhatsApp enviado: ?')
+    expect(rotuloEvento(e, new Map(), new Map(), new Map())).toBe('WhatsApp enviado: ?')
+  })
+
+  it('traduz pipeline_alterada nomeando as duas pipelines e as duas etapas', () => {
+    const nomeEtapa = new Map([
+      ['etapa-origem', 'Qualificação'],
+      ['etapa-destino', 'Onboarding'],
+    ])
+    const nomePipeline = new Map([
+      ['pipe-comercial', 'Comercial'],
+      ['pipe-pos', 'Pós-venda'],
+    ])
+    const e = evento({
+      tipo: 'pipeline_alterada',
+      payload: {
+        de_pipeline: 'pipe-comercial',
+        para_pipeline: 'pipe-pos',
+        de: 'etapa-origem',
+        para: 'etapa-destino',
+        loss_reason_id: null,
+      },
+    })
+
+    const resultado = rotuloEvento(e, nomeEtapa, new Map(), nomePipeline)
+
+    expect(resultado).toBe('Movido de Comercial · Qualificação para Pós-venda · Onboarding')
+  })
+
+  it('pipeline_alterada com a etapa de origem ja apagada nao mostra undefined', () => {
+    // lead_events e append-only: a etapa de onde o lead saiu pode ter sido
+    // excluida depois, e a ficha so' carrega os nomes da pipeline ATUAL do
+    // lead — o nome da etapa antiga costuma faltar mesmo com ela viva.
+    const e = evento({
+      tipo: 'pipeline_alterada',
+      payload: {
+        de_pipeline: 'pipe-comercial',
+        para_pipeline: 'pipe-pos',
+        de: 'etapa-sumida',
+        para: 'etapa-destino',
+      },
+    })
+
+    const resultado = rotuloEvento(
+      e,
+      new Map([['etapa-destino', 'Onboarding']]),
+      new Map(),
+      new Map([['pipe-pos', 'Pós-venda']]),
+    )
+
+    expect(resultado).toBe('Movido de ? · etapa removida para Pós-venda · Onboarding')
   })
 
   it('cai no default para tipo desconhecido', () => {
@@ -106,7 +155,7 @@ describe('rotuloEvento', () => {
     // provar que o default protege a timeline de tipos futuros.
     const e = evento({ tipo: 'tipo_que_nao_existe', payload: {} })
 
-    const resultado = rotuloEvento(e, new Map(), new Map())
+    const resultado = rotuloEvento(e, new Map(), new Map(), new Map())
 
     expect(resultado).toBe('tipo_que_nao_existe')
   })
@@ -114,8 +163,48 @@ describe('rotuloEvento', () => {
 
 describe('Timeline', () => {
   it('renderiza o estado vazio quando não há eventos', () => {
-    render(<Timeline eventos={[]} nomeEtapa={new Map()} nomePessoa={new Map()} />)
+    render(
+      <Timeline
+        eventos={[]}
+        nomeEtapa={new Map()}
+        nomePessoa={new Map()}
+        nomePipeline={new Map()}
+      />,
+    )
 
     screen.getByText('Nada aconteceu ainda.')
+  })
+
+  it('repassa nomePipeline para o rotulo de pipeline_alterada', () => {
+    render(
+      <Timeline
+        eventos={[
+          evento({
+            tipo: 'pipeline_alterada',
+            payload: {
+              de_pipeline: 'pipe-comercial',
+              para_pipeline: 'pipe-pos',
+              de: 'etapa-origem',
+              para: 'etapa-destino',
+            },
+          }),
+        ]}
+        nomeEtapa={
+          new Map([
+            ['etapa-origem', 'Qualificação'],
+            ['etapa-destino', 'Onboarding'],
+          ])
+        }
+        nomePessoa={new Map()}
+        nomePipeline={
+          new Map([
+            ['pipe-comercial', 'Comercial'],
+            ['pipe-pos', 'Pós-venda'],
+          ])
+        }
+      />,
+    )
+
+    screen.getByText('Movido de Comercial · Qualificação para Pós-venda · Onboarding')
   })
 })

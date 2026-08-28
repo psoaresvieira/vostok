@@ -83,6 +83,17 @@ export interface CrmStore {
     stageDestino: string,
     lossReasonId?: string | null,
   ): Promise<Resultado<void>>
+  /**
+   * Troca pipeline e etapa JUNTAS. `mesma_pipeline` manda usar `moverEtapa`:
+   * mover dentro do funil e' o outro movimento, com outro evento na timeline
+   * (`etapa_alterada`), e ter dois caminhos para ele faria a historia do lead
+   * depender de qual botao o usuario apertou.
+   */
+  moverParaPipeline(
+    leadId: string,
+    stageDestino: string,
+    lossReasonId?: string | null,
+  ): Promise<Resultado<void>>
   atribuirResponsavel(leadId: string, responsavelId: string | null): Promise<Resultado<void>>
 
   etiquetasDaConta(): Promise<Resultado<Etiqueta[]>>

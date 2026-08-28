@@ -12,6 +12,7 @@ const MENSAGENS_ERRO: Record<string, string> = {
   motivo_perda_obrigatorio: 'Escolha o motivo da perda.',
   motivo_perda_invalido: 'Esse motivo de perda não pertence à sua conta.',
   etapa_invalida: 'Essa etapa não pertence ao seu funil.',
+  mesma_pipeline: 'Esse lead já está nessa pipeline. Escolha uma etapa.',
   lead_nao_encontrado: 'Você não tem acesso a esse lead.',
   sem_permissao: 'Só gestor ou admin troca o responsável.',
   responsavel_invalido: 'Esse responsável não faz parte da sua conta. Recarregue a página e escolha de novo.',

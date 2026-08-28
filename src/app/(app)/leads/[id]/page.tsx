@@ -51,7 +51,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   // `LIMITE_EVENTOS + 1` de proposito: a linha extra e' so' o sinal de que ha
   // historia mais antiga (a lista desenha `LIMITE_EVENTOS`), e sai mais barato
   // que um count exato numa tabela cuja policy roda por linha.
-  const [lead, membros, eventos, etiquetas, motivos, tarefas] = await Promise.all([
+  const [lead, membros, eventos, etiquetas, motivos, tarefas, pipelines] = await Promise.all([
     store.buscarLead(id),
     store.membros(),
     store.eventosDoLead(id, LIMITE_EVENTOS + 1),
@@ -65,6 +65,10 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
       if (!tarefaStore.ok) return falha<Tarefa[]>(tarefaStore.erro)
       return tarefaStore.valor.doLead(id)
     })(),
+    // So' para nomear as pipelines nos eventos `pipeline_alterada` da linha
+    // do tempo. Entra no mesmo Promise.all das outras: nao depende da linha
+    // do lead, entao nao tem por que somar latencia.
+    store.listarPipelines(),
   ])
   if (!lead.ok) throw new Error(lead.erro)
   // Zero linhas por RLS chega aqui como null: e "nao encontrado", nunca 403.
@@ -74,6 +78,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   if (!etiquetas.ok) throw new Error(etiquetas.erro)
   if (!motivos.ok) throw new Error(motivos.erro)
   if (!tarefas.ok) throw new Error(tarefas.erro)
+  if (!pipelines.ok) throw new Error(pipelines.erro)
 
   const pipeline = await store.pipelinePorId(lead.valor.pipelineId)
   if (!pipeline.ok) throw new Error(pipeline.erro)
@@ -83,6 +88,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
 
   const nomeEtapa = new Map(pipeline.valor.etapas.map((e) => [e.id, e.nome]))
   const nomePessoa = new Map(membros.valor.map((m) => [m.id, m.nome]))
+  const nomePipeline = new Map(pipelines.valor.map((p) => [p.id, p.nome]))
   // Um contexto so para a ficha inteira: os mapas acima ja existem para a
   // timeline, e `contextoDoLead` e' puro — nada aqui vai ao banco de novo.
   const contextoScript = contextoDoLead(lead.valor, nomeEtapa, nomePessoa)
@@ -222,6 +228,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               eventos={eventosVisiveis}
               nomeEtapa={nomeEtapa}
               nomePessoa={nomePessoa}
+              nomePipeline={nomePipeline}
             />
             {/* Nao e' um "carregar mais": a janela existe para a ficha nao
                 serializar a historia inteira, e quem precisa do registro

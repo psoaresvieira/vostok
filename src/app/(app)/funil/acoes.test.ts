@@ -22,7 +22,10 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: unknown[]) => revalidatePathMock(...args),
 }))
 
-import { criarLeadAction } from './acoes'
+import { criarLeadAction, moverParaPipelineAction } from './acoes'
+import { InMemoryCrmStore } from '@/lib/data/memory'
+import { codigoEtiquetasSalvas } from './erros'
+import { leadSchema } from '@/lib/domain/lead'
 
 const PIPELINE_PADRAO = {
   pipeline: { id: 'pipe-padrao', nome: 'Funil de vendas', isDefault: true },
@@ -94,5 +97,89 @@ describe('criarLeadAction — pipelineId', () => {
       expect.objectContaining({ pipelineId: 'pipe-padrao', stageId: 'etapa-padrao-1' }),
     )
     expect(r).toEqual({ ok: true, valor: 'lead-novo' })
+  })
+})
+
+/**
+ * moverParaPipelineAction contra o InMemoryCrmStore de verdade — nao um
+ * `vi.fn()`. O que este bloco precisa provar e' ESTADO (o snapshot da etiqueta
+ * ficou na etapa de ORIGEM, o lead terminou na pipeline nova), e um mock so'
+ * provaria que a action chamou dois metodos na ordem em que ela mesma os
+ * chama.
+ */
+describe('moverParaPipelineAction', () => {
+  let store: InMemoryCrmStore
+
+  async function cenario() {
+    store = new InMemoryCrmStore()
+    store.semear('Empresa Exemplo', 'user-1')
+    criarStoreDoServidorMock.mockResolvedValue({
+      ok: true,
+      valor: { store, conta: { id: 'conta-1' }, usuarioId: 'user-1', papel: 'admin' },
+    })
+
+    const padrao = await store.pipelinePadrao()
+    if (!padrao.ok) throw new Error(padrao.erro)
+    const origem = padrao.valor.etapas[2]
+    const lead = await store.criarLead({
+      ...leadSchema.parse({ nome: 'Ana' }),
+      pipelineId: padrao.valor.pipeline.id,
+      stageId: origem.id,
+    })
+    if (!lead.ok) throw new Error(lead.erro)
+
+    const nova = await store.criarPipeline('Pós-venda', ['Onboarding', 'Ativo'])
+    if (!nova.ok) throw new Error(nova.erro)
+    const destino = await store.pipelinePorId(nova.valor)
+    if (!destino.ok) throw new Error(destino.erro)
+
+    return { leadId: lead.valor, origem, novaPipelineId: nova.valor, destino: destino.valor.etapas }
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('aplica as etiquetas com o snapshot da etapa de ORIGEM e leva o lead para a pipeline nova', async () => {
+    const { leadId, origem, novaPipelineId, destino } = await cenario()
+
+    const r = await moverParaPipelineAction(leadId, destino[0].id, null, ['Cliente novo'])
+
+    expect(r).toEqual({ ok: true, valor: undefined })
+    // O snapshot e' o da etapa onde a qualificacao aconteceu, nao o do destino:
+    // por isso a action aplica as etiquetas ANTES de mover.
+    expect(store.etapaDaEtiqueta(leadId, 'Cliente novo')).toBe(origem.id)
+
+    const lead = await store.buscarLead(leadId)
+    if (!lead.ok || !lead.valor) throw new Error('lead sumiu')
+    expect(lead.valor.pipelineId).toBe(novaPipelineId)
+    expect(lead.valor.stageId).toBe(destino[0].id)
+    expect(revalidatePathMock).toHaveBeenCalledWith('/funil')
+  })
+
+  it('etapa da mesma pipeline: devolve mesma_pipeline sem tocar no lead', async () => {
+    const { leadId, origem } = await cenario()
+    const padrao = await store.pipelinePadrao()
+    if (!padrao.ok) throw new Error(padrao.erro)
+
+    const r = await moverParaPipelineAction(leadId, padrao.valor.etapas[3].id, null, [])
+
+    expect(r).toEqual({ ok: false, erro: 'mesma_pipeline' })
+    const lead = await store.buscarLead(leadId)
+    if (!lead.ok || !lead.valor) throw new Error('lead sumiu')
+    expect(lead.valor.stageId).toBe(origem.id)
+  })
+
+  it('movimento falho com etiquetas ja gravadas carrega a causa no codigo', async () => {
+    // Mesma rede de seguranca de moverEtapaAction: sem transacao cobrindo as
+    // duas chamadas, as etiquetas ficam no banco quando o movimento recusa.
+    const { leadId, destino } = await cenario()
+    const perdido = destino.find((e) => e.tipo === 'perdido')!
+
+    const r = await moverParaPipelineAction(leadId, perdido.id, null, ['Sem verba'])
+
+    expect(r).toEqual({ ok: false, erro: codigoEtiquetasSalvas('motivo_perda_obrigatorio') })
+    expect(store.etapaDaEtiqueta(leadId, 'Sem verba')).not.toBeNull()
+    expect(revalidatePathMock).toHaveBeenCalledWith('/funil')
   })
 })

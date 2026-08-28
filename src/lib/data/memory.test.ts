@@ -77,6 +77,65 @@ describe('InMemoryCrmStore', () => {
     expect(eventos.valor.map((e) => e.tipo)).toContain('etapa_alterada')
   })
 
+  it('moverParaPipeline troca pipelineId e stageId juntos e grava pipeline_alterada', async () => {
+    const p = await store.pipelinePadrao()
+    if (!p.ok) throw new Error(p.erro)
+    const origem = p.valor.etapas[0]
+    const criado = await store.criarLead({
+      ...novoLead('Ana'),
+      pipelineId: p.valor.pipeline.id,
+      stageId: origem.id,
+    })
+    if (!criado.ok) throw new Error(criado.erro)
+
+    const nova = await store.criarPipeline('Pós-venda', ['Onboarding', 'Ativo'])
+    if (!nova.ok) throw new Error(nova.erro)
+    const destino = await store.pipelinePorId(nova.valor)
+    if (!destino.ok) throw new Error(destino.erro)
+    const onboarding = destino.valor.etapas[0]
+
+    const r = await store.moverParaPipeline(criado.valor, onboarding.id)
+    expect(r.ok).toBe(true)
+
+    const lead = await store.buscarLead(criado.valor)
+    if (!lead.ok || !lead.valor) throw new Error('lead sumiu')
+    expect(lead.valor.pipelineId).toBe(nova.valor)
+    expect(lead.valor.stageId).toBe(onboarding.id)
+    expect(lead.valor.status).toBe('aberto')
+
+    const eventos = await store.eventosDoLead(criado.valor)
+    if (!eventos.ok) throw new Error(eventos.erro)
+    const evento = eventos.valor.find((e) => e.tipo === 'pipeline_alterada')
+    expect(evento?.payload).toEqual({
+      de_pipeline: p.valor.pipeline.id,
+      para_pipeline: nova.valor,
+      de: origem.id,
+      para: onboarding.id,
+      loss_reason_id: null,
+    })
+  })
+
+  it('moverParaPipeline recusa etapa da MESMA pipeline: mesma_pipeline', async () => {
+    // A troca dentro do funil e' trabalho de moverEtapa. Deixar passar aqui
+    // criaria um segundo caminho para o mesmo movimento, com evento e
+    // mensagem de erro diferentes para o mesmo ato do usuario.
+    const p = await store.pipelinePadrao()
+    if (!p.ok) throw new Error(p.erro)
+    const criado = await store.criarLead({
+      ...novoLead('Ana'),
+      pipelineId: p.valor.pipeline.id,
+      stageId: p.valor.etapas[0].id,
+    })
+    if (!criado.ok) throw new Error(criado.erro)
+
+    const r = await store.moverParaPipeline(criado.valor, p.valor.etapas[2].id)
+
+    expect(r).toEqual({ ok: false, erro: 'mesma_pipeline' })
+    const lead = await store.buscarLead(criado.valor)
+    if (!lead.ok || !lead.valor) throw new Error('lead sumiu')
+    expect(lead.valor.stageId).toBe(p.valor.etapas[0].id)
+  })
+
   it('aplica etiqueta guardando a etapa do momento', async () => {
     const p = await store.pipelinePadrao()
     if (!p.ok) throw new Error(p.erro)

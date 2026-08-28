@@ -6,6 +6,9 @@ describe('mensagemDeErro', () => {
   it('traduz os codigos conhecidos', () => {
     expect(mensagemDeErro('motivo_perda_obrigatorio')).toBe('Escolha o motivo da perda.')
     expect(mensagemDeErro('lead_nao_encontrado')).toBe('Você não tem acesso a esse lead.')
+    expect(mensagemDeErro('mesma_pipeline')).toBe(
+      'Esse lead já está nessa pipeline. Escolha uma etapa.',
+    )
   })
 
   it('devolve o codigo cru quando nao conhece a mensagem', () => {
