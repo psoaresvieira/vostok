@@ -17,7 +17,7 @@ describe('corDaEtapa', () => {
     expect(roxo.fundo).toContain('violet')
     expect(rosa.fundo).toContain('pink')
 
-    // Cíclico: a sétima etapa (ordem 6) repete a cor da primeira (ordem 0).
+    // Cíclico: a sétima etapa (posicao 6) repete a cor da primeira (posicao 0).
     expect(corDaEtapa(6, 'aberta')).toEqual(azul)
   })
 
@@ -29,5 +29,17 @@ describe('corDaEtapa', () => {
   it('etapa de perdido e sempre cinza, independente da ordem', () => {
     expect(corDaEtapa(0, 'perdido').fundo).toContain('zinc')
     expect(corDaEtapa(5, 'perdido')).toEqual(corDaEtapa(0, 'perdido'))
+  })
+
+  it('posicao negativa cicla corretamente', () => {
+    const rosa = corDaEtapa(5, 'aberta')
+    // posicao -1 deve ciclar para posicao 5 (pink)
+    expect(corDaEtapa(-1, 'aberta')).toEqual(rosa)
+  })
+
+  it('posicao fracionaria e truncada', () => {
+    const amarelo = corDaEtapa(1, 'aberta')
+    // posicao 1.7 deve truncar para 1 (amber)
+    expect(corDaEtapa(1.7, 'aberta')).toEqual(amarelo)
   })
 })

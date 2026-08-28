@@ -3,9 +3,9 @@ import type { StageTipo } from './tipos'
 export type CorDeEtapa = { fundo: string; texto: string }
 
 /**
- * Seis familias de cor para etapas abertas, ciclando por `ordem % 6` — a
+ * Seis familias de cor para etapas abertas, ciclando por `posicao % 6` — a
  * setima etapa de uma pipeline volta a cor da primeira. `ganho` e `perdido`
- * ignoram `ordem`: sao sempre a mesma cor, porque so' existe (no maximo) uma
+ * ignoram `posicao`: sao sempre a mesma cor, porque so' existe (no maximo) uma
  * etapa de cada tipo por pipeline e o significado (venda fechada / perdida)
  * e' fixo.
  *
@@ -25,8 +25,20 @@ const CORES_ABERTA: CorDeEtapa[] = [
 const COR_GANHO: CorDeEtapa = { fundo: 'bg-emerald-200 dark:bg-emerald-900/60', texto: 'text-emerald-950 dark:text-emerald-100' }
 const COR_PERDIDO: CorDeEtapa = { fundo: 'bg-zinc-200 dark:bg-zinc-800', texto: 'text-zinc-950 dark:text-zinc-100' }
 
-export function corDaEtapa(ordem: number, tipo: StageTipo): CorDeEtapa {
+/**
+ * Retorna a cor de uma etapa baseado em seu tipo e posicao.
+ *
+ * @param posicao - Indice 0-based da etapa dentro da lista ordenada de etapas
+ *   abertas de sua pipeline (ex: `etapasAbertas.indexOf(etapa)` apos ordenar por
+ *   `ordem`). NAO é `etapa.ordem` (que comeca em 1). Ignorado para tipos
+ *   'ganho' e 'perdido'.
+ * @param tipo - Tipo da etapa ('aberta', 'ganho', 'perdido').
+ * @returns Objeto com cores de fundo e texto (Tailwind).
+ */
+export function corDaEtapa(posicao: number, tipo: StageTipo): CorDeEtapa {
   if (tipo === 'ganho') return COR_GANHO
   if (tipo === 'perdido') return COR_PERDIDO
-  return CORES_ABERTA[ordem % CORES_ABERTA.length]
+  const n = CORES_ABERTA.length
+  const indice = ((Math.trunc(posicao) % n) + n) % n
+  return CORES_ABERTA[indice]
 }
