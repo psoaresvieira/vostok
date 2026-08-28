@@ -138,7 +138,12 @@ export function ModalMovimento({
         </div>
 
         <div className="mt-4 flex justify-end gap-2">
-          <button type="button" onClick={onCancelar} className="px-3 py-1 text-sm">
+          <button
+            type="button"
+            disabled={enviando}
+            onClick={onCancelar}
+            className="px-3 py-1 text-sm disabled:opacity-40"
+          >
             Cancelar
           </button>
           <button

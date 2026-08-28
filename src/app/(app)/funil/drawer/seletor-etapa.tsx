@@ -109,7 +109,14 @@ export function SeletorEtapa({
       e.stopPropagation()
       // O modal, se estiver aberto, ganha do popover: e' a camada de cima.
       if (escolha) {
+        // Envio em andamento: cancelar aqui abandonaria o modal no meio de
+        // um pedido que ja saiu para o servidor, sem parar o movimento em
+        // si — so' o `stopPropagation` acima roda; o modal continua
+        // montado ate' a resposta chegar. `enviandoRef`, nao `enviando`:
+        // ver o comentario dela.
+        if (enviandoRef.current) return
         setEscolha(null)
+        setErro(null)
         return
       }
       setAberto(false)
@@ -186,13 +193,7 @@ export function SeletorEtapa({
         // deixaria escolher OUTRO destino enquanto o primeiro ainda esta a
         // caminho do servidor.
         disabled={enviando}
-        onClick={() => {
-          // A mensagem do movimento anterior morre aqui: ela e o popover
-          // ocupam o MESMO lugar (ancorados sob o gatilho), e mexer no seletor
-          // de novo ja e' dizer que a recusa antiga foi lida.
-          setErro(null)
-          setAberto((v) => !v)
-        }}
+        onClick={() => setAberto((v) => !v)}
         className="pressable rounded-full bg-primary-foreground/15 px-2 py-0.5 font-medium text-primary-foreground hover:bg-primary-foreground/25 disabled:opacity-60"
       >
         {etapaAtual?.nome ?? '—'} · {horas < 1 ? 'agora' : `há ${rotuloTempoNaEtapa(horas)}`}

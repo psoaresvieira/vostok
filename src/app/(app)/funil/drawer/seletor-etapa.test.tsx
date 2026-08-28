@@ -269,6 +269,38 @@ describe('SeletorEtapa — Escape com o modal de movimento aberto', () => {
 
     document.removeEventListener('keydown', spyDeBolha)
   })
+
+  it('Escape e o clique em Cancelar durante o envio sao no-op: o movimento em voo nao e cancelado', async () => {
+    // O mock so' resolve quando o teste mandar: o pedido fica "no ar" para
+    // provar que nem Escape nem Cancelar cancelam um movimento que ja saiu
+    // para o servidor — so' apagar o `escolha`/`erro` sem parar a Server
+    // Action deixaria o servidor mover o lead e o componente achando que
+    // desistiu.
+    let resolver!: (v: { ok: true; valor: undefined }) => void
+    moverEtapaMock.mockReturnValue(
+      new Promise((r) => {
+        resolver = r
+      }),
+    )
+    montar()
+    abrirModal()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }))
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    // O modal continua montado: nem Escape nem Cancelar tiveram efeito
+    // enquanto o pedido estava a caminho do servidor.
+    expect(screen.getByRole('heading', { name: 'Kariny → Novo lead' })).toBeTruthy()
+
+    await act(async () => {
+      resolver({ ok: true, valor: undefined })
+    })
+
+    expect(moverEtapaMock).toHaveBeenCalledTimes(1)
+    expect(aoMover).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('SeletorEtapa — mover', () => {
@@ -346,8 +378,9 @@ describe('SeletorEtapa — mover', () => {
   it('clicar duas vezes em Confirmar dentro do mesmo ato so chama a action uma vez', async () => {
     // O mock so' resolve quando o teste mandar: assim os dois cliques
     // acontecem os dois com o pedido ainda "no ar", provando a guarda de
-    // reentrancia (e nao so' o `disabled` do botao, que um `fireEvent.click`
-    // ignora).
+    // reentrancia (e nao so' o `disabled` do botao: dentro do MESMO act nao
+    // ha re-render entre os dois `fireEvent.click`, entao o segundo tambem
+    // acha o botao habilitado).
     let resolver!: (v: { ok: true; valor: undefined }) => void
     moverEtapaMock.mockReturnValue(
       new Promise((r) => {
