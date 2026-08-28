@@ -12,22 +12,7 @@ import { Campo, Rotulo } from '@/components/ui/campo'
 import { Modal, AcoesDoModal } from '@/components/ui/modal'
 import { renomearPipelineAction, excluirPipelineAction } from './acoes-pipelines'
 import { mensagemDePipeline } from './erros'
-
-/**
- * Monta o href de um item da barra a partir de `queryAtual` (searchParams
- * atuais, ja serializados por quem monta a pagina) — nunca do zero. So a
- * chave `pipeline` muda: setada para o id nas nao-padrao, removida na
- * padrao (que vive em /funil sem query nenhuma). Preservar as demais chaves
- * (origem, busca, dias, responsavel...) e o motivo de partir de
- * `queryAtual` em vez de reconstruir a URL so com o id.
- */
-function hrefDoItem(pipeline: Pipeline, queryAtual: string): string {
-  const params = new URLSearchParams(queryAtual)
-  if (pipeline.isDefault) params.delete('pipeline')
-  else params.set('pipeline', pipeline.id)
-  const query = params.toString()
-  return query ? `/funil?${query}` : '/funil'
-}
+import { hrefDoFunil } from './params'
 
 type AcaoRenomear = (pipelineId: string, nome: string) => Promise<Resultado<void>>
 type AcaoExcluir = (pipelineId: string) => Promise<Resultado<void>>
@@ -130,7 +115,7 @@ export function BarraPipelines({
               }`}
             >
               <Link
-                href={hrefDoItem(p, queryAtual)}
+                href={hrefDoFunil(queryAtual, { pipeline: p.isDefault ? null : p.id })}
                 aria-current={ativa ? 'page' : undefined}
                 className={`flex-1 truncate rounded-xl px-3 py-2 text-[13px] ${
                   ativa ? 'font-semibold text-foreground' : 'text-muted-foreground'
