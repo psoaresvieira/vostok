@@ -69,6 +69,9 @@ const MAPA: Record<string, Privilegios> = {
     authenticated: true,
   },
   'move_lead_stage(uuid,uuid,uuid)': { anon: false, authenticated: true },
+  // Troca de pipeline do lead (migration 0032). Invoker como move_lead_stage:
+  // a RLS de leads e' quem decide se o chamador enxerga o lead.
+  'mover_lead_pipeline(uuid,uuid,uuid)': { anon: false, authenticated: true },
   // Guarda de delete da policy pipelines_membro_delete (migration 0025):
   // definer para enxergar leads de colegas que a RLS do chamador esconderia.
   'pipeline_tem_leads(uuid)': { anon: false, authenticated: true },
