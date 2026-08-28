@@ -12,12 +12,23 @@ export function ModalMovimento({
   etiquetasConhecidas,
   onCancelar,
   onConfirmar,
+  enviando,
+  erro,
 }: {
   pedido: PedidoMovimento
   motivos: MotivoPerda[]
   etiquetasConhecidas: Etiqueta[]
   onCancelar: () => void
   onConfirmar: (lossReasonId: string | null, etiquetas: string[]) => void
+  /** Opcional e' proposito: o Quadro fecha este modal ANTES do await (o
+   *  movimento la' e' otimista, o cartao ja pulou de coluna), entao ele nunca
+   *  tem um "enviando" para mostrar. So' quem mantem o modal montado durante
+   *  o await — o SeletorEtapa do drawer — passa isto. */
+  enviando?: boolean
+  /** Erro do movimento anterior, mostrado DENTRO do modal para sobreviver ao
+   *  reabrir: motivo e etiquetas que o usuario ja preencheu continuam na
+   *  tela junto com a explicacao da recusa. */
+  erro?: string | null
 }) {
   const exigeMotivo = pedido.destino.tipo === 'perdido'
   const [motivoId, setMotivoId] = useState('')
@@ -47,6 +58,15 @@ export function ModalMovimento({
         <h2 className="text-lg font-semibold">
           {pedido.nomeLead} → {pedido.destino.nome}
         </h2>
+
+        {erro && (
+          <p
+            role="alert"
+            className="mt-3 rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {erro}
+          </p>
+        )}
 
         {exigeMotivo && (
           <label className="mt-3 block text-sm">
@@ -123,11 +143,11 @@ export function ModalMovimento({
           </button>
           <button
             type="button"
-            disabled={exigeMotivo && !motivoId}
+            disabled={(exigeMotivo && !motivoId) || enviando}
             onClick={() => onConfirmar(exigeMotivo ? motivoId : null, escolhidas)}
             className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-40"
           >
-            Confirmar
+            {enviando ? 'Movendo…' : 'Confirmar'}
           </button>
         </div>
       </div>

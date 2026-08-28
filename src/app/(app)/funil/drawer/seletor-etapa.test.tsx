@@ -217,6 +217,58 @@ describe('SeletorEtapa — o popover', () => {
 
     expect(screen.queryByRole('listbox')).toBeNull()
   })
+
+  it('cada cabecalho de pipeline alterna: clicar na ja expandida recolhe', () => {
+    montar()
+    const lista = abrir()
+
+    const cabecalhoAtual = within(lista).getByRole('button', { name: 'Funil de vendas' })
+    expect(cabecalhoAtual.getAttribute('aria-expanded')).toBe('true')
+    expect(within(lista).queryByRole('option', { name: 'Novo lead' })).toBeTruthy()
+
+    fireEvent.click(cabecalhoAtual)
+
+    expect(cabecalhoAtual.getAttribute('aria-expanded')).toBe('false')
+    expect(within(lista).queryByRole('option', { name: 'Novo lead' })).toBeNull()
+  })
+
+  it('cada grupo so tem role="option" como filho direto — sem ul/li no meio', () => {
+    montar()
+    const lista = abrir()
+
+    const grupo = within(lista).getByRole('group', { name: 'Funil de vendas' })
+    expect(within(grupo).getAllByRole('option').length).toBe(grupo.children.length)
+  })
+})
+
+describe('SeletorEtapa — Escape com o modal de movimento aberto', () => {
+  /** O gatilho e' o mesmo cabecalho do modal-movimento.test teria: escolher
+   *  uma etapa fecha o popover e abre o `ModalMovimento`. */
+  function abrirModal() {
+    const lista = abrir()
+    fireEvent.click(within(lista).getByRole('option', { name: 'Novo lead' }))
+  }
+
+  it('Escape cancela SO o modal — nao propaga para um listener de bolha no document (prova do stopPropagation na captura)', () => {
+    montar()
+    abrirModal()
+    expect(screen.getByRole('heading', { name: 'Kariny → Novo lead' })).toBeTruthy()
+
+    // Simula o listener de bolha que o Drawer registra no document: se a
+    // captura deste componente nao chamar `stopPropagation`, este spy roda e
+    // o painel inteiro (fora do escopo deste teste) fecharia junto.
+    const spyDeBolha = vi.fn()
+    document.addEventListener('keydown', spyDeBolha)
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(screen.queryByRole('heading', { name: 'Kariny → Novo lead' })).toBeNull()
+    expect(spyDeBolha).not.toHaveBeenCalled()
+    expect(moverEtapaMock).not.toHaveBeenCalled()
+    expect(moverParaPipelineMock).not.toHaveBeenCalled()
+
+    document.removeEventListener('keydown', spyDeBolha)
+  })
 })
 
 describe('SeletorEtapa — mover', () => {
@@ -236,6 +288,9 @@ describe('SeletorEtapa — mover', () => {
     expect(moverEtapaMock).toHaveBeenCalledWith('lead-1', 'p1-e1', null, [])
     expect(moverParaPipelineMock).not.toHaveBeenCalled()
     expect(aoMover).toHaveBeenCalledWith({ pipelineId: 'pipe-1', stageId: 'p1-e1' })
+    // Sucesso fecha o modal: e' a mesma acao que o usuario acabou de ver
+    // confirmada, nao ha por que continuar na tela.
+    expect(screen.queryByRole('heading', { name: 'Kariny → Novo lead' })).toBeNull()
   })
 
   it('etapa de OUTRA pipeline: confirma com moverParaPipelineAction', async () => {
@@ -267,7 +322,7 @@ describe('SeletorEtapa — mover', () => {
     expect(aoMover).not.toHaveBeenCalled()
   })
 
-  it('recusa do servidor vira mensagem traduzida, e nada de aoMover', async () => {
+  it('recusa do servidor mantem o MODAL aberto com a mensagem traduzida dentro dele, e nada de aoMover', async () => {
     moverParaPipelineMock.mockResolvedValue({ ok: false, erro: 'mesma_pipeline' })
     montar()
     const lista = abrir()
@@ -276,6 +331,9 @@ describe('SeletorEtapa — mover', () => {
     fireEvent.click(within(lista).getByRole('option', { name: 'Implantação' }))
     await confirmar()
 
+    // O modal continua na tela — nao volta para o popover — entao o motivo
+    // e as etiquetas que o usuario ja tinha preenchido nao se perdem.
+    expect(screen.getByRole('heading', { name: 'Kariny → Implantação' })).toBeTruthy()
     // O texto e' o de funil/erros.ts, e nao o codigo cru.
     expect(screen.getByRole('alert').textContent).toBe(
       'Esse lead já está nessa pipeline. Escolha uma etapa.',
@@ -283,11 +341,31 @@ describe('SeletorEtapa — mover', () => {
     // Navegar depois de uma falha levaria o usuario para uma pipeline em que o
     // lead nao esta.
     expect(aoMover).not.toHaveBeenCalled()
+  })
 
-    // Reabrir o seletor apaga a mensagem: os dois sao ancorados sob o gatilho,
-    // e a lista sobre a frase deixaria as duas ilegiveis.
-    fireEvent.click(screen.getByRole('button', { name: /^Proposta ·/ }))
-    expect(screen.queryByRole('alert')).toBeNull()
+  it('clicar duas vezes em Confirmar dentro do mesmo ato so chama a action uma vez', async () => {
+    // O mock so' resolve quando o teste mandar: assim os dois cliques
+    // acontecem os dois com o pedido ainda "no ar", provando a guarda de
+    // reentrancia (e nao so' o `disabled` do botao, que um `fireEvent.click`
+    // ignora).
+    let resolver!: (v: { ok: true; valor: undefined }) => void
+    moverEtapaMock.mockReturnValue(
+      new Promise((r) => {
+        resolver = r
+      }),
+    )
+    montar()
+    const lista = abrir()
+    fireEvent.click(within(lista).getByRole('option', { name: 'Novo lead' }))
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }))
+      fireEvent.click(screen.getByRole('button', { name: /Confirmar|Movendo…/ }))
+      resolver({ ok: true, valor: undefined })
+    })
+
+    expect(moverEtapaMock).toHaveBeenCalledTimes(1)
+    expect(aoMover).toHaveBeenCalledTimes(1)
   })
 
   it('perda exige motivo, e ele vai junto na action', async () => {

@@ -63,10 +63,19 @@ export function SeletorEtapa({
   // Uma pipeline expandida por vez: a lista inteira de todas as etapas de todas
   // as pipelines seria uma parede de nomes repetidos ("Novo lead", "Ganho",
   // "Perdido" existem em todas).
-  const [expandida, setExpandida] = useState(lead.pipelineId)
+  const [expandida, setExpandida] = useState<string | null>(lead.pipelineId)
   const [escolha, setEscolha] = useState<Escolha | null>(null)
+  const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const caixaRef = useRef<HTMLDivElement>(null)
+  // Guarda de reentrancia SINCRONA: dois cliques em "Confirmar" disparados no
+  // mesmo tick (sem um await entre eles) chegam aqui com o MESMO `confirmar`
+  // fechado sobre o `enviando` da ultima renderizacao — o `setEnviando(true)`
+  // do primeiro clique so' fica visivel numa renderizacao futura, entao ler
+  // o estado nao barra o segundo clique. Uma ref muda na hora, fora do ciclo
+  // de render, e por isso e' o segundo clique — nao o `disabled` do botao —
+  // quem a le e desiste.
+  const enviandoRef = useRef(false)
 
   const grupos = useMemo(
     () =>
@@ -83,29 +92,42 @@ export function SeletorEtapa({
       ?.etapas.find((e) => e.id === lead.stageId) ?? null
   const horas = horasNaEtapa(lead.entrouNaEtapaEm, new Date())
 
-  // Escape e clique fora fecham SO' o popover. Os dois listeners sao nativos e
-  // em captura no document de proposito: o Drawer que envolve este componente
-  // tambem escuta Escape no document e fecharia o painel inteiro junto —
-  // `stopPropagation` na captura da raiz encerra o despacho antes disso.
+  // Escape fecha SO' a camada de cima (o modal, se ele estiver aberto; senao
+  // o popover) — nunca o Drawer. O listener e' nativo e em CAPTURA no
+  // document de proposito: o Drawer que envolve este componente tambem
+  // escuta Escape no document (fase de bolha) e fecharia o painel inteiro
+  // junto, perdendo o motivo/etiquetas que o usuario digitou no
+  // `ModalMovimento` — `stopPropagation` na captura da raiz encerra o
+  // despacho antes que a fase de bolha chegue la'. O clique fora so' cuida
+  // do popover: o modal e' um overlay full-screen, clicar fora dele nao
+  // significa nada.
   useEffect(() => {
-    if (!aberto) return
+    if (!aberto && !escolha) return
 
     function aoTeclar(e: KeyboardEvent) {
       if (e.key !== 'Escape') return
       e.stopPropagation()
+      // O modal, se estiver aberto, ganha do popover: e' a camada de cima.
+      if (escolha) {
+        setEscolha(null)
+        return
+      }
       setAberto(false)
     }
+    document.addEventListener('keydown', aoTeclar, true)
+    return () => document.removeEventListener('keydown', aoTeclar, true)
+  }, [aberto, escolha])
+
+  useEffect(() => {
+    if (!aberto) return
+
     function aoApontar(e: MouseEvent) {
       if (e.target instanceof Node && caixaRef.current?.contains(e.target)) return
       setAberto(false)
     }
 
-    document.addEventListener('keydown', aoTeclar, true)
     document.addEventListener('mousedown', aoApontar)
-    return () => {
-      document.removeEventListener('keydown', aoTeclar, true)
-      document.removeEventListener('mousedown', aoApontar)
-    }
+    return () => document.removeEventListener('mousedown', aoApontar)
   }, [aberto])
 
   function escolher(pipelineDestinoId: string, destino: Etapa) {
@@ -121,9 +143,15 @@ export function SeletorEtapa({
   }
 
   async function confirmar(lossReasonId: string | null, etiquetas: string[]) {
-    if (!escolha) return
+    // Reentrancia: um segundo clique em "Confirmar" enquanto o primeiro ainda
+    // esta no ar nao pode disparar a action de novo — o servidor pode mover o
+    // lead duas vezes (ou a segunda chamada recusar por o lead ja nao estar
+    // mais onde a primeira o deixou). `enviandoRef`, nao `enviando`: ver o
+    // comentario dela.
+    if (!escolha || enviandoRef.current) return
+    enviandoRef.current = true
     const { pedido, pipelineDestinoId } = escolha
-    setEscolha(null)
+    setEnviando(true)
     setErro(null)
 
     // chamarAcao cobre a falha de TRANSPORTE (mesmo motivo do Quadro): sem ela
@@ -134,10 +162,16 @@ export function SeletorEtapa({
         ? moverEtapaAction(lead.id, pedido.destino.id, lossReasonId, etiquetas)
         : moverParaPipelineAction(lead.id, pedido.destino.id, lossReasonId, etiquetas),
     )
+    enviandoRef.current = false
+    setEnviando(false)
     if (!r.ok) {
+      // O modal continua montado, com o motivo/etiquetas que o usuario ja
+      // preencheu: `setEscolha(null)` aqui apagaria os dois no primeiro erro,
+      // obrigando a preencher tudo de novo so' porque o servidor recusou.
       setErro(mensagemDeErro(r.erro))
       return
     }
+    setEscolha(null)
     aoMover({ pipelineId: pipelineDestinoId, stageId: pedido.destino.id })
   }
 
@@ -147,6 +181,11 @@ export function SeletorEtapa({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={aberto}
+        // Desabilitado durante o envio: e' o mesmo movimento que o Confirmar
+        // do modal esta processando, e reabrir o popover no meio do caminho
+        // deixaria escolher OUTRO destino enquanto o primeiro ainda esta a
+        // caminho do servidor.
+        disabled={enviando}
         onClick={() => {
           // A mensagem do movimento anterior morre aqui: ela e o popover
           // ocupam o MESMO lugar (ancorados sob o gatilho), e mexer no seletor
@@ -154,7 +193,7 @@ export function SeletorEtapa({
           setErro(null)
           setAberto((v) => !v)
         }}
-        className="pressable rounded-full bg-primary-foreground/15 px-2 py-0.5 font-medium text-primary-foreground hover:bg-primary-foreground/25"
+        className="pressable rounded-full bg-primary-foreground/15 px-2 py-0.5 font-medium text-primary-foreground hover:bg-primary-foreground/25 disabled:opacity-60"
       >
         {etapaAtual?.nome ?? '—'} · {horas < 1 ? 'agora' : `há ${rotuloTempoNaEtapa(horas)}`}
       </button>
@@ -168,24 +207,38 @@ export function SeletorEtapa({
           // lista sairia da borda do painel.
           className="surface absolute right-0 top-full z-40 mt-1 max-h-80 w-64 overflow-y-auto rounded-xl bg-popover p-1 text-left text-popover-foreground"
         >
-          {grupos.map(({ pipeline, itens }) => (
-            <div key={pipeline.id} role="group" aria-label={pipeline.nome}>
-              <button
-                type="button"
-                aria-expanded={expandida === pipeline.id}
-                onClick={() => setExpandida(pipeline.id)}
-                className="w-full truncate rounded-lg px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-accent hover:text-foreground"
-              >
-                {pipeline.nome}
-              </button>
-              {expandida === pipeline.id && (
-                <ul className="flex flex-col gap-0.5 pb-1">
-                  {itens.map(({ etapa, indiceAberta }) => {
-                    const cor = corDaEtapa(indiceAberta, etapa.tipo)
-                    const atual = etapa.id === lead.stageId
-                    return (
-                      <li key={etapa.id}>
+          {grupos.map(({ pipeline, itens }) => {
+            const expandido = expandida === pipeline.id
+            return (
+              // O cabecalho da pipeline mora FORA do `role="group"`: um
+              // listbox so' pode ter groups e options como filhos diretos, e
+              // um botao de expandir/recolher no meio quebraria essa
+              // ownership. Este `div` sem role e' so' o agrupamento visual
+              // dos dois — leitor de tela nenhum enxerga ele.
+              <div key={pipeline.id}>
+                <button
+                  type="button"
+                  aria-expanded={expandido}
+                  onClick={() => setExpandida(expandido ? null : pipeline.id)}
+                  className="w-full truncate rounded-lg px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  {pipeline.nome}
+                </button>
+                {/* Um `group` por pipeline SEMPRE existe (vazio quando
+                    recolhida) — e' o que da' "um grupo por pipeline" pra
+                    quem le a arvore de acessibilidade mesmo antes de
+                    expandir. Filhos diretos: so' `role="option"`, sem
+                    `ul`/`li` no meio — a arvore de acessibilidade de um
+                    `group` so' reconhece um `option` como filho quando ele
+                    e' filho DIRETO no DOM. */}
+                <div role="group" aria-label={pipeline.nome} className="flex flex-col gap-0.5 pb-1">
+                  {expandido &&
+                    itens.map(({ etapa, indiceAberta }) => {
+                      const cor = corDaEtapa(indiceAberta, etapa.tipo)
+                      const atual = etapa.id === lead.stageId
+                      return (
                         <button
+                          key={etapa.id}
                           type="button"
                           role="option"
                           aria-selected={atual}
@@ -195,34 +248,31 @@ export function SeletorEtapa({
                           <span className="truncate">{etapa.nome}</span>
                           {atual && <Check size={14} strokeWidth={2.5} aria-hidden="true" />}
                         </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-            </div>
-          ))}
+                      )
+                    })}
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 
-      {erro && (
-        // Ancorado como o popover, e nao no fluxo: o cabecalho e' uma linha so'
-        // e uma frase inteira dentro dela empurraria o nome da pipeline para
-        // fora da tela.
-        <p
-          role="alert"
-          className="surface absolute right-0 top-full z-40 mt-1 w-64 rounded-xl bg-popover p-2 text-xs text-destructive"
-        >
-          {erro}
-        </p>
-      )}
+      {/* `erro` so' fica truthy enquanto `escolha` tambem esta (confirmar()
+          exige `escolha` para roda-lo, e o cancelar limpa os dois juntos) —
+          a mensagem sempre mora DENTRO do `ModalMovimento` abaixo, nunca
+          solta aqui fora dele. */}
 
       {escolha && (
         <ModalMovimento
           pedido={escolha.pedido}
           motivos={motivos}
           etiquetasConhecidas={etiquetasConhecidas}
-          onCancelar={() => setEscolha(null)}
+          enviando={enviando}
+          erro={erro}
+          onCancelar={() => {
+            setEscolha(null)
+            setErro(null)
+          }}
           onConfirmar={confirmar}
         />
       )}
