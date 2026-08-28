@@ -74,19 +74,19 @@ A implantação de cliente é manual do dono da plataforma (migration `0030`). O
 
 Pré-condições, nesta ordem:
 
-1. **App do Meta** dentro do BM da Vostok, com Webhooks → Page → `leadgen` apontando para `https://vostok-beta.vercel.app/api/webhooks/meta` e verificado com o `META_VERIFY_TOKEN` da Vercel. Conferir com `GET /{app-id}/subscriptions?access_token={app-id}|{app-secret}`.
+1. **App do Meta** dentro do BM da Vostok, com Webhooks → Page → `leadgen` apontando para `https://vostok-beta.vercel.app/api/webhooks/meta` e verificado com o `META_VERIFY_TOKEN` da Vercel. Conferir com `GET /{app-id}/subscriptions?access_token={app-id}|{app-secret}`. O `META_APP_ID`/`META_APP_SECRET` desse app já precisam estar na Vercel (e o projeto redeployado) antes da prova de ponta a ponta — o webhook usa `META_APP_SECRET` para validar o HMAC da assinatura; o script deste passo não usa nenhum dos dois.
 2. **System User** no BM da Vostok com a Page do cliente **atribuída** e token permanente com `pages_show_list`, `pages_manage_metadata`, `leads_retrieval`, gerado para esse app.
 3. O cliente **aceitou o convite** e é membro do tenant (senão `responsavel_invalido` ao passar `--responsavel`).
 
 Execução:
 
 ```bash
-vercel env pull prod.env --environment=production --yes
-# acrescente ao prod.env: OPERADOR_EMAIL, OPERADOR_SENHA (login do dono), META_TOKEN_SYSTEM_USER
-npm run meta:conectar -- --env prod.env --conta <account_id> --page <page_id> [--responsavel <user_id>] [--reivindicar]
+vercel env pull .env.prod --environment=production --yes
+# acrescente ao .env.prod: OPERADOR_EMAIL, OPERADOR_SENHA (login do dono), META_TOKEN_SYSTEM_USER
+npm run meta:conectar -- --env .env.prod --conta <account_id> --page <page_id> [--responsavel <user_id>] [--reivindicar]
 ```
 
-`META_API_VERSION` é lida na carga do módulo do Graph, antes do arquivo de env: exporte-a no shell se precisar de versão diferente de `v21.0`. Segunda execução para a mesma Page devolve `page_ja_conectada` e para — tomar a Page de outra conta é ato explícito (`--reivindicar`). Apague `prod.env` ao terminar.
+`META_API_VERSION` é lida na carga do módulo do Graph, antes do arquivo de env: exporte-a no shell se precisar de versão diferente de `v21.0`. Segunda execução para a mesma Page devolve `page_ja_conectada` e para — tomar a Page de outra conta é ato explícito (`--reivindicar`). Apague `.env.prod` ao terminar.
 
 Prova ponta a ponta: Lead Ads Testing Tool (`developers.facebook.com/tools/lead-ads-testing`) na Page → lead no `/funil` do cliente com campanha/conjunto/anúncio; reenvio do mesmo lead não duplica.
 
