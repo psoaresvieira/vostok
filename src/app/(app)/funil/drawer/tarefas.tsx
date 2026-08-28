@@ -141,19 +141,19 @@ export function PainelTarefas({
   }
 
   async function concluir(id: string) {
-    const r = await chamarAcao(concluirTarefa(id, leadId))
+    const r = await chamarAcao(concluirTarefa(id))
     if (!r.ok) setErro(mensagemDeErroTarefa(r.erro))
     else setErro(null)
   }
 
   async function reabrir(id: string) {
-    const r = await chamarAcao(reabrirTarefa(id, leadId))
+    const r = await chamarAcao(reabrirTarefa(id))
     if (!r.ok) setErro(mensagemDeErroTarefa(r.erro))
     else setErro(null)
   }
 
   async function excluir(id: string) {
-    const r = await chamarAcao(excluirTarefa(id, leadId))
+    const r = await chamarAcao(excluirTarefa(id))
     if (!r.ok) setErro(mensagemDeErroTarefa(r.erro))
     else setErro(null)
   }

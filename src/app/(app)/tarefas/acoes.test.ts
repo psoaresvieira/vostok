@@ -77,7 +77,7 @@ describe('concluirTarefa', () => {
     contextoFeliz()
     tarefaStoreMock.concluir.mockResolvedValue({ ok: false, erro: 'tarefa_nao_encontrada' })
 
-    const r = await concluirTarefa('tarefa-1', 'lead-1')
+    const r = await concluirTarefa('tarefa-1')
 
     expect(r).toEqual({ ok: false, erro: 'tarefa_nao_encontrada' })
     expect(revalidatePathMock).not.toHaveBeenCalled()
@@ -87,7 +87,7 @@ describe('concluirTarefa', () => {
     contextoFeliz()
     tarefaStoreMock.concluir.mockResolvedValue({ ok: false, erro: TAREFA_CONCLUIDA_SEM_EVENTO })
 
-    const r = await concluirTarefa('tarefa-1', 'lead-1')
+    const r = await concluirTarefa('tarefa-1')
 
     expect(r).toEqual({ ok: false, erro: TAREFA_CONCLUIDA_SEM_EVENTO })
     expect(revalidatePathMock).toHaveBeenCalledWith('/funil')
@@ -98,7 +98,7 @@ describe('concluirTarefa', () => {
     contextoFeliz()
     tarefaStoreMock.concluir.mockResolvedValue({ ok: true, valor: undefined })
 
-    const r = await concluirTarefa('tarefa-1', 'lead-1')
+    const r = await concluirTarefa('tarefa-1')
 
     expect(tarefaStoreMock.concluir).toHaveBeenCalledWith('tarefa-1')
     expect(revalidatePathMock).toHaveBeenCalledWith('/funil')
@@ -112,7 +112,7 @@ describe('reabrirTarefa / excluirTarefa', () => {
     contextoFeliz()
     tarefaStoreMock.reabrir.mockResolvedValue({ ok: true, valor: undefined })
 
-    const r = await reabrirTarefa('tarefa-1', 'lead-1')
+    const r = await reabrirTarefa('tarefa-1')
 
     expect(tarefaStoreMock.reabrir).toHaveBeenCalledWith('tarefa-1')
     expect(revalidatePathMock).toHaveBeenCalledWith('/tarefas')
@@ -123,7 +123,7 @@ describe('reabrirTarefa / excluirTarefa', () => {
     contextoFeliz()
     tarefaStoreMock.excluir.mockResolvedValue({ ok: false, erro: 'tarefa_nao_encontrada' })
 
-    const r = await excluirTarefa('tarefa-1', 'lead-1')
+    const r = await excluirTarefa('tarefa-1')
 
     expect(r).toEqual({ ok: false, erro: 'tarefa_nao_encontrada' })
     expect(revalidatePathMock).not.toHaveBeenCalled()
@@ -132,7 +132,7 @@ describe('reabrirTarefa / excluirTarefa', () => {
   it('sem contexto (sessao expirada) nenhuma acao toca o store', async () => {
     criarTarefaStoreDoServidorMock.mockResolvedValue({ ok: false, erro: 'sem_sessao' })
 
-    const r = await excluirTarefa('tarefa-1', 'lead-1')
+    const r = await excluirTarefa('tarefa-1')
 
     expect(r).toEqual({ ok: false, erro: 'sem_sessao' })
     expect(tarefaStoreMock.excluir).not.toHaveBeenCalled()

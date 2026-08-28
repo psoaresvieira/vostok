@@ -46,11 +46,7 @@ export async function criarTarefa(d: {
   return ok(undefined)
 }
 
-// `leadId` fica na assinatura das tres actions abaixo so' para simetria com
-// os chamadores (tarefas.tsx e lista.tsx passam sempre `(id, leadId)`) — a
-// unica leitura que fazia dele virou `revalidarTelasDeTarefa()` sem
-// parametro nenhum.
-export async function concluirTarefa(id: string, _leadId: string): Promise<Resultado<void>> {
+export async function concluirTarefa(id: string): Promise<Resultado<void>> {
   const contexto = await criarTarefaStoreDoServidor()
   if (!contexto.ok) return falha(contexto.erro)
 
@@ -72,7 +68,7 @@ export async function concluirTarefa(id: string, _leadId: string): Promise<Resul
   return ok(undefined)
 }
 
-export async function reabrirTarefa(id: string, _leadId: string): Promise<Resultado<void>> {
+export async function reabrirTarefa(id: string): Promise<Resultado<void>> {
   const contexto = await criarTarefaStoreDoServidor()
   if (!contexto.ok) return falha(contexto.erro)
 
@@ -86,7 +82,7 @@ export async function reabrirTarefa(id: string, _leadId: string): Promise<Result
   return ok(undefined)
 }
 
-export async function excluirTarefa(id: string, _leadId: string): Promise<Resultado<void>> {
+export async function excluirTarefa(id: string): Promise<Resultado<void>> {
   const contexto = await criarTarefaStoreDoServidor()
   if (!contexto.ok) return falha(contexto.erro)
 

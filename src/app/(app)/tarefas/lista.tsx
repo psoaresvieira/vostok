@@ -39,7 +39,7 @@ function ItemTarefa({
   onConcluir,
 }: {
   t: Tarefa
-  onConcluir: (id: string, leadId: string) => void
+  onConcluir: (id: string) => void
 }) {
   return (
     <li className="flex items-center justify-between gap-2 border-b py-2 text-sm last:border-0">
@@ -51,7 +51,7 @@ function ItemTarefa({
         <span>vence {FORMATO_PRAZO.format(t.venceEm)}</span>
         <button
           type="button"
-          onClick={() => onConcluir(t.id, t.leadId)}
+          onClick={() => onConcluir(t.id)}
           className="text-xs underline"
         >
           Concluir
@@ -68,8 +68,8 @@ function ItemTarefa({
 export function Lista({ tarefas, agora }: { tarefas: Tarefa[]; agora: Date }) {
   const [erro, setErro] = useState<string | null>(null)
 
-  async function concluir(id: string, leadId: string) {
-    const r = await chamarAcao(concluirTarefa(id, leadId))
+  async function concluir(id: string) {
+    const r = await chamarAcao(concluirTarefa(id))
     if (!r.ok) setErro(mensagemDeErroTarefa(r.erro))
     else setErro(null)
   }
