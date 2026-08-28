@@ -24,6 +24,10 @@ type Linha = {
   stage_id: string
   responsavel_id: string | null
   valor_cents: number | null
+  // telefone_e164 e criado_em: acrescentados pela 0031 (cartao compacto do
+  // funil precisa dos dois e nenhum vinha da RPC ate entao).
+  telefone_e164: string | null
+  criado_em: string
   etiquetas: { id: string; nome: string }[]
   total_na_etapa: string
   soma_cents_na_etapa: string | null
@@ -104,6 +108,16 @@ describe('0027 — leads_do_funil', () => {
 
     expect(linhas.filter((l) => l.stage_id === novo)).toHaveLength(2)
     expect(linhas.filter((l) => l.stage_id === contato)).toHaveLength(2)
+  })
+
+  it('Caso 1b (0031): telefone_e164 e criado_em vem na resposta — o cartao compacto do funil precisa dos dois', async () => {
+    const novo = etapa(c, 'Novo lead')
+    await semearLeads(c, novo, 1, { prefixo: 'N' })
+
+    const [linha] = await funil(c.adminId, { pipelineId: c.pipelineId })
+
+    expect(linha).toHaveProperty('telefone_e164')
+    expect(linha).toHaveProperty('criado_em')
   })
 
   it('Caso 2: total e soma contam a etapa inteira, nao a pagina', async () => {

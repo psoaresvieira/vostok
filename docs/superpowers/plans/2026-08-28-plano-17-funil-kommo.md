@@ -570,3 +570,7 @@ Reescrever `page.test.tsx` (3 casos: padrão, não-padrão, inexistente; `redire
 - [ ] **Step 4: E2E** — em `funil.spec.ts`: criar pipeline "Pós-venda" pelo botão "+ Nova pipeline" (ver `pipelines.spec.ts` para o fluxo), voltar à padrão, criar lead, abrir o drawer, clicar no gatilho da etapa, expandir "Pós-venda", escolher a primeira etapa, confirmar; esperar URL com `pipeline=` da nova e o card visível na coluna dela; aba Histórico mostra "Movido de …".
 
 - [ ] **Step 5: Verificar tudo** (`npm test`, typecheck, lint, integração, `db:reset`, e2e) e commitar `feat(funil): seletor de pipeline/etapa no drawer, mover entre pipelines`.
+
+### Deploy
+
+`npx supabase db push` aplica a 0031 e depois a 0032 em produção ANTES de mergear/dar push em master (banco primeiro, app depois): a 0031 é retrocompatível com o app rodando (mesma assinatura de `leads_do_funil`, colunas extras que o app antigo simplesmente ignora), e o endurecimento da 0032 em `move_lead_stage` (rejeitar etapa de outra pipeline) é inalcançável pelo app antigo — ele nunca envia esse par lead/etapa porque a UI dele não oferece trocar de pipeline. Aplicar em baixo tráfego (a janela de reload do schema cache do PostgREST depois de `drop function`/`create function` fecha em segundos, mas é a janela em que uma chamada concorrente pode ver a função ainda ausente). Reverter o app não exige reverter o banco: as duas migrations continuam válidas para a versão anterior do app.

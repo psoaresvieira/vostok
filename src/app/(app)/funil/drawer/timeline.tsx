@@ -27,8 +27,13 @@ export function rotuloEvento(
     case 'pipeline_alterada': {
       const dePipe = nomePipeline.get(String(p.de_pipeline)) ?? '?'
       const paraPipe = nomePipeline.get(String(p.para_pipeline)) ?? '?'
-      // 'etapa removida' e nao '?': a ficha so' carrega os nomes da pipeline
-      // ATUAL do lead, entao a etapa de ORIGEM quase sempre falta no mapa.
+      // 'etapa removida' e nao '?': `carregarDrawer` carrega os nomes de
+      // etapa de TODAS as pipelines da conta, entao um id que falta no mapa
+      // nao e' de uma pipeline que a ficha esqueceu de carregar — e' uma
+      // etapa que foi de fato excluida depois deste evento acontecer. O
+      // rotulo continua sendo o fallback certo para esse caso: o historico e'
+      // um snapshot do que aconteceu, e a etapa de origem pode nao existir
+      // mais.
       const de = p.de ? nomeEtapa.get(String(p.de)) ?? 'etapa removida' : 'início'
       const para = nomeEtapa.get(String(p.para)) ?? 'etapa removida'
       return `Movido de ${dePipe} · ${de} para ${paraPipe} · ${para}`
