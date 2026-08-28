@@ -6,7 +6,10 @@ import { Drawer } from '@/components/ui/drawer'
 import { formatarMoeda, formatarTelefone } from '@/lib/domain/formato'
 import { horasNaEtapa, rotuloTempoNaEtapa } from '@/lib/domain/lead'
 import type { LeadOrigem } from '@/lib/domain/tipos'
-import { LIMITE_EVENTOS, type DadosDoDrawer } from './carregar'
+// `import type`, e nunca valor: `carregar.ts` alcanca `next/headers` pela
+// cadeia do store, e um import de valor arrastaria o modulo inteiro para o
+// pacote do cliente (erro de build do Next). O tipo e' apagado na compilacao.
+import type { DadosDoDrawer } from './carregar'
 import { mapasDoLead } from './mapas'
 import { Abas } from './abas'
 import { CabecalhoLead } from './cabecalho'
@@ -124,7 +127,7 @@ export function DrawerLead({
           que ha mais e' honesto; fingir que a lista e' completa nao. */}
       {dados.temMaisEventos && (
         <p className="text-xs text-muted-foreground">
-          Mostrando os {LIMITE_EVENTOS} eventos mais recentes.
+          Mostrando os {dados.eventos.length} eventos mais recentes.
         </p>
       )}
     </div>

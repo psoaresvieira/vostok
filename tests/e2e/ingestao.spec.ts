@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { criarConta, carimbo, coluna } from './apoio'
+import { criarConta, carimbo, coluna, drawerDoLead } from './apoio'
 import { PREFIXO_FONTE_GOOGLE_E2E } from './global-setup'
 
 /**
@@ -103,12 +103,11 @@ test('lead do Google vira card sem reload, e o reenvio da mesma pessoa vira even
   // parte só precisa provar que o dedup do banco funcionou, não que o
   // Realtime também alcança a ficha.
   await cartao.click()
-  await expect(page.getByRole('heading', { name: nomeDoLead, exact: true, level: 1 })).toBeVisible()
+  const drawer = drawerDoLead(page, nomeDoLead)
+  await expect(drawer.getByRole('heading', { name: nomeDoLead, exact: true })).toBeVisible()
 
-  const linhaDoTempo = page
-    .locator('section')
-    .filter({ has: page.getByRole('heading', { name: 'Linha do tempo', exact: true, level: 2 }) })
-  const rotulos = linhaDoTempo.locator('ol > li > p:first-child')
+  // A linha do tempo mora na aba Historico do drawer.
+  const rotulos = drawer.locator('ol > li > p:first-child')
 
   // Asserção positiva PRIMEIRO: o after() do segundo POST ainda pode estar em
   // voo quando a ficha carrega, então recarrega até o evento aparecer, com
@@ -119,6 +118,9 @@ test('lead do Google vira card sem reload, e o reenvio da mesma pessoa vira even
   // do lado da leitura).
   await expect(async () => {
     await page.reload()
+    // O reload traz o drawer de volta (a URL guarda `?lead=`), mas na aba
+    // Principal: a aba escolhida e' estado do painel, nao da URL.
+    await drawer.getByRole('tab', { name: 'Histórico' }).click()
     await expect(rotulos.filter({ hasText: /^reingestao$/ })).toHaveCount(1)
   }).toPass({ timeout: 20_000 })
 

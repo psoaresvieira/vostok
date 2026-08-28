@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { SENHA, carimbo, criarConta, criarLead } from './apoio'
+import { SENHA, carimbo, criarConta, criarLead, drawerDoLead } from './apoio'
 
 /**
  * O percurso da spec §7 do Plano 10, ponta a ponta: o admin escreve um script
@@ -127,7 +127,7 @@ test.describe('scripts na ficha do lead', () => {
       await paginaAdmin.goto('/funil')
       await paginaAdmin.getByRole('link', { name: nomeLead }).click()
       await expect(
-        paginaAdmin.getByRole('heading', { name: nomeLead, exact: true, level: 1 }),
+        drawerDoLead(paginaAdmin, nomeLead).getByRole('heading', { name: nomeLead, exact: true }),
       ).toBeVisible()
 
       // A garantia do passo 0, afirmada na propria ficha.

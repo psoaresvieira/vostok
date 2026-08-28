@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
-import { criarConta, criarLead, coluna } from './apoio'
+import { criarConta, criarLead, coluna, drawerDoLead } from './apoio'
 
 // O PointerSensor do dnd-kit so ativa depois que o ponteiro anda mais de 5px, e
 // o destino so e calculado nos movimentos POSTERIORES a ativacao. Um unico pulo
@@ -94,17 +94,21 @@ test('do signup ate a perda com motivo, com a timeline contando a historia', asy
 
   await expect(coluna(page, 'Perdido').getByRole('link', { name: 'Cliente Teste' })).toBeVisible()
 
+  // O lead nao e mais uma pagina: o cartao abre o drawer do proprio funil, e
+  // quem manda nele e a URL (`?lead=`).
   await page.getByRole('link', { name: 'Cliente Teste' }).click()
-  await expect(page.getByRole('heading', { name: 'Cliente Teste', exact: true, level: 1 })).toBeVisible()
+  await expect(page).toHaveURL(/lead=/)
+  const drawer = drawerDoLead(page, 'Cliente Teste')
+  await expect(drawer.getByRole('heading', { name: 'Cliente Teste', exact: true })).toBeVisible()
+
+  // A linha do tempo mora na aba Historico.
+  await drawer.getByRole('tab', { name: 'Histórico' }).click()
 
   // A timeline e um <ol> com um <li> por evento e o rotulo no primeiro <p>. Ler a
   // lista inteira e a unica forma de assegurar ORDEM: getByText casa em qualquer
   // lugar da pagina, entao passaria igual se a timeline viesse invertida — e o
   // mais recente primeiro e um entregavel, ja quebrado uma vez neste plano.
-  const linhaDoTempo = page
-    .locator('section')
-    .filter({ has: page.getByRole('heading', { name: 'Linha do tempo', exact: true, level: 2 }) })
-  const rotulos = linhaDoTempo.locator('ol > li > p:first-child')
+  const rotulos = drawer.locator('ol > li > p:first-child')
   await expect(rotulos.first()).toBeVisible()
 
   const esperados = [
@@ -118,10 +122,17 @@ test('do signup ate a perda com motivo, com a timeline contando a historia', asy
   // eventos podem se intercalar, mas estes quatro tem que vir nesta sequencia.
   expect(lidos.filter((t) => esperados.includes(t))).toEqual(esperados)
 
-  // A perda gravou o motivo e o valor sobreviveu ao caminho inteiro.
-  // Scoped em <dd>: "Perdido" tambem e uma <option> do seletor "Mover para".
-  await expect(page.getByRole('definition').filter({ hasText: /^Perdido$/ })).toBeVisible()
-  await expect(page.getByText('R$ 1.500,00')).toBeVisible()
+  // A perda gravou o motivo e o valor sobreviveu ao caminho inteiro. Os dois
+  // estao no cabecalho do drawer: a etapa ao lado do nome da pipeline, o valor
+  // ao lado do nome do lead.
+  await expect(drawer.getByText(/^Perdido ·/)).toBeVisible()
+  await expect(drawer.getByText('R$ 1.500,00')).toBeVisible()
+
+  // Fechar e' navegacao, nao estado local: o "voltar" do navegador desfaz a
+  // abertura do painel e devolve o quadro sem ele.
+  await page.goBack()
+  await expect(page).not.toHaveURL(/lead=/)
+  await expect(drawer).toHaveCount(0)
 })
 
 test('movimento recusado pelo servidor: o quadro pinta, volta atras e avisa', async ({ page }) => {

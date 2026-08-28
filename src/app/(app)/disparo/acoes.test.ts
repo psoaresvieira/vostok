@@ -3,7 +3,7 @@ import { contextoDoLead } from '@/lib/domain/script'
 import type { Lead } from '@/lib/domain/tipos'
 
 /**
- * Unidade, na forma de scripts/acoes.test.ts e leads/[id]/acoes-whatsapp.test.ts:
+ * Unidade, na forma de scripts/acoes.test.ts e funil/drawer/acoes-whatsapp.test.ts:
  * store mockado por vi.mock de '@/lib/data/supabase' — sem Supabase de verdade.
  */
 

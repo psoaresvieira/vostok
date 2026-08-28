@@ -18,7 +18,7 @@ import { enviarWhatsApp } from '@/app/(app)/funil/drawer/acoes-whatsapp'
 import { buscarLeadsParaDisparo, type LeadParaDisparo } from './acoes'
 
 /** Quanto tempo o "Enviado ✓" fica visivel — mesma duracao e mesmo motivo do
- * "Copiado ✓"/"Enviado ✓" de leads/[id]/scripts.tsx: um sinal transitorio que
+ * "Copiado ✓"/"Enviado ✓" de funil/drawer/scripts.tsx: um sinal transitorio que
  * fica colado na tela passa a acompanhar eventos que nao sao dele. */
 const DURACAO_FEEDBACK_MS = 2_500
 
@@ -56,7 +56,7 @@ function statusDoScript(s: ScriptParaDisparo): { selecionavel: boolean; motivo: 
  * ver a previa interpolada e enviar — sem abrir a ficha.
  *
  * Actions por prop com default, mesmo padrao de template-whatsapp.tsx e
- * leads/[id]/scripts.tsx — e' o que torna os tres passos testaveis sem
+ * funil/drawer/scripts.tsx — e' o que torna os tres passos testaveis sem
  * servidor.
  */
 export function Disparar({
@@ -93,7 +93,7 @@ export function Disparar({
    * no mesmo frame leem o mesmo valor de closure (`false` nos dois) e o
    * `disabled={enviando}` do DOM so vale depois do re-render — o guard por
    * estado deixa passar os dois, e aqui isso custa DUAS mensagens enviadas e
-   * cobradas pelo Meta. Copiado de leads/[id]/scripts.tsx:57-64.
+   * cobradas pelo Meta. Copiado de funil/drawer/scripts.tsx:57-64.
    */
   const envioEmCurso = useRef(false)
 

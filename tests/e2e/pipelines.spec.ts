@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
-import { criarConta, criarLead, coluna } from './apoio'
+import { criarConta, criarLead, coluna, drawerDoLead } from './apoio'
 
 /** Nome fixo da pipeline padrão, gravado pela RPC de signup (0002_pipeline.sql:93). */
 const PIPELINE_PADRAO = 'Funil de vendas'
@@ -74,25 +74,28 @@ test('múltiplas pipelines: criar, isolar leads, ficha e exclusão bloqueada', a
   await expect(colunas(page)).toHaveText(ETAPAS_PADRAO)
   await expect(page.getByRole('link', { name: 'Lead Outbound' })).toHaveCount(0)
 
-  // 4. ficha mostra as etapas da Outbound: volta pra Outbound, abre o card.
+  // 4. o drawer do lead mostra a pipeline DELE, e nao a padrao: volta pra
+  // Outbound e abre o card.
   await nav.getByRole('link', { name: 'Outbound' }).click()
   await expect(page).toHaveURL(/\/funil\?pipeline=/)
   await page.getByRole('link', { name: 'Lead Outbound' }).click()
-  await expect(
-    page.getByRole('heading', { name: 'Lead Outbound', exact: true, level: 1 }),
-  ).toBeVisible()
+  const drawer = drawerDoLead(page, 'Lead Outbound')
+  await expect(drawer.getByRole('heading', { name: 'Lead Outbound', exact: true })).toBeVisible()
 
-  const opcoesMoverPara = await page.getByLabel('Mover para').locator('option').allTextContents()
-  expect(opcoesMoverPara).toEqual(['Novo lead', 'Qualificação', 'Ganho', 'Perdido'])
+  // O nome da pipeline no cabecalho e a barra de progresso contam as etapas da
+  // OUTBOUND: duas abertas ('Novo lead' e 'Qualificação'), com o lead na
+  // primeira. A padrao tem sete — se o drawer estivesse lendo a pipeline
+  // errada, o rotulo diria outro numero.
+  await expect(drawer.getByText('Outbound', { exact: true })).toBeVisible()
+  await expect(drawer.getByRole('img', { name: 'Etapa 1 de 2: Novo lead' })).toBeVisible()
 
-  // Voltar pelo link da ficha retorna ao funil preservando `?pipeline=` — a
-  // ficha sabe que o lead é da Outbound (pipeline.valor.pipeline.isDefault é
-  // false) e monta o href com o id (page.tsx:138-142).
-  // A seta virou icone aria-hidden na revisao de telas; o nome acessivel do
-  // link e so "Voltar ao funil" — dai o regex, como o comentario da propria
-  // ficha recomenda.
-  await page.getByRole('link', { name: /voltar ao funil/i }).click()
+  // Fechar o drawer devolve o funil da Outbound: `?pipeline=` sobrevive, so a
+  // chave `lead` sai. Era o que o antigo link "Voltar ao funil" da ficha
+  // garantia, agora por navegacao do proprio painel.
+  await drawer.getByRole('button', { name: 'Fechar' }).click()
   await expect(page).toHaveURL(/\/funil\?pipeline=/)
+  await expect(page).not.toHaveURL(/lead=/)
+  await expect(drawer).toHaveCount(0)
 
   // 5. excluir bloqueada com leads: kebab → Excluir → Confirmar exclusão.
   await nav.getByRole('button', { name: 'Opções de Outbound' }).click()

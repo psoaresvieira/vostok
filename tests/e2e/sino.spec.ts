@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { criarConta, carimbo } from './apoio'
+import { criarConta, carimbo, drawerDoLead } from './apoio'
 
 /**
  * O sino de ponta a ponta: gera uma fonte Google real na tela, define o
@@ -77,8 +77,10 @@ test('lead novo acende o sino sem reload, e a entrada linka para a ficha do lead
   await expect(entrada).toBeVisible()
 
   await entrada.click()
-  await expect(page).toHaveURL(/\/leads\//)
+  // O link do sino ainda aponta para /leads/<id>; a rota redireciona para o
+  // funil com o lead aberto como drawer.
+  await expect(page).toHaveURL(/\/funil\?.*lead=/)
   await expect(
-    page.getByRole('heading', { name: nomeDoLead, exact: true, level: 1 }),
+    drawerDoLead(page, nomeDoLead).getByRole('heading', { name: nomeDoLead, exact: true }),
   ).toBeVisible()
 })

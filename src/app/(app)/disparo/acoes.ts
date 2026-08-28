@@ -45,13 +45,13 @@ export async function buscarLeadsParaDisparo(
   // leituras abaixo idem — `listarLeads` encaminha `error.message` do
   // PostgREST direto, e `pipelinePadrao` pode devolver 'pipeline_nao_encontrado',
   // que nao esta no mapa de mensagens. Mesma guarda de `codigoDoErroDoTemplate`
-  // em leads/[id]/acoes-whatsapp.ts.
+  // em funil/drawer/acoes-whatsapp.ts.
   const contexto = await criarStoreDoServidor()
   if (!contexto.ok) return falha(codigoDoErroDoPainel(contexto.erro))
   const { store } = contexto.valor
 
   // Os tres independentes: nenhum depende do outro, e todos resolvem a mesma
-  // conta ativa — mesma forma de enviarWhatsApp (leads/[id]/acoes-whatsapp.ts).
+  // conta ativa — mesma forma de enviarWhatsApp (funil/drawer/acoes-whatsapp.ts).
   const [leads, pipeline, membros] = await Promise.all([
     // `limite` no BANCO, e nao um slice em JS depois: a consulta lia toda a
     // conta que casava com o termo (sem teto nenhum) para o painel mostrar

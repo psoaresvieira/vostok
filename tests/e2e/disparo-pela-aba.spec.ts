@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { carimbo, coluna, criarConta } from './apoio'
+import { carimbo, coluna, criarConta, drawerDoLead } from './apoio'
 import {
   NUMERO_FALSO_SECUNDARIO,
   TOKEN_FALSO_SECUNDARIO,
@@ -9,7 +9,8 @@ import {
  * O caso nomeado da Task 9 (spec §5 do Plano 13 remodelada): pela aba
  * /disparo, sem abrir a ficha do lead, o admin escolhe o script com template
  * aprovado, busca o lead pelo nome, ve a previa com o valor interpolado,
- * envia, ve "Enviado ✓", clica em "Ver na ficha" e a timeline mostra o
+ * envia, ve "Enviado ✓", clica em "Ver na ficha" (que abre o drawer do lead)
+ * e a timeline mostra o
  * evento whatsapp_enviado com o texto EXATO.
  *
  * disparo-whatsapp.spec.ts ja tranca o mesmo envio pela FICHA do lead (com
@@ -141,15 +142,16 @@ test.describe('disparo de WhatsApp pela aba /disparo', () => {
     // responder, entao ela ve a janela inteira em vez de correr contra ela.
     await expect(page.getByText('Enviado')).toBeVisible()
 
-    // --- "Ver na ficha" leva para a ficha do lead certo ---
+    // --- "Ver na ficha" leva ao lead certo: o link antigo /leads/<id>
+    // redireciona para o drawer do funil. ---
     await page.getByRole('link', { name: 'Ver na ficha' }).click()
-    await expect(
-      page.getByRole('heading', { name: nomeLead, exact: true, level: 1 }),
-    ).toBeVisible()
+    const drawer = drawerDoLead(page, nomeLead)
+    await expect(drawer.getByRole('heading', { name: nomeLead, exact: true })).toBeVisible()
 
     // --- A timeline mostra o texto EXATO que foi enviado ---
     await page.reload()
-    const linhaEvento = page
+    await drawer.getByRole('tab', { name: 'Histórico' }).click()
+    const linhaEvento = drawer
       .locator('li')
       .filter({ hasText: 'WhatsApp enviado:' })
       .locator('p')

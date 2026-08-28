@@ -166,9 +166,9 @@ export function BarraLateral({
 
       <nav aria-label="Navegação principal" className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-1">
         {itens.map(({ href, rotulo, icone }) => {
-          // startsWith e nao ===: /leads/[id] e' a ficha aberta a partir do
-          // funil e deve manter "Funil" aceso. A raiz '/' nunca aparece em
-          // ITENS, entao nao ha o falso positivo de startsWith('/').
+          // startsWith e nao ===: uma sub-rota (/scripts/[id], por exemplo)
+          // deve manter o item pai aceso. A raiz '/' nunca aparece em ITENS,
+          // entao nao ha o falso positivo de startsWith('/').
           const ativo = caminho === href || caminho.startsWith(`${href}/`)
           return (
             <Link

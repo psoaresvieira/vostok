@@ -11,7 +11,7 @@ import type { Tarefa } from '@/lib/data/tarefas'
 // scope. Mockado por inteiro para o teste de erro-apos-esvaziar abaixo poder
 // controlar o Resultado sem passar perto disso — mesmo motivo pelo qual
 // nenhum teste deste repo invoca uma Server Action real a partir de jsdom
-// (ver leads/[id]/tarefas.test.tsx).
+// (ver funil/drawer/tarefas.test.tsx).
 const concluirTarefaMock = vi.fn()
 vi.mock('@/app/(app)/tarefas/acoes', () => ({
   concluirTarefa: (...args: unknown[]) => concluirTarefaMock(...args),

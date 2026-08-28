@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { SENHA, carimbo, criarConta, criarLead, coluna } from './apoio'
+import { SENHA, carimbo, criarConta, criarLead, coluna, drawerDoLead } from './apoio'
 import { FUSO_PADRAO } from '@/lib/domain/tarefa'
 
 /**
@@ -88,9 +88,25 @@ function itemDaTarefa(secao: import('@playwright/test').Locator, texto: string) 
   return secao.locator('li').filter({ hasText: texto })
 }
 
+/** O lead cujo drawer esta aberto agora — assim `abaDoLead` nao precisa repetir
+ * o nome a cada passo. */
+let leadAberto = ''
+
+/** Clica o link do lead (do quadro ou de /tarefas) e espera o drawer abrir.
+ * O link de /tarefas ainda aponta para `/leads/<id>`, que redireciona. */
 async function abrirLead(page: Page, nomeDoLead: string) {
   await page.getByRole('link', { name: nomeDoLead }).click()
-  await expect(page.getByRole('heading', { name: nomeDoLead, exact: true, level: 1 })).toBeVisible()
+  await expect(
+    drawerDoLead(page, nomeDoLead).getByRole('heading', { name: nomeDoLead, exact: true }),
+  ).toBeVisible()
+  leadAberto = nomeDoLead
+}
+
+/** Vai para uma aba do drawer e espera o painel dela trocar. */
+async function abaDoLead(page: Page, rotulo: string) {
+  const aba = drawerDoLead(page, leadAberto).getByRole('tab', { name: rotulo })
+  await aba.click()
+  await expect(aba).toHaveAttribute('aria-selected', 'true')
 }
 
 async function criarTarefaNaFicha(
@@ -98,10 +114,13 @@ async function criarTarefaNaFicha(
   titulo: string,
   venceEmLocal: string,
 ): Promise<void> {
+  await abaDoLead(page, 'Tarefas')
   await page.getByPlaceholder('título da tarefa').fill(titulo)
   await page.locator('input[type="datetime-local"]').fill(venceEmLocal)
+  // A Server Action agora e postada de /funil (a pagina que hospeda o drawer),
+  // e nao mais de /leads/<id>.
   const resposta = page.waitForResponse(
-    (r) => r.request().method() === 'POST' && new URL(r.url()).pathname.startsWith('/leads/'),
+    (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/funil',
   )
   await page.getByRole('button', { name: 'Criar tarefa' }).click()
   await resposta
@@ -174,8 +193,11 @@ test.describe('ciclo de vida de uma tarefa, da ficha do lead a lista de /tarefas
 
       // --- Passo 6: voltar ao lead, ver "Tarefa concluída" na timeline ---
       await abrirLead(paginaA, nomeLead)
+      await abaDoLead(paginaA, 'Histórico')
       await expect(
-        paginaA.getByText(`Tarefa concluída: ${tituloAtrasado}`, { exact: true }),
+        drawerDoLead(paginaA, nomeLead).getByText(`Tarefa concluída: ${tituloAtrasado}`, {
+          exact: true,
+        }),
       ).toBeVisible()
 
       // ================================================================

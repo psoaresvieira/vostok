@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { SENHA, carimbo, coluna, criarConta } from './apoio'
+import { SENHA, carimbo, coluna, criarConta, drawerDoLead } from './apoio'
 import { NUMERO_FALSO_PADRAO, TOKEN_FALSO_PADRAO } from '@/lib/integracoes/whatsapp-falso'
 
 /**
@@ -144,9 +144,10 @@ test.describe('disparo de WhatsApp da ficha do lead', () => {
         empresa,
       })
       await coluna(paginaAdmin, ETAPA_DO_LEAD).getByRole('link', { name: nomeLead }).click()
-      await expect(
-        paginaAdmin.getByRole('heading', { name: nomeLead, exact: true, level: 1 }),
-      ).toBeVisible()
+      // O lead virou o drawer do funil: a "ficha" e' o dialogo, e a URL que a
+      // reabre e' a do funil com `?lead=`.
+      const drawerAdmin = drawerDoLead(paginaAdmin, nomeLead)
+      await expect(drawerAdmin.getByRole('heading', { name: nomeLead, exact: true })).toBeVisible()
       const urlFicha = paginaAdmin.url()
 
       // O texto esperado, montado AQUI a partir dos dados do lead — e' a
@@ -173,8 +174,11 @@ test.describe('disparo de WhatsApp da ficha do lead', () => {
       await expect(paginaAdmin.getByText('Enviado')).toBeVisible()
 
       // --- Passo 6: a timeline mostra o texto EXATO que foi enviado ---
+      // O reload traz o drawer de volta (a URL guarda `?lead=`) na aba
+      // Principal; a linha do tempo mora na aba Historico.
       await paginaAdmin.reload()
-      const linhaEvento = paginaAdmin
+      await drawerAdmin.getByRole('tab', { name: 'Histórico' }).click()
+      const linhaEvento = drawerAdmin
         .locator('li')
         .filter({ hasText: 'WhatsApp enviado:' })
         .locator('p')
@@ -191,7 +195,10 @@ test.describe('disparo de WhatsApp da ficha do lead', () => {
         .getByRole('link', { name: nomeLeadSemEmpresa })
         .click()
       await expect(
-        paginaAdmin.getByRole('heading', { name: nomeLeadSemEmpresa, exact: true, level: 1 }),
+        drawerDoLead(paginaAdmin, nomeLeadSemEmpresa).getByRole('heading', {
+          name: nomeLeadSemEmpresa,
+          exact: true,
+        }),
       ).toBeVisible()
 
       // Positiva primeiro: o contador acusa a lacuna que bloqueia o envio.
@@ -215,11 +222,14 @@ test.describe('disparo de WhatsApp da ficha do lead', () => {
       await paginaAdmin
         .getByLabel('Responsável')
         .selectOption({ label: 'Vendedor Disparo E2E' })
-      await expect(paginaAdmin.getByText('Responsável alterado para')).toBeVisible()
+      // O evento sai na aba Historico do drawer, nao mais no corpo da ficha.
+      await drawerAdmin.getByRole('tab', { name: 'Histórico' }).click()
+      await expect(drawerAdmin.getByText('Responsável alterado para')).toBeVisible()
 
       await paginaVendedor.goto(urlFicha)
+      const drawerVendedor = drawerDoLead(paginaVendedor, nomeLead)
       await expect(
-        paginaVendedor.getByRole('heading', { name: nomeLead, exact: true, level: 1 }),
+        drawerVendedor.getByRole('heading', { name: nomeLead, exact: true }),
       ).toBeVisible()
       // Positiva: ele DISPARA — o botao existe e esta habilitado para ele.
       await expect(

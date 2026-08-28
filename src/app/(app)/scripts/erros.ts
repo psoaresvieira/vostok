@@ -42,7 +42,7 @@ const MENSAGENS_ERRO: Record<string, string> = {
   template_nao_aprovado: 'O template deste script ainda não foi aprovado pelo Meta.',
   template_desatualizado: 'O script mudou depois da aprovação. Re-submeta o template para enviar.',
   // Mesma frase dos outros tres mapas do app (funil/erros.ts,
-  // tarefas/erros.ts, leads/[id]/etiquetas.tsx): o codigo vem da guarda de
+  // tarefas/erros.ts, funil/drawer/etiquetas.tsx): o codigo vem da guarda de
   // `enviarWhatsApp` quando o lead nao existe OU a RLS o esconde — daqui os
   // dois sao indistinguiveis, e a acao do usuario e' a mesma.
   lead_nao_encontrado: 'Você não tem acesso a esse lead.',

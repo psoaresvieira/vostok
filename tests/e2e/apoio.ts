@@ -75,6 +75,19 @@ export async function criarLead(page: Page, nome: string): Promise<void> {
   await expect(coluna(page, 'Novo lead').getByRole('link', { name: nome })).toBeVisible()
 }
 
+/**
+ * O painel lateral do lead (a ficha `/leads/[id]` virou drawer do funil).
+ *
+ * SEMPRE escopado pelo nome do lead, e nunca `getByRole('dialog')` cru: o
+ * `Modal` de confirmacao (movimento, envio de WhatsApp) tambem e' um dialog, e
+ * com ele aberto um localizador sem nome casaria com dois elementos — violacao
+ * de strict mode. O nome acessivel do drawer e' o <h2> do cabecalho, ou seja o
+ * nome do lead.
+ */
+export function drawerDoLead(page: Page, nomeDoLead: string): Locator {
+  return page.getByRole('dialog', { name: nomeDoLead })
+}
+
 export function coluna(page: Page, nome: string): Locator {
   return page
     .locator('section')

@@ -157,12 +157,22 @@ describe('DrawerLead', () => {
     ).toBeTruthy()
   })
 
-  it('avisa quando a janela de eventos foi cortada', async () => {
-    montar(dados({ temMaisEventos: true }))
+  it('avisa quando a janela de eventos foi cortada, contando os que estao na tela', async () => {
+    const nota = (id: string, texto: string): EventoLead => ({
+      id,
+      leadId: LEAD.id,
+      tipo: 'nota',
+      payload: { texto },
+      atorId: null,
+      criadoEm: new Date('2026-08-28T13:00:00Z'),
+    })
+    montar(dados({ eventos: [nota('a', 'primeira'), nota('b', 'segunda')], temMaisEventos: true }))
     const dialogo = await screen.findByRole('dialog')
 
     fireEvent.click(within(dialogo).getByRole('tab', { name: 'Histórico' }))
-    expect(within(dialogo).getByText(/Mostrando os 60 eventos mais recentes/)).toBeTruthy()
+    // O numero e' o tamanho da lista desenhada, e nao uma constante repetida:
+    // dizer "60" com dois eventos na tela seria mentira.
+    expect(within(dialogo).getByText('Mostrando os 2 eventos mais recentes.')).toBeTruthy()
   })
 
   it('fechar leva a URL sem o lead, sem rolar a pagina', async () => {

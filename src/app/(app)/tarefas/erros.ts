@@ -1,7 +1,7 @@
 import { FALHA_DE_CONEXAO, MENSAGEM_FALHA_DE_CONEXAO } from '@/lib/ui/acao'
 
 // Mapa unico dos codigos de tarefas.acoes, importado pela ficha do lead
-// (leads/[id]/tarefas.tsx, Task 5) e pela tela /tarefas (Task 6). Vive fora
+// (funil/drawer/tarefas.tsx, Task 5) e pela tela /tarefas (Task 6). Vive fora
 // de acoes.ts porque 'use server' exige que todo export de la seja uma
 // Server Action assincrona — nao da pra exportar um mapa dali. Nao criar um
 // mapa local em cada tela: src/lib/ui/acao.ts:10 ja registra que este app
