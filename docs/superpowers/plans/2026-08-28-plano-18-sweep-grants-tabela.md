@@ -380,19 +380,25 @@ git commit -m "feat(db): 0033 sweep de grants de tabela — anon sem nada, matri
 
 ### Task 3: Rollout em produção (operador — controller com o Pedro)
 
-**Files:** nenhum arquivo de código; memória e ledger.
+**Files:** `supabase/sondas/0033_pre_push.sql` (sonda pré-push, seções A–E devem voltar 0 linhas), `supabase/sondas/0033_verificar.sql` (matriz completa: 0 linhas = estado correto; validada por mutação na review final); memória e ledger.
 
-- [ ] **Step 1: Pré-condições** — branch mergeada em `master` localmente (ff), **sem push ainda**; `npx supabase migration list` mostra `0033` local sem remoto; horário de baixo tráfego.
+> Emendado após a review final da branch (2026-08-28): a versão anterior não tinha sonda pré-push, não checava dono/grantor (num banco antigo, `REVOKE` em objeto de outro dono só AVISA e não remove), e o smoke não exercitava nenhum caminho `anon` — que é a hipótese inteira da mudança.
 
-- [ ] **Step 2: Aplicar** — `npx supabase db push` (só a 0033). Expected: `Applying migration 0033_sweep_grants_tabela.sql... Finished`.
+- [ ] **Step 1: Pré-condições** — branch mergeada em `master` localmente (ff), **sem push ainda**; horário de baixo tráfego; anotar `npx supabase --version` no ledger.
 
-- [ ] **Step 3: Sonda read-only (MCP `execute_sql` no projeto `jmxadynyastrwyngkqdt`)** — as três consultas do teste (tabelas com `has_table_privilege` para anon/authenticated; `column_privileges` das 3 tabelas de coluna; `pg_default_acl` de `postgres`) e comparar com `MAPA_TABELAS`/`COLUNAS`. Expected: idêntico; `anon` sem linha nenhuma; `lead_events_seq_seq` só `usage` para `authenticated`.
+- [ ] **Step 2: Sonda pré-push** — rodar `supabase/sondas/0033_pre_push.sql` em produção (MCP `execute_sql`, read-only). **Regra de abort:** qualquer linha nas seções A (objeto não pertencente a `postgres`), B (objeto fora dos 23+1), C (objeto previsto ausente), D (grant a anon/authenticated com grantor ≠ postgres) ou E (coluna nova em `integration_log`) → **não fazer o push**; corrigir a causa (ou incluir o objeto no mapa + migration) e voltar à Task 2. F deve ler `postgres`; G deve ler `0032`; H é informativo (default de `supabase_admin`, fora do alcance).
 
-- [ ] **Step 4: Smoke no ar** — `vostok-beta.vercel.app`: login, funil carrega, abrir um lead (drawer), escrever uma nota (insere em `lead_events` — prova o `usage` da sequência), sino (`notifications`), `/admin` (invites), `/config` fontes. Expected: tudo funciona; nenhum `42501`/`permission denied` nos logs (`mcp__supabase__query_logs` postgres, últimos minutos).
+- [ ] **Step 3: Dry-run** — `npx supabase db push --dry-run`; abortar se listar qualquer coisa além de `0033_sweep_grants_tabela.sql`.
 
-- [ ] **Step 5: Se a sonda ou o smoke falhar** — rodar `supabase/rollback/0033_rollback.sql` no SQL editor, `npx supabase migration repair --status reverted 0033`, registrar o que quebrou no ledger e voltar à Task 2 Step 5.
+- [ ] **Step 4: Aplicar** — `npx supabase db push`. Expected: `Applying migration 0033_sweep_grants_tabela.sql... Finished`. (Não acrescentar `begin/commit` ao arquivo: o CLI já envolve cada migration numa transação e registra a versão dentro dela. GRANT/REVOKE não toma lock de relação — não enfileira atrás de query longa.)
 
-- [ ] **Step 6: Push e registro** — `git push origin master` (nenhum deploy funcional; só a migration e o teste entram no repo). Atualizar memória: `crm-projeto` (0033 no ar, 33/33; integração 356/356) e `supabase-guardas-silenciosas` nº 9 ("fechado pela 0033 em tabelas/sequências/funções + default privileges; toda migration nova precisa de grant explícito, e os sweeps 0024/0033 reprovam a ausência"). Fechar o ledger `.superpowers/sdd/progress.md`.
+- [ ] **Step 5: Verificação pós-push** — rodar `supabase/sondas/0033_verificar.sql` em produção. Expected: **0 linhas**. Qualquer linha nomeia o desvio exato (tabela/papel/privilégio ou default ACL).
+
+- [ ] **Step 6: Smoke no ar — sessão E anon** — `vostok-beta.vercel.app`: login, funil, abrir lead (drawer), escrever uma nota (insere em `lead_events` — prova o `usage` da sequência), sino (`notifications`), `/admin` (invites), `/config` fontes. **Caminhos anon (obrigatórios):** `GET https://vostok-beta.vercel.app/api/webhooks/reprocessar` com `Authorization: Bearer $CRON_SECRET` (valor nas envs da Vercel) → 200 com JSON; e uma entrega real de webhook — Google (`POST /api/webhooks/google/<token de uma fonte conectada>` com o corpo de `tests/e2e/ingestao.spec.ts`) ou o Lead Ads Testing Tool do Meta — → lead aparece no funil e `integration_log` marca `processado`. Depois `mcp__supabase__get_advisors` (security) e `query_logs` postgres dos últimos minutos: nenhum `42501`/`permission denied`.
+
+- [ ] **Step 7: Se a sonda ou o smoke falhar** — rodar `supabase/rollback/0033_rollback.sql` no SQL editor (como `postgres`), rodar `0033_verificar.sql` de novo (agora deve acusar o estado pré-0033 — é o esperado), `npx supabase migration repair --status reverted 0033`, registrar o que quebrou no ledger e voltar à Task 2 Step 5.
+
+- [ ] **Step 8: Push e registro** — `git push origin master` (nenhum deploy funcional; só migration, sondas e teste entram no repo). Atualizar memória: `crm-projeto` (0033 no ar, 33/33; integração 357/357) e `supabase-guardas-silenciosas` nº 9 ("fechado pela 0033 em tabelas/sequências/funções + default privileges de `postgres`; toda migration nova precisa de grant explícito e os sweeps 0024/0033 reprovam a ausência; **tabela criada pelo Table Editor nasce aberta (default de `supabase_admin`) — criar tabela por migration**"). Fechar o ledger.
 
 ---
 
