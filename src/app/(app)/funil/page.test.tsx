@@ -100,6 +100,20 @@ describe('/funil?lead= — a pipeline do lead', () => {
     expect(await destinoDe({ pipeline: pipelineB2B, lead: leadNaPadrao })).toBeNull()
   })
 
+  it('?pipeline= INVALIDO (cai na padrao) + lead em outra pipeline: sem redirect — a URL manda, e nunca ha loop', async () => {
+    const { leadNaB2B } = await cenario()
+
+    expect(await destinoDe({ pipeline: 'pipeline-que-nao-existe', lead: leadNaB2B })).toBeNull()
+  })
+
+  it('o redirect e decidido ANTES de carregar o quadro: leadsDoFunil nao e chamado', async () => {
+    const { store, leadNaB2B } = await cenario()
+    const leadsDoFunil = vi.spyOn(store, 'leadsDoFunil')
+
+    expect(await destinoDe({ lead: leadNaB2B })).toMatch(/pipeline=/)
+    expect(leadsDoFunil).not.toHaveBeenCalled()
+  })
+
   it('?lead= inexistente: nada de redirect, a pagina mostra o aviso', async () => {
     await cenario()
 

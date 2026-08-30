@@ -142,8 +142,8 @@ test.describe('disparo de WhatsApp pela aba /disparo', () => {
     // responder, entao ela ve a janela inteira em vez de correr contra ela.
     await expect(page.getByText('Enviado')).toBeVisible()
 
-    // --- "Ver na ficha" leva ao lead certo: o link antigo /leads/<id>
-    // redireciona para o drawer do funil. ---
+    // --- "Ver na ficha" leva ao lead certo: /funil?lead=<id> abre o drawer
+    // do funil. ---
     await page.getByRole('link', { name: 'Ver na ficha' }).click()
     const drawer = drawerDoLead(page, nomeLead)
     await expect(drawer.getByRole('heading', { name: nomeLead, exact: true })).toBeVisible()

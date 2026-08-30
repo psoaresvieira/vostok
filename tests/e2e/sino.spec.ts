@@ -77,8 +77,8 @@ test('lead novo acende o sino sem reload, e a entrada linka para a ficha do lead
   await expect(entrada).toBeVisible()
 
   await entrada.click()
-  // O link do sino ainda aponta para /leads/<id>; a rota redireciona para o
-  // funil com o lead aberto como drawer.
+  // O link do sino aponta direto para /funil?lead=<id>: o funil abre o lead
+  // como drawer (e resolve a pipeline dele sozinho).
   await expect(page).toHaveURL(/\/funil\?.*lead=/)
   await expect(
     drawerDoLead(page, nomeDoLead).getByRole('heading', { name: nomeDoLead, exact: true }),

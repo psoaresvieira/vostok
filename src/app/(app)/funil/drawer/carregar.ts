@@ -51,53 +51,44 @@ export type DadosDoDrawer = DadosDoLead & {
 }
 
 /**
- * O que o drawer do lead precisa ALEM do que a pagina do funil ja tem: a
- * linha do lead, as tarefas dele e a timeline.
+ * O que o drawer do lead precisa ALEM do que a pagina do funil ja tem: as
+ * tarefas do lead e a timeline.
+ *
+ * Recebe o `Lead` ja lido, e nao o id: a pagina do funil le a linha do lead
+ * ANTES de resolver o quadro (e' ela que decide, pela pipeline do lead, se
+ * redireciona para `?pipeline=`), e ler de novo aqui seria a mesma consulta
+ * duas vezes. Por isso "lead nao encontrado" tambem e' decisao da pagina —
+ * esta funcao so' roda quando o lead existe.
  *
  * Membros, motivos, etiquetas e pipelines com etapas ficavam aqui tambem
  * (Plano 17) e eram lidos DUAS vezes por render — uma para o quadro, outra
  * para o painel —, mais um `pipelinePorId` por pipeline da conta. Agora a
  * pagina passa os dela para o drawer (`DadosDoDrawer`).
- *
- * `ok(null)` quando o lead nao existe OU a RLS o esconde: quem chama e' a
- * pagina do funil, que mostra um aviso acima do quadro em vez de 404 (o quadro
- * ao lado continua valido; derrubar a tela inteira por um `?lead=` velho
- * seria trocar um aviso por uma pagina de erro).
  */
-export async function carregarDrawer(
-  store: CrmStore,
-  leadId: string,
-): Promise<Resultado<DadosDoLead | null>> {
-  // As tres leituras saem juntas, e nao em serie: tarefas e timeline so'
-  // precisam do `leadId`. Se o lead nao existir (ou a RLS o esconder), as
-  // duas ao lado terao sido feitas a toa — um `?lead=` invalido e' raro o
-  // bastante para valer o corte de latencia em todos os outros.
+export async function carregarDrawer(store: CrmStore, lead: Lead): Promise<Resultado<DadosDoLead>> {
+  // As duas leituras saem juntas, e nao em serie: so' precisam do id.
   //
   // `LIMITE_EVENTOS + 1` de proposito: a linha extra e' so' o sinal de que ha
   // historia mais antiga (a lista desenha `LIMITE_EVENTOS`), e sai mais barato
   // que um count exato numa tabela cuja policy roda por linha.
-  const [lead, eventos, tarefas] = await Promise.all([
-    store.buscarLead(leadId),
-    store.eventosDoLead(leadId, LIMITE_EVENTOS + 1),
+  const [eventos, tarefas] = await Promise.all([
+    store.eventosDoLead(lead.id, LIMITE_EVENTOS + 1),
     (async () => {
       const tarefaStore = await criarTarefaStoreDoServidor()
       // Encaminha o codigo do store em vez de lancar aqui dentro: uma excecao
-      // dentro do Promise.all rejeitaria a rodada inteira e perderia os erros
-      // das outras leituras.
+      // dentro do Promise.all rejeitaria a rodada inteira e perderia o erro
+      // da outra leitura.
       if (!tarefaStore.ok) return falha<Tarefa[]>(tarefaStore.erro)
-      return tarefaStore.valor.doLead(leadId)
+      return tarefaStore.valor.doLead(lead.id)
     })(),
   ])
-  if (!lead.ok) return falha(lead.erro)
-  // Zero linhas por RLS chega aqui como null: e "nao encontrado", nunca 403.
-  if (!lead.valor) return ok(null)
   if (!eventos.ok) return falha(eventos.erro)
   if (!tarefas.ok) return falha(tarefas.erro)
 
   const temMaisEventos = eventos.valor.length > LIMITE_EVENTOS
 
   return ok({
-    lead: lead.valor,
+    lead,
     tarefas: tarefas.valor,
     eventos: temMaisEventos ? eventos.valor.slice(0, LIMITE_EVENTOS) : eventos.valor,
     temMaisEventos,

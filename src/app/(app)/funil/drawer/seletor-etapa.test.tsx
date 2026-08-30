@@ -249,6 +249,32 @@ describe('SeletorEtapa — teclado no listbox', () => {
     expect(document.activeElement).toBe(within(lista).getByRole('option', { name: 'Proposta' }))
   })
 
+  it('depois de o lead mudar de pipeline (mesmo componente montado), abrir expande a pipeline NOVA e foca a etapa atual', () => {
+    const { rerender } = montar()
+    // Abre e fecha uma vez com a pipeline antiga expandida, como o usuario
+    // faria antes de mover.
+    abrir()
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    // O drawer e' key={lead.id}: mover para outra pipeline troca as props do
+    // MESMO componente, nao remonta.
+    rerender(
+      <SeletorEtapa
+        lead={lead({ pipelineId: POS.id, stageId: 'p2-e2' })}
+        pipelines={PIPELINES}
+        motivos={[{ id: 'motivo-1', nome: 'Preço', ativo: true }]}
+        etiquetasConhecidas={[]}
+        aoMover={aoMover}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Acompanhamento ·/ }))
+    const lista = screen.getByRole('listbox')
+
+    expect(within(lista).getByRole('button', { name: 'Pós-venda' }).getAttribute('aria-expanded')).toBe('true')
+    expect(within(lista).getByRole('button', { name: 'Funil de vendas' }).getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(within(lista).getByRole('option', { name: 'Acompanhamento' }))
+  })
+
   it('ArrowDown/ArrowUp andam pelos itens visiveis (cabecalhos e opcoes), sem sair da lista', () => {
     montar()
     const lista = abrir()

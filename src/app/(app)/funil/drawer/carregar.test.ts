@@ -31,16 +31,18 @@ async function comDuasPipelines() {
   })
   if (!criado.ok) throw new Error(criado.erro)
 
-  return { store, leadId: criado.valor }
+  const lead = await store.buscarLead(criado.valor)
+  if (!lead.ok || !lead.valor) throw new Error('lead recem-criado nao encontrado')
+
+  return { store, leadId: criado.valor, lead: lead.valor }
 }
 
 describe('carregarDrawer', () => {
   it('devolve SO o que depende do lead: lead, tarefas e timeline — pipelines, membros, motivos e etiquetas vem da pagina', async () => {
-    const { store, leadId } = await comDuasPipelines()
+    const { store, leadId, lead } = await comDuasPipelines()
 
-    const r = await carregarDrawer(store, leadId)
+    const r = await carregarDrawer(store, lead)
     if (!r.ok) throw new Error(r.erro)
-    if (!r.valor) throw new Error('esperava dados do lead')
 
     expect(r.valor.lead.id).toBe(leadId)
     expect(r.valor.lead.nome).toBe('Carlos')
@@ -52,24 +54,16 @@ describe('carregarDrawer', () => {
     expect(Object.keys(r.valor).sort()).toEqual(['eventos', 'lead', 'tarefas', 'temMaisEventos'])
   })
 
-  it('lead inexistente (ou escondido pela RLS) e ok(null), nunca falha', async () => {
-    const { store } = await comDuasPipelines()
-
-    const r = await carregarDrawer(store, '00000000-0000-4000-8000-000000000000')
-    expect(r).toEqual(ok(null))
-  })
-
   it('temMaisEventos so quando passa do limite, e a lista fica no limite', async () => {
-    const { store, leadId } = await comDuasPipelines()
+    const { store, leadId, lead } = await comDuasPipelines()
 
     for (let i = 0; i < LIMITE_EVENTOS + 3; i++) {
       const n = await store.registrarNota(leadId, `nota ${i}`)
       if (!n.ok) throw new Error(n.erro)
     }
 
-    const r = await carregarDrawer(store, leadId)
+    const r = await carregarDrawer(store, lead)
     if (!r.ok) throw new Error(r.erro)
-    if (!r.valor) throw new Error('esperava dados do lead')
 
     expect(r.valor.temMaisEventos).toBe(true)
     expect(r.valor.eventos.length).toBe(LIMITE_EVENTOS)

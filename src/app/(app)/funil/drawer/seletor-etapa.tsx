@@ -147,14 +147,18 @@ export function SeletorEtapa({
   }, [aberto])
 
   // Ao abrir, o foco vai para a etapa ATUAL (e nao para o primeiro item): e'
-  // dela que se parte, e a lista pode ser longa. Sem opcao marcada (lead numa
-  // etapa que nao esta na lista), o primeiro item.
+  // dela que se parte, e a lista pode ser longa.
   useEffect(() => {
     if (!aberto) return
     const lista = listaRef.current
     if (!lista) return
     const atual = lista.querySelector<HTMLElement>('[role="option"][aria-selected="true"]')
-    const alvo = atual ?? lista.querySelector<HTMLElement>('button')
+    // Sem etapa marcada: a primeira opcao visivel; sem opcao nenhuma (todas
+    // recolhidas), o primeiro cabecalho.
+    const alvo =
+      atual ??
+      lista.querySelector<HTMLElement>('[role="option"]') ??
+      lista.querySelector<HTMLElement>('button')
     alvo?.focus()
   }, [aberto])
 
@@ -250,7 +254,17 @@ export function SeletorEtapa({
         // deixaria escolher OUTRO destino enquanto o primeiro ainda esta a
         // caminho do servidor.
         disabled={enviando}
-        onClick={() => setAberto((v) => !v)}
+        onClick={() =>
+          setAberto((v) => {
+            // Ao abrir, a pipeline expandida volta a ser a do lead. `expandida`
+            // nasce dela no mount, mas o Drawer e' `key={lead.id}`: depois de
+            // mover o lead para outra pipeline, o componente continua montado
+            // com a pipeline ANTIGA expandida — e a etapa atual nem estaria na
+            // lista para receber o foco.
+            if (!v) setExpandida(lead.pipelineId)
+            return !v
+          })
+        }
         className="pressable rounded-full bg-primary-foreground/15 px-2 py-0.5 font-medium text-primary-foreground hover:bg-primary-foreground/25 disabled:opacity-60"
       >
         {etapaAtual?.nome ?? '—'} · {horas < 1 ? 'agora' : `há ${rotuloTempoNaEtapa(horas)}`}

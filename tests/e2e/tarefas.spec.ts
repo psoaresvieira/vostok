@@ -89,7 +89,7 @@ function itemDaTarefa(secao: import('@playwright/test').Locator, texto: string) 
 }
 
 /** Clica o link do lead (do quadro ou de /tarefas) e espera o drawer abrir. O
- * link de /tarefas ainda aponta para `/leads/<id>`, que redireciona. */
+ * link de /tarefas aponta direto para `/funil?lead=<id>`. */
 async function abrirLead(page: Page, nomeDoLead: string) {
   await page.getByRole('link', { name: nomeDoLead }).click()
   await expect(
