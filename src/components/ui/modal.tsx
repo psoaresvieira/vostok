@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/ui/cn'
@@ -16,9 +16,10 @@ import { cn } from '@/lib/ui/cn'
  * da pagina. Um dialogo acessivel de verdade precisa dos dois, e fazer isso
  * direito pede <dialog> nativo ou uma dependencia de headless UI — decisao
  * grande demais para vir de carona numa mudanca de visual. O que este
- * componente ADICIONA sobre o que existia: Escape fecha e o clique no fundo
- * fecha, dois comportamentos que nenhuma das cinco copias tinha. O foco
- * continua livre para sair do modal por Tab, como ja era antes.
+ * componente ADICIONA sobre o que existia: Escape fecha, o clique no fundo
+ * fecha, o foco ENTRA no dialogo ao abrir (primeiro campo focavel; um filho
+ * com `autoFocus` ganha; sem nada focavel, o proprio dialogo) e VOLTA para
+ * quem o tinha ao fechar. O foco continua livre para sair do modal por Tab.
  */
 export function Modal({
   titulo,
@@ -42,6 +43,32 @@ export function Modal({
    */
   const [montado, setMontado] = useState(false)
   useEffect(() => setMontado(true), [])
+
+  const dialogoRef = useRef<HTMLDivElement>(null)
+
+  // Quem tinha o foco antes de o modal abrir — capturado no PRIMEIRO efeito,
+  // antes de o portal existir e de qualquer `autoFocus` de filho rodar. A
+  // devolucao acontece no cleanup do mesmo efeito, que so' roda no unmount.
+  useEffect(() => {
+    const origem = document.activeElement
+    return () => {
+      if (origem instanceof HTMLElement && origem.isConnected) origem.focus()
+    }
+  }, [])
+
+  // Foco para dentro, depois que o portal montou. Um filho com `autoFocus`
+  // (o Cancelar dos dialogos destrutivos) ja esta focado nesta altura, e
+  // entao nao ha o que fazer — a checagem `contains` e' o que impede o
+  // Modal de roubar o foco dele.
+  useEffect(() => {
+    if (!montado) return
+    const dialogo = dialogoRef.current
+    if (!dialogo || dialogo.contains(document.activeElement)) return
+    const primeiro = dialogo.querySelector<HTMLElement>(
+      'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]):not([aria-label="Fechar"]), [href]',
+    )
+    ;(primeiro ?? dialogo).focus()
+  }, [montado])
 
   useEffect(() => {
     if (!aoFechar) return
@@ -80,9 +107,13 @@ export function Modal({
       onClick={aoFechar ? (e) => e.target === e.currentTarget && aoFechar() : undefined}
     >
       <div
+        ref={dialogoRef}
         role="dialog"
         aria-modal="true"
         aria-label={titulo}
+        // Focavel por script (nao por Tab): e' o destino do foco quando o
+        // dialogo nao tem nenhum campo nem botao dentro.
+        tabIndex={-1}
         className={cn(
           'surface fade-in w-full rounded-3xl p-6 shadow-2xl',
           larguras[largura],
