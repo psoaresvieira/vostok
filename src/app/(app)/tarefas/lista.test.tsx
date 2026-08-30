@@ -99,13 +99,13 @@ describe('Lista', () => {
     expect(screen.queryAllByRole('heading')).toHaveLength(0)
   })
 
-  it('cada linha leva ao lead, com um link para /leads/<id>', () => {
+  it('cada linha leva ao lead, direto no drawer do funil (/funil?lead=), sem passar pelo redirect de /leads/<id>', () => {
     const t = tarefa({ id: 't-1', leadId: 'lead-42', titulo: 'Tarefa de hoje', venceEm: new Date('2026-08-02T18:00:00Z') })
 
     render(<Lista tarefas={[t]} agora={AGORA} />)
 
     const link = screen.getByRole('link', { name: /tarefa de hoje/i })
-    expect(link.getAttribute('href')).toBe('/leads/lead-42')
+    expect(link.getAttribute('href')).toBe('/funil?lead=lead-42')
   })
 
   // Achado minor do review da Task 6: nenhum teste afirmava que cada linha

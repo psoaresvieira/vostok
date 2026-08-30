@@ -168,6 +168,44 @@ export class SupabaseCrmStore implements CrmStore {
     return ok((data ?? []).map((p) => ({ id: p.id, nome: p.nome, isDefault: p.is_default })))
   }
 
+  // Duas consultas, nao 1+N: as pipelines (mesma ordem de listarPipelines) e
+  // TODAS as etapas delas de uma vez, agrupadas aqui. `in` pelos ids das
+  // pipelines da conta, e nao `stages` inteira: stages nao tem account_id, e
+  // o recorte explicito e' o mesmo que pipelinePorId faz por outra via.
+  async listarPipelinesComEtapas(): Promise<
+    Resultado<{ pipeline: Pipeline; etapas: Etapa[] }[]>
+  > {
+    const lista = await this.listarPipelines()
+    if (!lista.ok) return falha(lista.erro)
+    if (lista.valor.length === 0) return ok([])
+
+    const { data: s, error: erroS } = await this.cliente
+      .from('stages')
+      .select('id, pipeline_id, nome, ordem, tipo, sla_horas')
+      .in(
+        'pipeline_id',
+        lista.valor.map((p) => p.id),
+      )
+      .order('ordem')
+    if (erroS) return falha(erroS.message)
+
+    const porPipeline = new Map<string, Etapa[]>()
+    for (const e of s ?? []) {
+      const etapa: Etapa = {
+        id: e.id,
+        pipelineId: e.pipeline_id,
+        nome: e.nome,
+        ordem: e.ordem,
+        tipo: e.tipo,
+        slaHoras: e.sla_horas,
+      }
+      const grupo = porPipeline.get(e.pipeline_id)
+      if (grupo) grupo.push(etapa)
+      else porPipeline.set(e.pipeline_id, [etapa])
+    }
+    return ok(lista.valor.map((pipeline) => ({ pipeline, etapas: porPipeline.get(pipeline.id) ?? [] })))
+  }
+
   async pipelinePorId(
     pipelineId: string,
   ): Promise<Resultado<{ pipeline: Pipeline; etapas: Etapa[] }>> {

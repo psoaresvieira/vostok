@@ -58,6 +58,14 @@ export interface CrmStore {
   perfilAtual(): Promise<Resultado<Perfil | null>>
   pipelinePadrao(): Promise<Resultado<{ pipeline: Pipeline; etapas: Etapa[] }>>
   listarPipelines(): Promise<Resultado<Pipeline[]>>
+  /**
+   * Todas as pipelines da conta, na ordem de `listarPipelines`, cada uma com
+   * as proprias etapas por `ordem`. Uma leitura so' — o drawer do lead
+   * precisa das etapas de TODAS (timeline nomeia a etapa de origem de um
+   * `pipeline_alterada`; o seletor move entre pipelines) e fazia
+   * `listarPipelines` + um `pipelinePorId` por pipeline.
+   */
+  listarPipelinesComEtapas(): Promise<Resultado<{ pipeline: Pipeline; etapas: Etapa[] }[]>>
   pipelinePorId(pipelineId: string): Promise<Resultado<{ pipeline: Pipeline; etapas: Etapa[] }>>
   criarPipeline(nome: string, etapasAbertas: string[]): Promise<Resultado<string>>
   renomearPipeline(pipelineId: string, nome: string): Promise<Resultado<void>>

@@ -13,7 +13,7 @@ import { NovoLead } from './novo-lead'
 import { Quadro } from './quadro'
 import { hrefDoFunil } from './params'
 import { mensagemDeErro } from './erros'
-import { carregarDrawer } from './drawer/carregar'
+import { carregarDrawer, type DadosDoDrawer } from './drawer/carregar'
 import { mapasDoLead } from './drawer/mapas'
 import { DrawerLead } from './drawer/drawer-lead'
 import { BlocoScripts } from './drawer/bloco-scripts'
@@ -74,7 +74,10 @@ export default async function FunilPage({
   const leadParam = params.lead || undefined
 
   const [pipelines, colunas, membros, motivos, etiquetas, resumoEtapas, drawer] = await Promise.all([
-    store.listarPipelines(),
+    // Com etapas, numa leitura so': a barra so' precisa dos nomes, mas o
+    // drawer precisa das etapas de TODAS (timeline e seletor) e antes as
+    // buscava por conta propria, uma pipeline por vez.
+    store.listarPipelinesComEtapas(),
     // Uma pagina por coluna, com total e soma da etapa inteira vindos do
     // banco — nao a pipeline inteira. Ver paginacao.ts.
     store.leadsDoFunil(filtroDoFunil(pipelineId, filtros, LIMITE_CARTOES_POR_ETAPA)),
@@ -87,7 +90,7 @@ export default async function FunilPage({
       const resumo = await etapaStore.valor.etapas.resumoEtapas()
       return resumo.ok ? resumo.valor : []
     })(),
-    leadParam ? carregarDrawer(store, papel, leadParam) : Promise.resolve(ok(null)),
+    leadParam ? carregarDrawer(store, leadParam) : Promise.resolve(ok(null)),
   ])
   if (!pipelines.ok) throw new Error(pipelines.erro)
   if (!colunas.ok) throw new Error(colunas.erro)
@@ -101,6 +104,17 @@ export default async function FunilPage({
   const queryAtual = new URLSearchParams(
     Object.entries(params).filter((par): par is [string, string] => par[1] !== undefined),
   ).toString()
+
+  // `?lead=` sem `?pipeline=` de um lead que NAO esta na pipeline padrao: o
+  // quadro atras do painel seria o funil errado (o cartao nao esta nele). E'
+  // o que chega de todo link direto ao lead — sino, tarefas, disparo,
+  // duplicados, `/leads/<id>` — que conhece o id e nao a pipeline. Resolve-se
+  // AQUI, uma vez, em vez de cada link consultar a pipeline antes de montar o
+  // href. Com `?pipeline=` explicito a URL manda, mesmo que discorde do lead
+  // (o seletor ja navega com a pipeline certa ao mover).
+  if (!params.pipeline && drawer.ok && drawer.valor && drawer.valor.lead.pipelineId !== pipelineId) {
+    redirect(hrefDoFunil(queryAtual, { pipeline: drawer.valor.lead.pipelineId }))
+  }
 
   // A MESMA query SEM `lead`. Duas coisas dependem dela:
   //
@@ -128,7 +142,17 @@ export default async function FunilPage({
 
   // Os mapas de nome vem da MESMA funcao que o drawer usa, entao o contexto do
   // script enxerga as etapas de todas as pipelines, nao so' as da atual.
-  const dadosDoDrawer = drawer.ok ? drawer.valor : null
+  const dadosDoDrawer: DadosDoDrawer | null =
+    drawer.ok && drawer.valor
+      ? {
+          ...drawer.valor,
+          pipelines: pipelines.valor,
+          membros: membros.valor,
+          motivos: motivos.valor,
+          etiquetasConhecidas: etiquetas.valor,
+          papel,
+        }
+      : null
   const contextoScript = dadosDoDrawer
     ? (() => {
         const { nomeEtapa, nomePessoa } = mapasDoLead(
@@ -151,7 +175,7 @@ export default async function FunilPage({
           funil em vez de sumir para cima. */}
       <div className="sticky top-0 flex h-screen w-56 shrink-0 flex-col border-r border-border">
         <BarraPipelines
-          pipelines={pipelines.valor}
+          pipelines={pipelines.valor.map((p) => p.pipeline)}
           pipelineAtivaId={pipelineId}
           queryAtual={queryDoQuadro}
         />

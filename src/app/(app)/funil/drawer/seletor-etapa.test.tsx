@@ -241,6 +241,73 @@ describe('SeletorEtapa — o popover', () => {
   })
 })
 
+describe('SeletorEtapa — teclado no listbox', () => {
+  it('abrir leva o foco para a etapa ATUAL, e nao para o primeiro item da lista', () => {
+    montar()
+    const lista = abrir()
+
+    expect(document.activeElement).toBe(within(lista).getByRole('option', { name: 'Proposta' }))
+  })
+
+  it('ArrowDown/ArrowUp andam pelos itens visiveis (cabecalhos e opcoes), sem sair da lista', () => {
+    montar()
+    const lista = abrir()
+
+    fireEvent.keyDown(lista, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(within(lista).getByRole('option', { name: 'Ganho' }))
+
+    fireEvent.keyDown(lista, { key: 'ArrowDown' })
+    fireEvent.keyDown(lista, { key: 'ArrowDown' })
+    // Depois de "Perdido" vem o cabecalho da pipeline recolhida — ele tambem
+    // e' um item do teclado, senao nao ha como expandir a outra pipeline sem
+    // mouse.
+    expect(document.activeElement).toBe(within(lista).getByRole('button', { name: 'Pós-venda' }))
+
+    // Ultimo item: ArrowDown para ali, nao volta ao inicio nem escapa da lista.
+    fireEvent.keyDown(lista, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(within(lista).getByRole('button', { name: 'Pós-venda' }))
+
+    fireEvent.keyDown(lista, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(within(lista).getByRole('option', { name: 'Perdido' }))
+  })
+
+  it('Home e End vao para o primeiro e o ultimo item', () => {
+    montar()
+    const lista = abrir()
+
+    fireEvent.keyDown(lista, { key: 'End' })
+    expect(document.activeElement).toBe(within(lista).getByRole('button', { name: 'Pós-venda' }))
+
+    fireEvent.keyDown(lista, { key: 'Home' })
+    expect(document.activeElement).toBe(within(lista).getByRole('button', { name: 'Funil de vendas' }))
+  })
+
+  it('Enter num cabecalho expande a pipeline e o foco vai para a primeira etapa dela', () => {
+    montar()
+    const lista = abrir()
+
+    fireEvent.keyDown(lista, { key: 'End' })
+    const cabecalho = within(lista).getByRole('button', { name: 'Pós-venda' })
+    expect(document.activeElement).toBe(cabecalho)
+
+    // Botao nativo: Enter vira click. O teste dispara o click que o navegador
+    // dispararia, e o que se prova e' o foco depois da expansao.
+    fireEvent.click(cabecalho)
+    expect(cabecalho.getAttribute('aria-expanded')).toBe('true')
+    expect(document.activeElement).toBe(within(lista).getByRole('option', { name: 'Implantação' }))
+  })
+
+  it('o gatilho recebe o foco de volta quando Escape fecha o popover', () => {
+    montar()
+    abrir()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(screen.queryByRole('listbox')).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /^Proposta ·/ }))
+  })
+})
+
 describe('SeletorEtapa — Escape com o modal de movimento aberto', () => {
   /** O gatilho e' o mesmo cabecalho do modal-movimento.test teria: escolher
    *  uma etapa fecha o popover e abre o `ModalMovimento`. */

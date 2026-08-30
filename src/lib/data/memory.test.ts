@@ -632,6 +632,30 @@ describe('InMemoryCrmStore', () => {
       expect(r.valor.slice(1).map((p) => p.id)).toEqual([a.valor, b.valor])
     })
 
+    it('listarPipelinesComEtapas: mesma ordem de listarPipelines, cada uma com as etapas por ordem', async () => {
+      const a = await store.criarPipeline('Outbound', ['Prospecção', 'Contato'])
+      if (!a.ok) throw new Error(a.erro)
+
+      const r = await store.listarPipelinesComEtapas()
+      if (!r.ok) throw new Error(r.erro)
+      const lista = await store.listarPipelines()
+      if (!lista.ok) throw new Error(lista.erro)
+      expect(r.valor.map((p) => p.pipeline)).toEqual(lista.valor)
+
+      const outbound = r.valor.find((p) => p.pipeline.id === a.valor)
+      expect(outbound?.etapas.map((e) => [e.nome, e.ordem])).toEqual([
+        ['Prospecção', 1],
+        ['Contato', 2],
+        ['Ganho', 3],
+        ['Perdido', 4],
+      ])
+      // Cada pipeline traz SO' as proprias etapas.
+      for (const p of r.valor) {
+        expect(p.etapas.every((e) => e.pipelineId === p.pipeline.id)).toBe(true)
+        expect(p.etapas.length).toBeGreaterThan(0)
+      }
+    })
+
     it('excluir recusa a padrao', async () => {
       const p = await store.pipelinePadrao()
       if (!p.ok) throw new Error(p.erro)

@@ -9,6 +9,7 @@ import { criarClienteNavegador } from '@/lib/supabase/navegador'
 import { chamarAcao } from '@/lib/ui/acao'
 import type { Notificacao } from '@/lib/data/notificacoes'
 import { marcarNotificacaoLidaAction, marcarTodasNotificacoesLidasAction } from './acoes-notificacoes'
+import { hrefDoFunil } from './funil/params'
 
 type Props = {
   contagem: number
@@ -165,7 +166,7 @@ export function Sino({ contagem, notificacoes }: Props) {
             {notificacoes.map((n) => (
               <li key={n.id} className="hairline border-b last:border-b-0">
                 <Link
-                  href={`/leads/${n.leadId}`}
+                  href={hrefDoFunil('', { lead: n.leadId })}
                   onClick={() => {
                     setAberto(false)
                     // Melhor esforco: nao bloqueia a navegacao esperando a

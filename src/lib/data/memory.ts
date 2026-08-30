@@ -119,6 +119,21 @@ export class InMemoryCrmStore implements CrmStore {
     return ok([...padrao, ...demais])
   }
 
+  async listarPipelinesComEtapas(): Promise<
+    Resultado<{ pipeline: Pipeline; etapas: Etapa[] }[]>
+  > {
+    const lista = await this.listarPipelines()
+    if (!lista.ok) return falha(lista.erro)
+    return ok(
+      lista.valor.map((pipeline) => ({
+        pipeline,
+        etapas: this.etapas
+          .filter((e) => e.pipelineId === pipeline.id)
+          .sort((a, b) => a.ordem - b.ordem),
+      })),
+    )
+  }
+
   async pipelinePorId(
     pipelineId: string,
   ): Promise<Resultado<{ pipeline: Pipeline; etapas: Etapa[] }>> {

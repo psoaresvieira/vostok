@@ -45,6 +45,37 @@ describe('SupabaseCrmStore — multiplas pipelines', () => {
     ])
   })
 
+  it('listarPipelinesComEtapas: mesma ordem de listarPipelines, cada uma com as proprias etapas por ordem, e nada de outra conta', async () => {
+    await outraConta('fora-lista@z.com')
+    const cliente = await clienteDoUsuario(c.adminId)
+    const store = new SupabaseCrmStore(cliente, c.accountId, c.adminId)
+
+    const criado = await store.criarPipeline('Outbound', ['Prospecção', 'Contato'])
+    if (!criado.ok) throw new Error(criado.erro)
+
+    const r = await store.listarPipelinesComEtapas()
+    if (!r.ok) throw new Error(r.erro)
+    const lista = await store.listarPipelines()
+    if (!lista.ok) throw new Error(lista.erro)
+
+    // A outra conta tem a propria pipeline padrao; ela nao aparece aqui.
+    expect(r.valor.map((p) => p.pipeline)).toEqual(lista.valor)
+    expect(r.valor.length).toBe(2)
+
+    const outbound = r.valor.find((p) => p.pipeline.id === criado.valor)
+    expect(outbound?.etapas.map((e) => [e.nome, e.ordem, e.tipo])).toEqual([
+      ['Prospecção', 1, 'aberta'],
+      ['Contato', 2, 'aberta'],
+      ['Ganho', 3, 'ganho'],
+      ['Perdido', 4, 'perdido'],
+    ])
+    for (const p of r.valor) {
+      expect(p.etapas.length).toBeGreaterThan(0)
+      expect(p.etapas.every((e) => e.pipelineId === p.pipeline.id)).toBe(true)
+      expect(p.etapas.map((e) => e.ordem)).toEqual([...p.etapas.map((e) => e.ordem)].sort((a, b) => a - b))
+    }
+  })
+
   it('isolamento entre contas: pipelinePorId de pipeline de outra conta falha com pipeline_nao_encontrado', async () => {
     const outra = await outraConta('fora-pipeline@z.com')
     const cliente = await clienteDoUsuario(c.adminId)

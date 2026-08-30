@@ -300,7 +300,7 @@ describe('Disparar', () => {
 
       await waitFor(() => expect(screen.getByText('Enviado')).toBeTruthy())
       const link = screen.getByRole('link', { name: /ver na ficha/i })
-      expect(link.getAttribute('href')).toBe('/leads/lead-1')
+      expect(link.getAttribute('href')).toBe('/funil?lead=lead-1')
     })
 
     it('erro de envio do lead A some ao trocar para o lead B, sem novo envio', async () => {

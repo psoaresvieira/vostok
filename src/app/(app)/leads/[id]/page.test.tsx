@@ -1,17 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { InMemoryCrmStore } from '@/lib/data/memory'
-import { leadSchema } from '@/lib/domain/lead'
-import { falha } from '@/lib/domain/resultado'
-
-const criarStoreDoServidorMock = vi.fn()
-vi.mock('@/lib/data/supabase', () => ({
-  criarStoreDoServidor: (...args: unknown[]) => criarStoreDoServidorMock(...args),
-}))
+import { describe, it, expect, vi } from 'vitest'
 
 // `redirect` do Next LANCA para interromper o render — quem chama nunca ve o
-// retorno. O mock preserva esse contrato (uma funcao que so' registrasse o
-// destino deixaria a pagina seguir executando linhas que o produto nunca roda)
-// e carrega o destino na mensagem.
+// retorno. O mock preserva esse contrato e carrega o destino na mensagem.
 class Redirecionou extends Error {
   constructor(readonly destino: string) {
     super(`redirect:${destino}`)
@@ -25,95 +15,16 @@ vi.mock('next/navigation', () => ({
 
 import LeadPage from './page'
 
-function novoLead(nome: string, extras: Record<string, unknown> = {}) {
-  return leadSchema.parse({ nome, ...extras })
-}
-
-/** Para onde a rota manda o navegador. Falha se ela NAO redirecionar. */
-async function destinoDe(store: InMemoryCrmStore, leadId: string): Promise<string> {
-  criarStoreDoServidorMock.mockResolvedValue({
-    ok: true,
-    valor: { store, conta: { id: 'conta-1' }, usuarioId: 'user-1', papel: 'admin' },
-  })
-  try {
-    await LeadPage({ params: Promise.resolve({ id: leadId }) })
-  } catch (e) {
-    if (e instanceof Redirecionou) return e.destino
-    throw e
-  }
-  throw new Error('a rota nao redirecionou')
-}
-
-beforeEach(() => {
-  criarStoreDoServidorMock.mockReset()
-})
-
 describe('/leads/[id] — a ficha virou o drawer do funil', () => {
-  it('lead da pipeline PADRAO: abre o drawer no funil padrao, sem ?pipeline=', async () => {
-    const store = new InMemoryCrmStore()
-    store.semear('Empresa Exemplo', 'user-1')
-    const padrao = await store.pipelinePadrao()
-    if (!padrao.ok) throw new Error(padrao.erro)
-
-    const criado = await store.criarLead({
-      ...novoLead('Carlos'),
-      pipelineId: padrao.valor.pipeline.id,
-      stageId: padrao.valor.etapas[0].id,
-    })
-    if (!criado.ok) throw new Error(criado.erro)
-
-    expect(await destinoDe(store, criado.valor)).toBe(`/funil?lead=${criado.valor}`)
-  })
-
-  it('lead de OUTRA pipeline: carrega a pipeline junto, senao o funil abriria a padrao', async () => {
-    const store = new InMemoryCrmStore()
-    store.semear('Empresa Exemplo', 'user-1')
-
-    const b2b = await store.criarPipeline('B2B', ['Contato'])
-    if (!b2b.ok) throw new Error(b2b.erro)
-    const info = await store.pipelinePorId(b2b.valor)
-    if (!info.ok) throw new Error(info.erro)
-
-    const criado = await store.criarLead({
-      ...novoLead('Carlos'),
-      pipelineId: b2b.valor,
-      stageId: info.valor.etapas[0].id,
-    })
-    if (!criado.ok) throw new Error(criado.erro)
-
-    expect(await destinoDe(store, criado.valor)).toBe(
-      `/funil?pipeline=${b2b.valor}&lead=${criado.valor}`,
-    )
-  })
-
-  it('lead inexistente (ou escondido pela RLS): funil sem painel, nunca 404', async () => {
-    const store = new InMemoryCrmStore()
-    store.semear('Empresa Exemplo', 'user-1')
-
-    expect(await destinoDe(store, '00000000-0000-4000-8000-000000000000')).toBe('/funil')
-  })
-
-  it('falha do store (nao lead inexistente): manda pro funil JA com ?lead=, para tentar de novo', async () => {
-    // Ao contrario do "lead inexistente" acima (buscarLead devolve ok(null)),
-    // aqui o PROPRIO buscarLead falha — sem_sessao, conexao caida, RLS
-    // quebrada. Nao e' o mesmo caso: redirecionar para /funil cru engoliria o
-    // erro em silencio. O redirect carrega `?lead=` para o funil tentar
-    // carregar de novo e, numa segunda falha, mostrar o proprio aviso dele.
-    const storeComFalha = { buscarLead: async () => falha('sem_sessao') } as unknown as InMemoryCrmStore
-    criarStoreDoServidorMock.mockResolvedValue({
-      ok: true,
-      valor: { store: storeComFalha, conta: { id: 'conta-1' }, usuarioId: 'user-1', papel: 'admin' },
-    })
-
+  it('redireciona para /funil?lead=<id> sem tocar em store nenhum: o funil resolve pipeline, sessao e lead inexistente', async () => {
     await expect(LeadPage({ params: Promise.resolve({ id: 'lead-1' }) })).rejects.toThrow(
       'redirect:/funil?lead=lead-1',
     )
   })
 
-  it('sem sessao: vai para o login antes de tocar no store', async () => {
-    criarStoreDoServidorMock.mockResolvedValue({ ok: false, erro: 'sem_sessao' })
-    await expect(LeadPage({ params: Promise.resolve({ id: 'lead-1' }) })).rejects.toThrow(
-      'redirect:/login',
+  it('o id vai pela query codificado — um id malformado nao quebra a URL', async () => {
+    await expect(LeadPage({ params: Promise.resolve({ id: 'a b&c' }) })).rejects.toThrow(
+      'redirect:/funil?lead=a+b%26c',
     )
   })
 })

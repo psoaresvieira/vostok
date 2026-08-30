@@ -15,6 +15,7 @@ import { PreviaSegmentos } from '@/app/(app)/scripts/previa'
 // 'use server': enviarWhatsApp e' a MESMA action da ficha do lead — nenhuma
 // action de envio nova, todas as guardas do Plano 11 vem com ela.
 import { enviarWhatsApp } from '@/app/(app)/funil/drawer/acoes-whatsapp'
+import { hrefDoFunil } from '@/app/(app)/funil/params'
 import { buscarLeadsParaDisparo, type LeadParaDisparo } from './acoes'
 
 /** Quanto tempo o "Enviado ✓" fica visivel — mesma duracao e mesmo motivo do
@@ -307,7 +308,7 @@ export function Disparar({
               <span role="status" className="inline-flex items-center gap-1.5 text-sm text-success">
                 <Check size={15} strokeWidth={2.5} aria-hidden="true" />
                 Enviado{' '}
-                <Link href={`/leads/${leadEnviadoId}`} className="underline">
+                <Link href={hrefDoFunil('', { lead: leadEnviadoId })} className="underline">
                   Ver na ficha
                 </Link>
               </span>

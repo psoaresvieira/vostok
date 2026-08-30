@@ -68,6 +68,12 @@ export function SeletorEtapa({
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const caixaRef = useRef<HTMLDivElement>(null)
+  const gatilhoRef = useRef<HTMLButtonElement>(null)
+  const listaRef = useRef<HTMLDivElement>(null)
+  // A pipeline que acabou de ser expandida pelo cabecalho: o foco vai para a
+  // primeira etapa dela assim que as opcoes existirem no DOM (efeito abaixo).
+  // Ref, nao estado: e' um sinal de uma renderizacao so'.
+  const expandidaAgora = useRef<string | null>(null)
   // Guarda de reentrancia SINCRONA: dois cliques em "Confirmar" disparados no
   // mesmo tick (sem um await entre eles) chegam aqui com o MESMO `confirmar`
   // fechado sobre o `enviando` da ultima renderizacao — o `setEnviando(true)`
@@ -120,6 +126,9 @@ export function SeletorEtapa({
         return
       }
       setAberto(false)
+      // O popover some com o foco dentro dele; sem isto o foco cai no body e
+      // quem navega por teclado perde o lugar.
+      gatilhoRef.current?.focus()
     }
     document.addEventListener('keydown', aoTeclar, true)
     return () => document.removeEventListener('keydown', aoTeclar, true)
@@ -137,9 +146,56 @@ export function SeletorEtapa({
     return () => document.removeEventListener('mousedown', aoApontar)
   }, [aberto])
 
+  // Ao abrir, o foco vai para a etapa ATUAL (e nao para o primeiro item): e'
+  // dela que se parte, e a lista pode ser longa. Sem opcao marcada (lead numa
+  // etapa que nao esta na lista), o primeiro item.
+  useEffect(() => {
+    if (!aberto) return
+    const lista = listaRef.current
+    if (!lista) return
+    const atual = lista.querySelector<HTMLElement>('[role="option"][aria-selected="true"]')
+    const alvo = atual ?? lista.querySelector<HTMLElement>('button')
+    alvo?.focus()
+  }, [aberto])
+
+  // Depois de expandir uma pipeline pelo cabecalho: primeira etapa dela.
+  useEffect(() => {
+    if (!aberto || !expandida || expandidaAgora.current !== expandida) return
+    expandidaAgora.current = null
+    const primeira = listaRef.current?.querySelector<HTMLElement>(
+      `[role="group"][data-pipeline="${expandida}"] [role="option"]`,
+    )
+    primeira?.focus()
+  }, [aberto, expandida])
+
+  /**
+   * Setas, Home e End andam pelos itens VISIVEIS da lista — cabecalhos de
+   * pipeline e etapas, na ordem do DOM — sem sair dela nem dar a volta. O
+   * cabecalho conta como item: sem ele nao ha como expandir outra pipeline
+   * pelo teclado. Enter/Espaco nao precisam de nada aqui: cada item e' um
+   * `<button>` nativo, e o navegador ja os transforma em click.
+   */
+  function aoTeclarNaLista(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return
+    const itens = Array.from(listaRef.current?.querySelectorAll<HTMLElement>('button') ?? [])
+    if (itens.length === 0) return
+    e.preventDefault()
+    const i = itens.indexOf(document.activeElement as HTMLElement)
+    const ultimo = itens.length - 1
+    let destino: number
+    if (e.key === 'Home') destino = 0
+    else if (e.key === 'End') destino = ultimo
+    else if (e.key === 'ArrowDown') destino = i < 0 ? 0 : Math.min(i + 1, ultimo)
+    else destino = i < 0 ? ultimo : Math.max(i - 1, 0)
+    itens[destino].focus()
+  }
+
   function escolher(pipelineDestinoId: string, destino: Etapa) {
     setAberto(false)
     setErro(null)
+    // A opcao clicada some junto com o popover: devolve o foco ao gatilho
+    // (o modal, se abrir, toma o foco dele em seguida).
+    gatilhoRef.current?.focus()
     // Escolher onde o lead ja esta e' desistir do movimento, nao move-lo para
     // ele mesmo: nenhuma action, nenhum modal.
     if (destino.id === lead.stageId) return
@@ -185,6 +241,7 @@ export function SeletorEtapa({
   return (
     <div ref={caixaRef} className="relative">
       <button
+        ref={gatilhoRef}
         type="button"
         aria-haspopup="listbox"
         aria-expanded={aberto}
@@ -201,8 +258,10 @@ export function SeletorEtapa({
 
       {aberto && (
         <div
+          ref={listaRef}
           role="listbox"
           aria-label="Etapa do lead"
+          onKeyDown={aoTeclarNaLista}
           // `absolute` ancorado no gatilho, e alinhado a direita porque o
           // gatilho mora na ponta direita do cabecalho — alinhado a esquerda a
           // lista sairia da borda do painel.
@@ -220,7 +279,10 @@ export function SeletorEtapa({
                 <button
                   type="button"
                   aria-expanded={expandido}
-                  onClick={() => setExpandida(expandido ? null : pipeline.id)}
+                  onClick={() => {
+                    if (!expandido) expandidaAgora.current = pipeline.id
+                    setExpandida(expandido ? null : pipeline.id)
+                  }}
                   className="w-full truncate rounded-lg px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-accent hover:text-foreground"
                 >
                   {pipeline.nome}
@@ -232,7 +294,12 @@ export function SeletorEtapa({
                     `ul`/`li` no meio — a arvore de acessibilidade de um
                     `group` so' reconhece um `option` como filho quando ele
                     e' filho DIRETO no DOM. */}
-                <div role="group" aria-label={pipeline.nome} className="flex flex-col gap-0.5 pb-1">
+                <div
+                  role="group"
+                  aria-label={pipeline.nome}
+                  data-pipeline={pipeline.id}
+                  className="flex flex-col gap-0.5 pb-1"
+                >
                   {expandido &&
                     itens.map(({ etapa, indiceAberta }) => {
                       const cor = corDaEtapa(indiceAberta, etapa.tipo)

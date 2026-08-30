@@ -8,6 +8,7 @@ import { Botao } from '@/components/ui/botao'
 import { Campo, Selecao } from '@/components/ui/campo'
 import { Modal, AcoesDoModal } from '@/components/ui/modal'
 import { criarLeadAction, verificarDuplicados, type Duplicado } from './acoes'
+import { hrefDoFunil } from './params'
 
 const MENSAGENS: Record<string, string> = {
   nome_obrigatorio: 'Informe o nome do lead.',
@@ -118,7 +119,7 @@ export function NovoLead({
               <ul className="mt-1 list-disc pl-4">
                 {duplicados.map((d) => (
                   <li key={d.id}>
-                    <a href={`/leads/${d.id}`} className="underline">
+                    <a href={hrefDoFunil('', { lead: d.id })} className="underline">
                       {d.nome}
                     </a>{' '}
                     <span className="text-muted-foreground">({d.status})</span>

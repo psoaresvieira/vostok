@@ -7,6 +7,7 @@ import { classificar, FUSO_PADRAO, type Balde } from '@/lib/domain/tarefa'
 import { chamarAcao } from '@/lib/ui/acao'
 import { mensagemDeErroTarefa } from './erros'
 import { concluirTarefa } from '@/app/(app)/tarefas/acoes'
+import { hrefDoFunil } from '@/app/(app)/funil/params'
 
 const ROTULO_TIPO: Record<TipoTarefa, string> = {
   ligacao: 'Ligação',
@@ -43,7 +44,7 @@ function ItemTarefa({
 }) {
   return (
     <li className="flex items-center justify-between gap-2 border-b py-2 text-sm last:border-0">
-      <Link href={`/leads/${t.leadId}`} className="underline">
+      <Link href={hrefDoFunil('', { lead: t.leadId })} className="underline">
         {t.leadNome} · {t.titulo}
       </Link>
       <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
