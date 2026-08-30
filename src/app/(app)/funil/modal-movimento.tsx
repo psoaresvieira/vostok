@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import type { Etapa, Etiqueta, MotivoPerda } from '@/lib/domain/tipos'
 
@@ -34,6 +34,34 @@ export function ModalMovimento({
   const [motivoId, setMotivoId] = useState('')
   const [entrada, setEntrada] = useState('')
   const [escolhidas, setEscolhidas] = useState<string[]>([])
+  const tituloId = useId()
+  const primeiroCampoRef = useRef<HTMLSelectElement & HTMLInputElement>(null)
+
+  // Foco: entra no primeiro campo (o motivo, quando e' obrigatorio; senao as
+  // etiquetas) e, ao desmontar, volta para quem o tinha antes — o gatilho do
+  // seletor ou o cartao arrastado. Sem isto o teclado ficava atras do
+  // overlay e, ao fechar, caia no body. Nao ha focus trap nem `inert` (mesma
+  // decisao do Modal compartilhado em components/ui/modal.tsx).
+  useEffect(() => {
+    const origem = document.activeElement
+    primeiroCampoRef.current?.focus()
+    return () => {
+      if (origem instanceof HTMLElement && origem.isConnected) origem.focus()
+    }
+  }, [])
+
+  // Escape cancela — exceto durante o envio: o pedido ja saiu para o
+  // servidor e fechar o modal nao o pararia. Quem hospeda este modal dentro
+  // de outro popover (SeletorEtapa) intercepta Escape em captura antes daqui
+  // e com a mesma regra; este listener cobre o Quadro, que nao tem outro.
+  useEffect(() => {
+    function aoTeclar(e: KeyboardEvent) {
+      if (e.key !== 'Escape' || enviando) return
+      onCancelar()
+    }
+    document.addEventListener('keydown', aoTeclar)
+    return () => document.removeEventListener('keydown', aoTeclar)
+  }, [enviando, onCancelar])
 
   function adicionar(nome: string) {
     const limpo = nome.trim()
@@ -54,8 +82,13 @@ export function ModalMovimento({
           hairline e a sombra que bg-card sozinho nao tem: sobre o scrim de
           bg-black/40, bg-card (#0e1526) compoe para ~1.12:1 contra o fundo —
           o painel praticamente nao tem borda visivel. */}
-      <div className="surface fade-in w-full max-w-md rounded-3xl p-6">
-        <h2 className="text-lg font-semibold">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={tituloId}
+        className="surface fade-in w-full max-w-md rounded-3xl p-6"
+      >
+        <h2 id={tituloId} className="text-lg font-semibold">
           {pedido.nomeLead} → {pedido.destino.nome}
         </h2>
 
@@ -72,6 +105,7 @@ export function ModalMovimento({
           <label className="mt-3 block text-sm">
             Motivo da perda <span className="text-destructive">*</span>
             <select
+              ref={primeiroCampoRef}
               value={motivoId}
               onChange={(e) => setMotivoId(e.target.value)}
               className="mt-1 h-10 w-full rounded-xl border border-border bg-muted/60 px-3 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary focus:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
@@ -89,6 +123,7 @@ export function ModalMovimento({
         <div className="mt-3 text-sm">
           <span>Etiquetas {exigeMotivo ? '' : '(opcional)'}</span>
           <input
+            ref={exigeMotivo ? undefined : primeiroCampoRef}
             value={entrada}
             onChange={(e) => setEntrada(e.target.value)}
             onKeyDown={(e) => {
